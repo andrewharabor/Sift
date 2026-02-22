@@ -9,39 +9,36 @@ namespace Clownfish {
 
 class Color {
 public:
-    enum class Underlying : std::uint8_t {
+    enum class ColorEnum : std::uint8_t {
         WHITE,
         BLACK,
         NONE
     };
 
-    constexpr Color() : value(Underlying::NONE) {}
-    constexpr Color(Underlying color) : value(color) {}
-    constexpr Color(int color) : value(static_cast<Underlying>(color)) {}
+    static constexpr ColorEnum WHITE = ColorEnum::WHITE;
+    static constexpr ColorEnum BLACK = ColorEnum::BLACK;
+    static constexpr ColorEnum NONE = ColorEnum::NONE;
 
-    constexpr Color operator!() const {
-        assert(value != Underlying::NONE);
-        return Color(static_cast<Underlying>(static_cast<int>(value) ^ 1));
+    constexpr Color() noexcept : color_(ColorEnum::NONE) {}
+    constexpr Color(ColorEnum color) noexcept : color_(color) {}
+    constexpr Color(int color) noexcept : color_(static_cast<ColorEnum>(color)) { assert(isValid(color)); }
+
+    constexpr Color operator!() const noexcept {
+        if (color_ == ColorEnum::NONE) {
+            return Color::NONE;
+        }
+        return Color(static_cast<ColorEnum>(static_cast<int>(color_) ^ 1));
     }
 
-    constexpr bool operator==(const Color &other) const {
-        return value == other.value;
-    }
+    constexpr bool operator==(const Color &other) const noexcept { return color_ == other.color_; }
+    constexpr bool operator!=(const Color &other) const noexcept { return color_ != other.color_; }
 
-    constexpr bool operator!=(const Color &other) const {
-        return value != other.value;
-    }
-
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying WHITE = Underlying::WHITE;
-    static constexpr Underlying BLACK = Underlying::BLACK;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr ColorEnum internal() const noexcept { return color_; }
 
 private:
-    Underlying value;
+    static constexpr bool isValid(int color) noexcept { return color >= 0 && color < 3; }
+
+    ColorEnum color_;
 };
 
-}
+}  // namespace Clownfish

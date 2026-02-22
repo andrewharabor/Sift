@@ -1,20 +1,23 @@
 
 #include <iostream>
 
+#include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
+#include "move.hpp"
 #include "piece.hpp"
 
 
 using namespace std;
 using namespace Clownfish;
 
-namespace {
-
 void testColor() {
     Color defaultColor;
     Color whiteColor(Color::WHITE);
     Color blackColor(Color::BLACK);
+    Color whiteFromInt(0);
+    Color blackFromInt(1);
+    Color noneFromInt(2);
 
     assert(defaultColor == Color::NONE);
     assert(whiteColor != blackColor);
@@ -25,6 +28,9 @@ void testColor() {
     assert(static_cast<int>(Color::WHITE) == 0);
     assert(static_cast<int>(Color::BLACK) == 1);
     assert(static_cast<int>(Color::NONE) == 2);
+    assert(whiteFromInt == Color::WHITE);
+    assert(blackFromInt == Color::BLACK);
+    assert(noneFromInt == Color::NONE);
 }
 
 void testPieceType() {
@@ -124,14 +130,12 @@ void testPiece() {
 void testFileAndRank() {
     File fileA(0);
     File fileH(7);
-    File fileInvalidLow(-1);
-    File fileInvalidHigh(8);
+    File fileB(1);
 
     assert(File() == File::NONE);
     assert(fileA == File::FILE_A);
+    assert(fileB == File::FILE_B);
     assert(fileH == File::FILE_H);
-    assert(fileInvalidLow == File::NONE);
-    assert(fileInvalidHigh == File::NONE);
     assert(File::FILE_A < File::FILE_B);
     assert(File::FILE_H > File::FILE_G);
     assert(File::FILE_C <= File::FILE_C);
@@ -139,13 +143,11 @@ void testFileAndRank() {
 
     Rank rank1(0);
     Rank rank8(7);
-    Rank rankInvalidLow(-1);
-    Rank rankInvalidHigh(8);
+    Rank rank2(1);
     assert(Rank() == Rank::NONE);
     assert(rank1 == Rank::RANK_1);
+    assert(rank2 == Rank::RANK_2);
     assert(rank8 == Rank::RANK_8);
-    assert(rankInvalidLow == Rank::NONE);
-    assert(rankInvalidHigh == Rank::NONE);
     assert(Rank::RANK_1 < Rank::RANK_2);
     assert(Rank::RANK_8 > Rank::RANK_7);
     assert(Rank::RANK_4 <= Rank::RANK_4);
@@ -171,15 +173,11 @@ void testSquare() {
     Square a1(Square::SQUARE_A1);
     Square h8(Square::SQUARE_H8);
     Square fromValidIndex(27);
-    Square fromInvalidIndexLow(-1);
-    Square fromInvalidIndexHigh(64);
     Square fromFileRank(File::FILE_E, Rank::RANK_4);
     assert(defaultSquare == Square::NONE);
     assert(a1.index() == 0);
     assert(h8.index() == 63);
     assert(fromValidIndex == Square::SQUARE_D4);
-    assert(fromInvalidIndexLow == Square::NONE);
-    assert(fromInvalidIndexHigh == Square::NONE);
     assert(fromFileRank == Square::SQUARE_E4);
     assert(Square(File::NONE, Rank::RANK_1) == Square::NONE);
     assert(Square(File::FILE_A, Rank::NONE) == Square::NONE);
@@ -249,7 +247,175 @@ void testSquare() {
     assert(a8Edge + Direction::NORTH_WEST == Square::NONE);
 }
 
-} // namespace
+void testBitboard() {
+    Bitboard empty;
+    Bitboard fromBits(0xF0F0ULL);
+    Bitboard fileA(File::FILE_A);
+    Bitboard fileH(File::FILE_H);
+    Bitboard rank1(Rank::RANK_1);
+    Bitboard rank8(Rank::RANK_8);
+
+    assert(empty == 0ULL);
+    assert(empty.empty());
+    assert(fromBits == 0xF0F0ULL);
+    assert(fileA == 0x0101010101010101ULL);
+    assert(fileH == 0x8080808080808080ULL);
+    assert(rank1 == 0x00000000000000FFULL);
+    assert(rank8 == 0xFF00000000000000ULL);
+
+    Bitboard a(0x0F0FULL);
+    Bitboard b(0x00FFULL);
+    assert((a & b) == 0x000FULL);
+    assert((a | b) == 0x0FFFULL);
+    assert((a ^ b) == 0x0FF0ULL);
+    assert((~Bitboard(0ULL)) == ~0ULL);
+
+    Bitboard c(0xAA00ULL);
+    c &= Bitboard(0x0FF0ULL);
+    assert(c == 0x0A00ULL);
+    c |= Bitboard(0x000FULL);
+    assert(c == 0x0A0FULL);
+    c ^= Bitboard(0x0003ULL);
+    assert(c == 0x0A0CULL);
+
+    assert(Bitboard(5ULL) == 5ULL);
+    assert(Bitboard(5ULL) != 6ULL);
+    assert(Bitboard(5ULL) && 1ULL);
+    assert(!(Bitboard(0ULL) && 1ULL));
+    assert(Bitboard(0ULL) || 7ULL);
+    assert(!(Bitboard(0ULL) || 0ULL));
+    assert((Bitboard(0xF0ULL) & 0x0FULL) == 0ULL);
+    assert((Bitboard(0xF0ULL) | 0x0FULL) == 0xFFULL);
+    assert((Bitboard(0xAAULL) ^ 0xFFULL) == 0x55ULL);
+    assert((Bitboard(1ULL) << 3) == 8ULL);
+    assert((Bitboard(8ULL) >> 3) == 1ULL);
+
+    Bitboard d(0x0F0FULL);
+    d &= 0x00FFULL;
+    assert(d == 0x000FULL);
+    d |= 0x0F00ULL;
+    assert(d == 0x0F0FULL);
+    d ^= 0x000FULL;
+    assert(d == 0x0F00ULL);
+
+    Bitboard e;
+    assert(e.empty());
+    e.set(0).set(63);
+    assert(e.check(0));
+    assert(e.check(63));
+    assert(e.count() == 2);
+    e.toggle(0);
+    assert(!e.check(0));
+    assert(e.check(63));
+    e.clear(63);
+    assert(e.empty());
+    e.set(5).set(9);
+    e.clear();
+    assert(e.empty());
+
+    Bitboard f((1ULL << 3) | (1ULL << 20) | (1ULL << 50));
+    assert(f.lsb() == 3);
+    assert(f.msb() == 50);
+    assert(f.count() == 3);
+
+    Bitboard g((1ULL << 2) | (1ULL << 10) | (1ULL << 12));
+    assert(g.pop() == 2ULL);
+    assert(g.count() == 2);
+    assert(g.pop() == 10ULL);
+    assert(g.pop() == 12ULL);
+    assert(g.empty());
+
+    Bitboard h(0x123456789ABCDEF0ULL);
+    assert(h.bits() == 0x123456789ABCDEF0ULL);
+}
+
+void testMove() {
+    Move defaultMove;
+    assert(defaultMove.move() == 0);
+    assert(defaultMove.from() == Square::SQUARE_A1);
+    assert(defaultMove.to() == Square::SQUARE_A1);
+    assert(defaultMove.type() == Move::NORMAL);
+    assert(defaultMove.promotion() == PieceType::NONE);
+
+    Move normalMove = Move::create<Move::NORMAL>(Square::SQUARE_E2, Square::SQUARE_E4);
+    assert(normalMove.from() == Square::SQUARE_E2);
+    assert(normalMove.to() == Square::SQUARE_E4);
+    assert(normalMove.type() == Move::NORMAL);
+    assert(normalMove.promotion() == PieceType::NONE);
+    assert(normalMove.move() != 0);
+
+    Move enPassantMove = Move::create<Move::EN_PASSANT>(Square::SQUARE_E5, Square::SQUARE_D6);
+    assert(enPassantMove.from() == Square::SQUARE_E5);
+    assert(enPassantMove.to() == Square::SQUARE_D6);
+    assert(enPassantMove.type() == Move::EN_PASSANT);
+    assert(enPassantMove.promotion() == PieceType::NONE);
+
+    Move castlingMove = Move::create<Move::CASTLING>(Square::SQUARE_E1, Square::SQUARE_G1);
+    assert(castlingMove.from() == Square::SQUARE_E1);
+    assert(castlingMove.to() == Square::SQUARE_G1);
+    assert(castlingMove.type() == Move::CASTLING);
+
+    Move promotionMove = Move::create<Move::PROMOTION>(Square::SQUARE_A7, Square::SQUARE_A8, PieceType::QUEEN);
+    assert(promotionMove.from() == Square::SQUARE_A7);
+    assert(promotionMove.to() == Square::SQUARE_A8);
+    assert(promotionMove.type() == Move::PROMOTION);
+    assert(promotionMove.promotion() == PieceType::QUEEN);
+
+    Move promotionToKnight = Move::create<Move::PROMOTION>(Square::SQUARE_B7, Square::SQUARE_B8, PieceType::KNIGHT);
+    assert(promotionToKnight.promotion() == PieceType::KNIGHT);
+
+    Move copiedMove(normalMove.move());
+    assert(copiedMove == normalMove);
+    assert(copiedMove != promotionMove);
+}
+
+void testMoveList() {
+    MoveList list;
+    assert(list.empty());
+    assert(list.size() == 0);
+    assert(list.begin() == list.end());
+
+    const Move firstMove = Move::create<Move::NORMAL>(Square::SQUARE_E2, Square::SQUARE_E4);
+    Move secondMove = Move::create<Move::EN_PASSANT>(Square::SQUARE_E5, Square::SQUARE_D6);
+    const Move thirdMove = Move::create<Move::CASTLING>(Square::SQUARE_E1, Square::SQUARE_G1);
+
+    list.add(firstMove);
+    list.add(std::move(secondMove));
+    list.add(thirdMove);
+
+    assert(!list.empty());
+    assert(list.size() == 3);
+    assert(list.front() == firstMove);
+    assert(list.back() == thirdMove);
+
+    assert(list.at(0) == firstMove);
+    assert(list.at(1).type() == Move::EN_PASSANT);
+    assert(list[2] == thirdMove);
+
+    list[2] = firstMove;
+    assert(list.back() == firstMove);
+
+    std::size_t count = 0;
+    for (const Move &move : list) {
+        assert(move == list.at(count));
+        ++count;
+    }
+    assert(count == list.size());
+
+    assert(list.find(firstMove) == 0);
+    assert(list.find(Move::create<Move::CASTLING>(Square::SQUARE_E1, Square::SQUARE_C1)) == list.size());
+
+    list.clear();
+    assert(list.empty());
+    assert(list.size() == 0);
+    assert(list.begin() == list.end());
+
+    for (std::size_t i = 0; i < MoveList::MAX_MOVES; ++i) {
+        list.add(Move::create<Move::NORMAL>(Square::SQUARE_A1, Square((i + 1) % 64)));
+    }
+    assert(list.size() == MoveList::MAX_MOVES);
+    assert(!list.empty());
+}
 
 int main() {
     testColor();
@@ -258,8 +424,11 @@ int main() {
     testFileAndRank();
     testDirection();
     testSquare();
+    testBitboard();
+    testMove();
+    testMoveList();
 
-    cout << "success!" << endl;
+    cout << "Success!" << endl;
 
     return 0;
 }

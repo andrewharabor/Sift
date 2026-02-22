@@ -7,20 +7,20 @@
 
 namespace Clownfish {
 
-#define CLOWNFISH_SQUARE_DECLARE_RANK(X)                               \
-    static constexpr Underlying SQUARE_A##X = Underlying::SQUARE_A##X; \
-    static constexpr Underlying SQUARE_B##X = Underlying::SQUARE_B##X; \
-    static constexpr Underlying SQUARE_C##X = Underlying::SQUARE_C##X; \
-    static constexpr Underlying SQUARE_D##X = Underlying::SQUARE_D##X; \
-    static constexpr Underlying SQUARE_E##X = Underlying::SQUARE_E##X; \
-    static constexpr Underlying SQUARE_F##X = Underlying::SQUARE_F##X; \
-    static constexpr Underlying SQUARE_G##X = Underlying::SQUARE_G##X; \
-    static constexpr Underlying SQUARE_H##X = Underlying::SQUARE_H##X
+#define SQUARE_DECLARE_RANK(X)                                         \
+    static constexpr SquareEnum SQUARE_A##X = SquareEnum::SQUARE_A##X; \
+    static constexpr SquareEnum SQUARE_B##X = SquareEnum::SQUARE_B##X; \
+    static constexpr SquareEnum SQUARE_C##X = SquareEnum::SQUARE_C##X; \
+    static constexpr SquareEnum SQUARE_D##X = SquareEnum::SQUARE_D##X; \
+    static constexpr SquareEnum SQUARE_E##X = SquareEnum::SQUARE_E##X; \
+    static constexpr SquareEnum SQUARE_F##X = SquareEnum::SQUARE_F##X; \
+    static constexpr SquareEnum SQUARE_G##X = SquareEnum::SQUARE_G##X; \
+    static constexpr SquareEnum SQUARE_H##X = SquareEnum::SQUARE_H##X
 
 
 class File {
 public:
-    enum class Underlying : std::uint8_t {
+    enum class FileEnum : std::uint8_t {
         FILE_A,
         FILE_B,
         FILE_C,
@@ -32,59 +32,38 @@ public:
         NONE
     };
 
-    constexpr File() : value(Underlying::NONE) {}
-    constexpr File(Underlying file) : value(file) {}
-    constexpr File(int file) : value(isValid(file) ? static_cast<Underlying>(file) : Underlying::NONE) {}
+    static constexpr FileEnum FILE_A = FileEnum::FILE_A;
+    static constexpr FileEnum FILE_B = FileEnum::FILE_B;
+    static constexpr FileEnum FILE_C = FileEnum::FILE_C;
+    static constexpr FileEnum FILE_D = FileEnum::FILE_D;
+    static constexpr FileEnum FILE_E = FileEnum::FILE_E;
+    static constexpr FileEnum FILE_F = FileEnum::FILE_F;
+    static constexpr FileEnum FILE_G = FileEnum::FILE_G;
+    static constexpr FileEnum FILE_H = FileEnum::FILE_H;
+    static constexpr FileEnum NONE = FileEnum::NONE;
 
-    constexpr bool operator==(const File &other) const {
-        return value == other.value;
-    }
+    constexpr File() noexcept : file_(FileEnum::NONE) {}
+    constexpr File(FileEnum file) noexcept : file_(file) {}
+    constexpr File(int file) noexcept : file_(static_cast<FileEnum>(file)) { assert(isValid(file)); }
 
-    constexpr bool operator!=(const File &other) const {
-        return value != other.value;
-    }
+    constexpr bool operator==(const File &other) const noexcept { return file_ == other.file_; }
+    constexpr bool operator!=(const File &other) const noexcept { return file_ != other.file_; }
+    constexpr bool operator<(const File &other) const noexcept { return static_cast<int>(file_) < static_cast<int>(other.file_); }
+    constexpr bool operator>(const File &other) const noexcept { return static_cast<int>(file_) > static_cast<int>(other.file_); }
+    constexpr bool operator<=(const File &other) const noexcept { return static_cast<int>(file_) <= static_cast<int>(other.file_); }
+    constexpr bool operator>=(const File &other) const noexcept { return static_cast<int>(file_) >= static_cast<int>(other.file_); }
 
-    constexpr bool operator<(const File &other) const {
-        return static_cast<int>(value) < static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>(const File &other) const {
-        return static_cast<int>(value) > static_cast<int>(other.value);
-    }
-
-    constexpr bool operator<=(const File &other) const {
-        return static_cast<int>(value) <= static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>=(const File &other) const {
-        return static_cast<int>(value) >= static_cast<int>(other.value);
-    }
-
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying FILE_A = Underlying::FILE_A;
-    static constexpr Underlying FILE_B = Underlying::FILE_B;
-    static constexpr Underlying FILE_C = Underlying::FILE_C;
-    static constexpr Underlying FILE_D = Underlying::FILE_D;
-    static constexpr Underlying FILE_E = Underlying::FILE_E;
-    static constexpr Underlying FILE_F = Underlying::FILE_F;
-    static constexpr Underlying FILE_G = Underlying::FILE_G;
-    static constexpr Underlying FILE_H = Underlying::FILE_H;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr FileEnum internal() const noexcept { return file_; }
 
 private:
-    static constexpr bool isValid(int file) {
-        return file >= 0 && file < 8;
-    }
+    static constexpr bool isValid(int file) noexcept { return file >= 0 && file < 8; }
 
-    Underlying value;
+    FileEnum file_;
 };
 
 class Rank {
 public:
-    enum class Underlying : std::uint8_t {
+    enum class RankEnum : std::uint8_t {
         RANK_1,
         RANK_2,
         RANK_3,
@@ -96,60 +75,38 @@ public:
         NONE
     };
 
-    constexpr Rank() : value(Underlying::NONE) {}
-    constexpr Rank(Underlying rank) : value(rank) {}
-    constexpr Rank(int rank) : value(isValid(rank) ? static_cast<Underlying>(rank) : Underlying::NONE) {}
+    static constexpr RankEnum RANK_1 = RankEnum::RANK_1;
+    static constexpr RankEnum RANK_2 = RankEnum::RANK_2;
+    static constexpr RankEnum RANK_3 = RankEnum::RANK_3;
+    static constexpr RankEnum RANK_4 = RankEnum::RANK_4;
+    static constexpr RankEnum RANK_5 = RankEnum::RANK_5;
+    static constexpr RankEnum RANK_6 = RankEnum::RANK_6;
+    static constexpr RankEnum RANK_7 = RankEnum::RANK_7;
+    static constexpr RankEnum RANK_8 = RankEnum::RANK_8;
+    static constexpr RankEnum NONE = RankEnum::NONE;
 
-    constexpr bool operator==(const Rank &other) const {
-        return value == other.value;
-    }
+    constexpr Rank() noexcept : rank_(RankEnum::NONE) {}
+    constexpr Rank(RankEnum rank) noexcept : rank_(rank) {}
+    constexpr Rank(int rank) noexcept : rank_(static_cast<RankEnum>(rank)) { assert(isValid(rank)); }
 
-    constexpr bool operator!=(const Rank &other) const {
-        return value != other.value;
-    }
+    constexpr bool operator==(const Rank &other) const noexcept { return rank_ == other.rank_; }
+    constexpr bool operator!=(const Rank &other) const noexcept { return rank_ != other.rank_; }
+    constexpr bool operator<(const Rank &other) const noexcept { return static_cast<int>(rank_) < static_cast<int>(other.rank_); }
+    constexpr bool operator>(const Rank &other) const noexcept { return static_cast<int>(rank_) > static_cast<int>(other.rank_); }
+    constexpr bool operator<=(const Rank &other) const noexcept { return static_cast<int>(rank_) <= static_cast<int>(other.rank_); }
+    constexpr bool operator>=(const Rank &other) const noexcept { return static_cast<int>(rank_) >= static_cast<int>(other.rank_); }
 
-    constexpr bool operator<(const Rank &other) const {
-        return static_cast<int>(value) < static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>(const Rank &other) const {
-        return static_cast<int>(value) > static_cast<int>(other.value);
-    }
-
-    constexpr bool operator<=(const Rank &other) const {
-        return static_cast<int>(value) <= static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>=(const Rank &other) const {
-        return static_cast<int>(value) >= static_cast<int>(other.value);
-    }
-
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying RANK_1 = Underlying::RANK_1;
-    static constexpr Underlying RANK_2 = Underlying::RANK_2;
-    static constexpr Underlying RANK_3 = Underlying::RANK_3;
-    static constexpr Underlying RANK_4 = Underlying::RANK_4;
-    static constexpr Underlying RANK_5 = Underlying::RANK_5;
-    static constexpr Underlying RANK_6 = Underlying::RANK_6;
-    static constexpr Underlying RANK_7 = Underlying::RANK_7;
-    static constexpr Underlying RANK_8 = Underlying::RANK_8;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr RankEnum internal() const noexcept { return rank_; }
 
 private:
-    static constexpr bool isValid(int rank) {
-        return rank >= 0 && rank < 8;
-    }
+    static constexpr bool isValid(int rank) noexcept { return rank >= 0 && rank < 8; }
 
-    Underlying value;
-
+    RankEnum rank_;
 };
 
 class Direction {
 public:
-    enum class Underlying : std::int8_t {
+    enum class DirectionEnum : std::int8_t {
         NORTH = 8,
         EAST = 1,
         SOUTH = -8,
@@ -161,39 +118,44 @@ public:
         NONE = 0
     };
 
-    constexpr Direction() : value(Underlying::NONE) {}
-    constexpr Direction(Underlying direction) : value(direction) {}
+    static constexpr DirectionEnum NORTH = DirectionEnum::NORTH;
+    static constexpr DirectionEnum EAST = DirectionEnum::EAST;
+    static constexpr DirectionEnum SOUTH = DirectionEnum::SOUTH;
+    static constexpr DirectionEnum WEST = DirectionEnum::WEST;
+    static constexpr DirectionEnum NORTH_EAST = DirectionEnum::NORTH_EAST;
+    static constexpr DirectionEnum SOUTH_EAST = DirectionEnum::SOUTH_EAST;
+    static constexpr DirectionEnum SOUTH_WEST = DirectionEnum::SOUTH_WEST;
+    static constexpr DirectionEnum NORTH_WEST = DirectionEnum::NORTH_WEST;
+    static constexpr DirectionEnum NONE = DirectionEnum::NONE;
 
-    constexpr bool operator==(const Direction &other) const {
-        return value == other.value;
+    constexpr Direction() noexcept : direction_(DirectionEnum::NONE) {}
+    constexpr Direction(DirectionEnum direction) noexcept : direction_(direction) {}
+    constexpr Direction(int direction) noexcept : direction_(static_cast<DirectionEnum>(direction)) { assert(isValid(direction)); }
+
+    constexpr bool operator==(const Direction &other) const noexcept { return direction_ == other.direction_; }
+    constexpr bool operator!=(const Direction &other) const noexcept { return direction_ != other.direction_; }
+
+    constexpr DirectionEnum operator-() const noexcept {
+        if (direction_ == DirectionEnum::NONE) {
+            return DirectionEnum::NONE;
+        }
+        return static_cast<DirectionEnum>(-static_cast<int>(direction_));
     }
 
-    constexpr bool operator!=(const Direction &other) const {
-        return value != other.value;
-    }
-
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying NORTH = Underlying::NORTH;
-    static constexpr Underlying EAST = Underlying::EAST;
-    static constexpr Underlying SOUTH = Underlying::SOUTH;
-    static constexpr Underlying WEST = Underlying::WEST;
-    static constexpr Underlying NORTH_EAST = Underlying::NORTH_EAST;
-    static constexpr Underlying SOUTH_EAST = Underlying::SOUTH_EAST;
-    static constexpr Underlying SOUTH_WEST = Underlying::SOUTH_WEST;
-    static constexpr Underlying NORTH_WEST = Underlying::NORTH_WEST;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr DirectionEnum internal() const noexcept { return direction_; }
 
 private:
-    Underlying value;
+    constexpr bool isValid(int direction) const noexcept {
+        return direction == 8 || direction == 1 || direction == -8 || direction == -1 ||
+            direction == 9 || direction == -7 || direction == -9 || direction == 7 || direction == 0;
+    }
 
+    DirectionEnum direction_;
 };
 
 class Square {
 public:
-    enum class Underlying {
+    enum class SquareEnum {
         SQUARE_A1, SQUARE_B1, SQUARE_C1, SQUARE_D1, SQUARE_E1, SQUARE_F1, SQUARE_G1, SQUARE_H1,
         SQUARE_A2, SQUARE_B2, SQUARE_C2, SQUARE_D2, SQUARE_E2, SQUARE_F2, SQUARE_G2, SQUARE_H2,
         SQUARE_A3, SQUARE_B3, SQUARE_C3, SQUARE_D3, SQUARE_E3, SQUARE_F3, SQUARE_G3, SQUARE_H3,
@@ -205,95 +167,88 @@ public:
         NONE
     };
 
-    constexpr Square() : value(Underlying::NONE) {}
-    constexpr Square(Underlying square) : value(square) {}
-    constexpr Square(int square) : value((isValid(square)) ? static_cast<Underlying>(square) : Underlying::NONE) {}
+    SQUARE_DECLARE_RANK(1);
+    SQUARE_DECLARE_RANK(2);
+    SQUARE_DECLARE_RANK(3);
+    SQUARE_DECLARE_RANK(4);
+    SQUARE_DECLARE_RANK(5);
+    SQUARE_DECLARE_RANK(6);
+    SQUARE_DECLARE_RANK(7);
+    SQUARE_DECLARE_RANK(8);
+    static constexpr SquareEnum NONE = SquareEnum::NONE;
 
-    constexpr Square(File file, Rank rank) : value(Underlying::NONE) {
+    constexpr Square() noexcept : square_(SquareEnum::NONE) {}
+    constexpr Square(SquareEnum square) noexcept : square_(square) {}
+    constexpr Square(int index) noexcept : square_(static_cast<SquareEnum>(index)) { assert(isValid(index)); }
+
+    constexpr Square(File file, Rank rank) noexcept : square_(SquareEnum::NONE) {
         if (file == File::NONE || rank == Rank::NONE) {
-            value = Underlying::NONE;
+            square_ = SquareEnum::NONE;
             return;
         }
-        value = static_cast<Underlying>(static_cast<int>(rank.underlying()) * 8 + static_cast<int>(file.underlying()));
+        square_ = static_cast<SquareEnum>(static_cast<int>(rank.internal()) * 8 + static_cast<int>(file.internal()));
     }
 
-    constexpr bool operator==(const Square &other) const {
-        return value == other.value;
-    }
+    constexpr bool operator==(const Square &other) const noexcept { return square_ == other.square_; }
+    constexpr bool operator!=(const Square &other) const noexcept { return square_ != other.square_; }
+    constexpr bool operator<(const Square &other) const noexcept { return static_cast<int>(square_) < static_cast<int>(other.square_); }
+    constexpr bool operator>(const Square &other) const noexcept { return static_cast<int>(square_) > static_cast<int>(other.square_); }
+    constexpr bool operator<=(const Square &other) const noexcept { return static_cast<int>(square_) <= static_cast<int>(other.square_); }
+    constexpr bool operator>=(const Square &other) const noexcept { return static_cast<int>(square_) >= static_cast<int>(other.square_); }
 
-    constexpr bool operator!=(const Square &other) const {
-        return value != other.value;
-    }
-
-    constexpr bool operator<(const Square &other) const {
-        return static_cast<int>(value) < static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>(const Square &other) const {
-        return static_cast<int>(value) > static_cast<int>(other.value);
-    }
-
-    constexpr bool operator<=(const Square &other) const {
-        return static_cast<int>(value) <= static_cast<int>(other.value);
-    }
-
-    constexpr bool operator>=(const Square &other) const {
-        return static_cast<int>(value) >= static_cast<int>(other.value);
-    }
-
-    constexpr Square &operator++() {
-        if (value == Underlying::NONE) {
+    constexpr Square &operator++() noexcept {
+        if (square_ == SquareEnum::NONE) {
             return *this;
         }
         if (index() >= 63) {
-            value = Underlying::NONE;
+            square_ = SquareEnum::NONE;
 
         } else {
-            value = static_cast<Underlying>(index() + 1);
+            square_ = static_cast<SquareEnum>(index() + 1);
         }
         return *this;
     }
 
-    constexpr Square operator++(int) {
-        if (value == Underlying::NONE) {
+    constexpr Square operator++(int) noexcept {
+        if (square_ == SquareEnum::NONE) {
             return *this;
         }
         Square tmp = *this;
         if (index() >= 63) {
-            value = Underlying::NONE;
+            square_ = SquareEnum::NONE;
         } else {
-            value = static_cast<Underlying>(index() + 1);
+            square_ = static_cast<SquareEnum>(index() + 1);
         }
         return tmp;
     }
 
-    constexpr Square &operator--() {
-        if (value == Underlying::NONE) {
+    constexpr Square &operator--() noexcept {
+        if (square_ == SquareEnum::NONE) {
             return *this;
         }
         if (index() <= 0) {
-            value = Underlying::NONE;
+            square_ = SquareEnum::NONE;
         } else {
-            value = static_cast<Underlying>(index() - 1);
+            square_ = static_cast<SquareEnum>(index() - 1);
         }
         return *this;
     }
 
-    constexpr Square operator--(int) {
-        if (value == Underlying::NONE) {
+    constexpr Square operator--(int) noexcept {
+        if (square_ == SquareEnum::NONE) {
             return *this;
         }
         Square tmp = *this;
         if (index() <= 0) {
-            value = Underlying::NONE;
+            square_ = SquareEnum::NONE;
         } else {
-            value = static_cast<Underlying>(index() - 1);
+            square_ = static_cast<SquareEnum>(index() - 1);
         }
         return tmp;
     }
 
-    constexpr Square operator+(Direction direction) const {
-        if (value == Underlying::NONE || direction == Direction::NONE) {
+    constexpr Square operator+(Direction direction) const noexcept {
+        if (square_ == SquareEnum::NONE || direction == Direction::NONE) {
             return *this;
         }
 
@@ -323,51 +278,39 @@ public:
             return Square::NONE;
         }
 
-        const int newIndex = index() + static_cast<int>(direction.underlying());
+        const int newIndex = index() + static_cast<int>(direction.internal());
         if (!isValid(newIndex)) {
             return Square::NONE;
         }
-        return Square(static_cast<Underlying>(newIndex));
+        return Square(static_cast<SquareEnum>(newIndex));
     }
 
-    constexpr File file() const {
-        if (value == Underlying::NONE || !isValid(index())) {
+    constexpr Square operator-(Direction direction) const noexcept {
+        return *this + (-direction);
+    }
+
+    constexpr File file() const noexcept {
+        if (square_ == SquareEnum::NONE) {
             return File::NONE;
         }
         return File(index() % 8);
     }
 
-    constexpr Rank rank() const {
-        if (value == Underlying::NONE || !isValid(index())) {
+    constexpr Rank rank() const noexcept {
+        if (square_ == SquareEnum::NONE) {
             return Rank::NONE;
         }
         return Rank(index() / 8);
     }
 
-    constexpr int index() const {
-        return static_cast<int>(value);
-    }
+    constexpr int index() const noexcept { return static_cast<int>(square_); }
 
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    CLOWNFISH_SQUARE_DECLARE_RANK(1);
-    CLOWNFISH_SQUARE_DECLARE_RANK(2);
-    CLOWNFISH_SQUARE_DECLARE_RANK(3);
-    CLOWNFISH_SQUARE_DECLARE_RANK(4);
-    CLOWNFISH_SQUARE_DECLARE_RANK(5);
-    CLOWNFISH_SQUARE_DECLARE_RANK(6);
-    CLOWNFISH_SQUARE_DECLARE_RANK(7);
-    CLOWNFISH_SQUARE_DECLARE_RANK(8);
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr SquareEnum internal() const noexcept { return square_; }
 
 private:
-    static constexpr bool isValid(int square) {
-        return square >= 0 && square < 64;
-    }
+    static constexpr bool isValid(int index) noexcept { return index >= 0 && index < 64; }
 
-    Underlying value;
+    SquareEnum square_;
 };
 
-}
+}  // namespace Clownfish

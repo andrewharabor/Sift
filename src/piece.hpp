@@ -3,7 +3,7 @@
 
 #include <cassert>
 #include <cstdint>
-#include <string>
+#include <string_view>
 
 #include "color.hpp"
 
@@ -12,7 +12,7 @@ namespace Clownfish {
 
 class PieceType {
 public:
-    enum class Underlying : std::uint8_t {
+    enum class PieceTypeEnum : std::uint8_t {
         PAWN,
         KNIGHT,
         BISHOP,
@@ -22,57 +22,54 @@ public:
         NONE
     };
 
-    constexpr PieceType() : value(Underlying::NONE) {}
-    constexpr PieceType(Underlying pieceType) : value(pieceType) {}
-    constexpr PieceType(int pieceType) : value(static_cast<Underlying>(pieceType)) {}
+    static constexpr PieceTypeEnum PAWN = PieceTypeEnum::PAWN;
+    static constexpr PieceTypeEnum KNIGHT = PieceTypeEnum::KNIGHT;
+    static constexpr PieceTypeEnum BISHOP = PieceTypeEnum::BISHOP;
+    static constexpr PieceTypeEnum ROOK = PieceTypeEnum::ROOK;
+    static constexpr PieceTypeEnum QUEEN = PieceTypeEnum::QUEEN;
+    static constexpr PieceTypeEnum KING = PieceTypeEnum::KING;
+    static constexpr PieceTypeEnum NONE = PieceTypeEnum::NONE;
 
-    constexpr PieceType(std::string piece) : value(Underlying::NONE) {
+    constexpr PieceType() noexcept : pieceType_(PieceTypeEnum::NONE) {}
+    constexpr PieceType(PieceTypeEnum pieceType) noexcept : pieceType_(pieceType) {}
+    constexpr PieceType(int pieceType) noexcept : pieceType_(static_cast<PieceTypeEnum>(pieceType)) {}
+
+    constexpr PieceType(std::string_view piece) noexcept : pieceType_(PieceTypeEnum::NONE) {
         assert(piece.size() == 1);
         char c = piece[0];
         if (c == 'P' || c == 'p') {
-            value = Underlying::PAWN;
+            pieceType_ = PieceTypeEnum::PAWN;
         } else if (c == 'N' || c == 'n') {
-            value = Underlying::KNIGHT;
+            pieceType_ = PieceTypeEnum::KNIGHT;
         } else if (c == 'B' || c == 'b') {
-            value = Underlying::BISHOP;
+            pieceType_ = PieceTypeEnum::BISHOP;
         } else if (c == 'R' || c == 'r') {
-            value = Underlying::ROOK;
+            pieceType_ = PieceTypeEnum::ROOK;
         } else if (c == 'Q' || c == 'q') {
-            value = Underlying::QUEEN;
+            pieceType_ = PieceTypeEnum::QUEEN;
         } else if (c == 'K' || c == 'k') {
-            value = Underlying::KING;
+            pieceType_ = PieceTypeEnum::KING;
         } else {
-            value = Underlying::NONE;
+            pieceType_ = PieceTypeEnum::NONE;
         }
     }
 
-    constexpr bool operator==(const PieceType &other) const {
-        return value == other.value;
-    }
+    constexpr bool operator==(const PieceType &other) const noexcept { return pieceType_ == other.pieceType_; }
+    constexpr bool operator!=(const PieceType &other) const noexcept { return pieceType_ != other.pieceType_; }
+    constexpr bool operator<(const PieceType &other) const noexcept { return static_cast<int>(pieceType_) < static_cast<int>(other.pieceType_); }
+    constexpr bool operator>(const PieceType &other) const noexcept { return static_cast<int>(pieceType_) > static_cast<int>(other.pieceType_); }
+    constexpr bool operator<=(const PieceType &other) const noexcept { return static_cast<int>(pieceType_) <= static_cast<int>(other.pieceType_); }
+    constexpr bool operator>=(const PieceType &other) const noexcept { return static_cast<int>(pieceType_) >= static_cast<int>(other.pieceType_); }
 
-    constexpr bool operator!=(const PieceType &other) const {
-        return value != other.value;
-    }
-
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying PAWN = Underlying::PAWN;
-    static constexpr Underlying KNIGHT = Underlying::KNIGHT;
-    static constexpr Underlying BISHOP = Underlying::BISHOP;
-    static constexpr Underlying ROOK = Underlying::ROOK;
-    static constexpr Underlying QUEEN = Underlying::QUEEN;
-    static constexpr Underlying KING = Underlying::KING;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr PieceTypeEnum internal() const noexcept { return pieceType_; }
 
 private:
-    Underlying value;
+    PieceTypeEnum pieceType_;
 };
 
 class Piece {
 public:
-    enum class Underlying : std::uint8_t {
+    enum class PieceEnum : std::uint8_t {
         WHITE_PAWN,
         WHITE_KNIGHT,
         WHITE_BISHOP,
@@ -88,108 +85,99 @@ public:
         NONE
     };
 
-    constexpr Piece() : value(Underlying::NONE) {}
-    constexpr Piece(Underlying piece) : value(piece) {}
-    constexpr Piece(int piece) : value(static_cast<Underlying>(piece)) {}
+    static constexpr PieceEnum WHITE_PAWN = PieceEnum::WHITE_PAWN;
+    static constexpr PieceEnum WHITE_KNIGHT = PieceEnum::WHITE_KNIGHT;
+    static constexpr PieceEnum WHITE_BISHOP = PieceEnum::WHITE_BISHOP;
+    static constexpr PieceEnum WHITE_ROOK = PieceEnum::WHITE_ROOK;
+    static constexpr PieceEnum WHITE_QUEEN = PieceEnum::WHITE_QUEEN;
+    static constexpr PieceEnum WHITE_KING = PieceEnum::WHITE_KING;
+    static constexpr PieceEnum BLACK_PAWN = PieceEnum::BLACK_PAWN;
+    static constexpr PieceEnum BLACK_KNIGHT = PieceEnum::BLACK_KNIGHT;
+    static constexpr PieceEnum BLACK_BISHOP = PieceEnum::BLACK_BISHOP;
+    static constexpr PieceEnum BLACK_ROOK = PieceEnum::BLACK_ROOK;
+    static constexpr PieceEnum BLACK_QUEEN = PieceEnum::BLACK_QUEEN;
+    static constexpr PieceEnum BLACK_KING = PieceEnum::BLACK_KING;
+    static constexpr PieceEnum NONE = PieceEnum::NONE;
 
-    constexpr Piece(std::string piece) : value(Underlying::NONE) {
+    constexpr Piece() noexcept : piece_(PieceEnum::NONE) {}
+    constexpr Piece(PieceEnum piece) noexcept : piece_(piece) {}
+    constexpr Piece(int piece) noexcept : piece_(static_cast<PieceEnum>(piece)) {}
+
+    constexpr Piece(std::string_view piece) noexcept : piece_(PieceEnum::NONE) {
         assert(piece.size() == 1);
         char c = piece[0];
         if (c == 'P') {
-            value = Underlying::WHITE_PAWN;
+            piece_ = PieceEnum::WHITE_PAWN;
         } else if (c == 'N') {
-            value = Underlying::WHITE_KNIGHT;
+            piece_ = PieceEnum::WHITE_KNIGHT;
         } else if (c == 'B') {
-            value = Underlying::WHITE_BISHOP;
+            piece_ = PieceEnum::WHITE_BISHOP;
         } else if (c == 'R') {
-            value = Underlying::WHITE_ROOK;
+            piece_ = PieceEnum::WHITE_ROOK;
         } else if (c == 'Q') {
-            value = Underlying::WHITE_QUEEN;
+            piece_ = PieceEnum::WHITE_QUEEN;
         } else if (c == 'K') {
-            value = Underlying::WHITE_KING;
+            piece_ = PieceEnum::WHITE_KING;
         } else if (c == 'p') {
-            value = Underlying::BLACK_PAWN;
+            piece_ = PieceEnum::BLACK_PAWN;
         } else if (c == 'n') {
-            value = Underlying::BLACK_KNIGHT;
+            piece_ = PieceEnum::BLACK_KNIGHT;
         } else if (c == 'b') {
-            value = Underlying::BLACK_BISHOP;
+            piece_ = PieceEnum::BLACK_BISHOP;
         } else if (c == 'r') {
-            value = Underlying::BLACK_ROOK;
+            piece_ = PieceEnum::BLACK_ROOK;
         } else if (c == 'q') {
-            value = Underlying::BLACK_QUEEN;
+            piece_ = PieceEnum::BLACK_QUEEN;
         } else if (c == 'k') {
-            value = Underlying::BLACK_KING;
+            piece_ = PieceEnum::BLACK_KING;
         } else {
-            value = Underlying::NONE;
+            piece_ = PieceEnum::NONE;
         }
     }
 
-    constexpr Piece(PieceType pieceType, Color color) : value(Underlying::NONE) {
+    constexpr Piece(PieceType pieceType, Color color) noexcept : piece_(PieceEnum::NONE) {
         if (pieceType == PieceType::NONE || color == Color::NONE) {
-            value = Underlying::NONE;
+            piece_ = PieceEnum::NONE;
             return;
         }
-        value = static_cast<Underlying>(static_cast<int>(color.underlying()) * 6 + static_cast<int>(pieceType.underlying()));
+        piece_ = static_cast<PieceEnum>(static_cast<int>(color.internal()) * 6 + static_cast<int>(pieceType.internal()));
     }
 
-    constexpr bool operator==(const Piece &other) const {
-        return value == other.value;
-    }
+    constexpr bool operator==(const Piece &other) const noexcept { return piece_ == other.piece_; }
+    constexpr bool operator!=(const Piece &other) const noexcept { return piece_ != other.piece_; }
+    constexpr bool operator<(const Piece &other) const noexcept { return static_cast<int>(piece_) < static_cast<int>(other.piece_); }
+    constexpr bool operator>(const Piece &other) const noexcept { return static_cast<int>(piece_) > static_cast<int>(other.piece_); }
+    constexpr bool operator<=(const Piece &other) const noexcept { return static_cast<int>(piece_) <= static_cast<int>(other.piece_); }
+    constexpr bool operator>=(const Piece &other) const noexcept { return static_cast<int>(piece_) >= static_cast<int>(other.piece_); }
 
-    constexpr bool operator!=(const Piece &other) const {
-        return value != other.value;
-    }
+    constexpr bool operator==(const PieceType &other) const noexcept { return type() == other; }
+    constexpr bool operator!=(const PieceType &other) const noexcept { return type() != other; }
+    constexpr bool operator<(const PieceType &other) const noexcept { return type() < other; }
+    constexpr bool operator>(const PieceType &other) const noexcept { return type() > other; }
+    constexpr bool operator<=(const PieceType &other) const noexcept { return type() <= other; }
+    constexpr bool operator>=(const PieceType &other) const noexcept { return type() >= other; }
 
-    constexpr bool operator==(const PieceType &other) const {
-        return type() == other;
-    }
+    constexpr bool operator==(const Color &other) const noexcept { return color() == other; }
+    constexpr bool operator!=(const Color &other) const noexcept { return color() != other; }
 
-    constexpr bool operator!=(const PieceType &other) const {
-        return type() != other;
-    }
-
-    constexpr bool operator==(const Color &other) const {
-        return color() == other;
-    }
-
-    constexpr bool operator!=(const Color &other) const {
-        return color() != other;
-    }
-
-    constexpr PieceType type() const {
-        if (value == Underlying::NONE) {
+    constexpr PieceType type() const noexcept {
+        if (piece_ == PieceEnum::NONE) {
             return PieceType::NONE;
         }
-        return PieceType(static_cast<int>(value) % 6);
+        return PieceType(static_cast<int>(piece_) % 6);
     }
 
-    constexpr Color color() const {
-        if (value == Underlying::NONE) {
+    constexpr Color color() const noexcept {
+        if (piece_ == PieceEnum::NONE) {
             return Color::NONE;
         }
-        return Color(static_cast<int>(value) / 6);
+        return Color(static_cast<int>(piece_) / 6);
     }
 
-    constexpr Underlying underlying() const {
-        return value;
-    }
-
-    static constexpr Underlying WHITE_PAWN = Underlying::WHITE_PAWN;
-    static constexpr Underlying WHITE_KNIGHT = Underlying::WHITE_KNIGHT;
-    static constexpr Underlying WHITE_BISHOP = Underlying::WHITE_BISHOP;
-    static constexpr Underlying WHITE_ROOK = Underlying::WHITE_ROOK;
-    static constexpr Underlying WHITE_QUEEN = Underlying::WHITE_QUEEN;
-    static constexpr Underlying WHITE_KING = Underlying::WHITE_KING;
-    static constexpr Underlying BLACK_PAWN = Underlying::BLACK_PAWN;
-    static constexpr Underlying BLACK_KNIGHT = Underlying::BLACK_KNIGHT;
-    static constexpr Underlying BLACK_BISHOP = Underlying::BLACK_BISHOP;
-    static constexpr Underlying BLACK_ROOK = Underlying::BLACK_ROOK;
-    static constexpr Underlying BLACK_QUEEN = Underlying::BLACK_QUEEN;
-    static constexpr Underlying BLACK_KING = Underlying::BLACK_KING;
-    static constexpr Underlying NONE = Underlying::NONE;
+    constexpr PieceEnum internal() const noexcept { return piece_; }
 
 private:
-    Underlying value;
+    PieceEnum piece_;
 };
 
-}
+}  // namespace Clownfish
