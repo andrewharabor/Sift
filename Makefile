@@ -1,3 +1,4 @@
+
 SHELL := /bin/zsh
 CXX := /usr/bin/clang++
 CXXFLAGS := -std=c++23 -g -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always -fsanitize=undefined,address
