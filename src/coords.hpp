@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstdint>
 
+#include "color.hpp"
+
 
 namespace Clownfish {
 
@@ -132,14 +134,21 @@ public:
     constexpr Direction(DirectionEnum direction) noexcept : direction_(direction) {}
     constexpr Direction(int direction) noexcept : direction_(static_cast<DirectionEnum>(direction)) { assert(isValid(direction)); }
 
+    constexpr Direction(DirectionEnum direction, Color color) noexcept : direction_(direction) {
+        assert(color != Color::NONE);
+        if (color == Color::BLACK) {
+            direction_ = static_cast<DirectionEnum>(-static_cast<int>(direction));
+        }
+    }
+
     constexpr bool operator==(const Direction &other) const noexcept { return direction_ == other.direction_; }
     constexpr bool operator!=(const Direction &other) const noexcept { return direction_ != other.direction_; }
 
-    constexpr DirectionEnum operator-() const noexcept {
+    constexpr Direction operator-() const noexcept {
         if (direction_ == DirectionEnum::NONE) {
-            return DirectionEnum::NONE;
+            return Direction::NONE;
         }
-        return static_cast<DirectionEnum>(-static_cast<int>(direction_));
+        return Direction(static_cast<DirectionEnum>(-static_cast<int>(direction_)));
     }
 
     constexpr DirectionEnum internal() const noexcept { return direction_; }
@@ -182,10 +191,7 @@ public:
     constexpr Square(int index) noexcept : square_(static_cast<SquareEnum>(index)) { assert(isValid(index)); }
 
     constexpr Square(File file, Rank rank) noexcept : square_(SquareEnum::NONE) {
-        if (file == File::NONE || rank == Rank::NONE) {
-            square_ = SquareEnum::NONE;
-            return;
-        }
+        assert(file != File::NONE && rank != Rank::NONE);
         square_ = static_cast<SquareEnum>(static_cast<int>(rank.internal()) * 8 + static_cast<int>(file.internal()));
     }
 
@@ -254,9 +260,7 @@ public:
 
         const File currentFile = file();
         const Rank currentRank = rank();
-        if (currentFile == File::NONE || currentRank == Rank::NONE) {
-            return Square::NONE;
-        }
+        assert(currentFile != File::NONE && currentRank != Rank::NONE);
 
         if ((direction == Direction::EAST || direction == Direction::NORTH_EAST || direction == Direction::SOUTH_EAST)
             && currentFile == File::FILE_H) {

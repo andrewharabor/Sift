@@ -33,11 +33,11 @@ public:
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
     constexpr bool operator!=(const Move &other) const noexcept { return move_ != other.move_; }
 
-    template<MoveType Type>
+    template<MoveType MT>
     static constexpr Move create(Square from, Square to, PieceType promotion = PieceType::NONE) noexcept {
-        const std::uint16_t typeBits = static_cast<std::uint16_t>(Type);
+        const std::uint16_t typeBits = static_cast<std::uint16_t>(MT);
         std::uint16_t promotionBits = 0;
-        if constexpr (Type == MoveType::PROMOTION) {
+        if constexpr (MT == MoveType::PROMOTION) {
             assert(promotion >= PieceType(PieceType::KNIGHT) && promotion <= PieceType(PieceType::QUEEN));
             promotionBits = static_cast<std::uint16_t>((static_cast<int>(promotion.internal()) - static_cast<int>(PieceType::KNIGHT)) << 12);
         }

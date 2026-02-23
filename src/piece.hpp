@@ -32,7 +32,7 @@ public:
 
     constexpr PieceType() noexcept : pieceType_(PieceTypeEnum::NONE) {}
     constexpr PieceType(PieceTypeEnum pieceType) noexcept : pieceType_(pieceType) {}
-    constexpr PieceType(int pieceType) noexcept : pieceType_(static_cast<PieceTypeEnum>(pieceType)) {}
+    constexpr PieceType(int pieceType) noexcept : pieceType_(static_cast<PieceTypeEnum>(pieceType)) { assert(isValid(pieceType)); }
 
     constexpr PieceType(std::string_view piece) noexcept : pieceType_(PieceTypeEnum::NONE) {
         assert(piece.size() == 1);
@@ -64,6 +64,8 @@ public:
     constexpr PieceTypeEnum internal() const noexcept { return pieceType_; }
 
 private:
+    constexpr bool isValid(int pieceType) const noexcept { return pieceType >= 0 && pieceType < 7; }
+
     PieceTypeEnum pieceType_;
 };
 
@@ -101,7 +103,7 @@ public:
 
     constexpr Piece() noexcept : piece_(PieceEnum::NONE) {}
     constexpr Piece(PieceEnum piece) noexcept : piece_(piece) {}
-    constexpr Piece(int piece) noexcept : piece_(static_cast<PieceEnum>(piece)) {}
+    constexpr Piece(int piece) noexcept : piece_(static_cast<PieceEnum>(piece)) { assert(isValid(piece)); }
 
     constexpr Piece(std::string_view piece) noexcept : piece_(PieceEnum::NONE) {
         assert(piece.size() == 1);
@@ -177,6 +179,8 @@ public:
     constexpr PieceEnum internal() const noexcept { return piece_; }
 
 private:
+    constexpr bool isValid(int piece) const noexcept { return piece >= 0 && piece < 13; }
+
     PieceEnum piece_;
 };
 

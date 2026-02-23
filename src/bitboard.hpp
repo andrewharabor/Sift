@@ -54,11 +54,11 @@ public:
     constexpr bool operator&&(std::uint64_t bits) const noexcept { return bitboard_ && bits; }
     constexpr bool operator||(std::uint64_t bits) const noexcept { return bitboard_ || bits; }
 
-    constexpr std::uint64_t operator&(std::uint64_t bits) const noexcept { return bitboard_ & bits; }
-    constexpr std::uint64_t operator|(std::uint64_t bits) const noexcept { return bitboard_ | bits; }
-    constexpr std::uint64_t operator^(std::uint64_t bits) const noexcept { return bitboard_ ^ bits; }
-    constexpr std::uint64_t operator<<(std::uint64_t shift) const noexcept { return bitboard_ << shift; }
-    constexpr std::uint64_t operator>>(std::uint64_t shift) const noexcept { return bitboard_ >> shift; }
+    constexpr Bitboard operator&(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ & bits); }
+    constexpr Bitboard operator|(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ | bits); }
+    constexpr Bitboard operator^(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ ^ bits); }
+    constexpr Bitboard operator<<(std::uint64_t shift) const noexcept { return Bitboard(bitboard_ << shift); }
+    constexpr Bitboard operator>>(std::uint64_t shift) const noexcept { return Bitboard(bitboard_ >> shift); }
 
     constexpr Bitboard &operator&=(std::uint64_t bits) noexcept {
         bitboard_ &= bits;
@@ -81,15 +81,15 @@ public:
         return *this;
     }
 
+    constexpr bool get(int index) const noexcept {
+        assert(index >= 0 && index < 64);
+        return bitboard_ & (1ULL << index);
+    }
+
     constexpr Bitboard &toggle(int index) noexcept {
         assert(index >= 0 && index < 64);
         bitboard_ ^= (1ULL << index);
         return *this;
-    }
-
-    constexpr bool check(int index) const noexcept {
-        assert(index >= 0 && index < 64);
-        return bitboard_ & (1ULL << index);
     }
 
     constexpr Bitboard &clear(int index) noexcept {

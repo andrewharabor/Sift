@@ -27,7 +27,7 @@ public:
         if (color_ == ColorEnum::NONE) {
             return Color::NONE;
         }
-        return Color(static_cast<ColorEnum>(static_cast<int>(color_) ^ 1));
+        return Color(static_cast<ColorEnum>(1 - static_cast<int>(color_)));
     }
 
     constexpr bool operator==(const Color &other) const noexcept { return color_ == other.color_; }

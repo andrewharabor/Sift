@@ -1,15 +1,103 @@
 
 #include <iostream>
 
+#include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
+#include "magic.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 
 
 using namespace std;
 using namespace Clownfish;
+
+Bitboard naiveKnightAttacks(Square square) {
+    assert(square != Square::NONE);
+    static constexpr int offsets[8][2] = {
+        { 1, 2 }, { 2, 1 }, { 2, -1 }, { 1, -2 },
+        { -1, -2 }, { -2, -1 }, { -2, 1 }, { -1, 2 }
+    };
+    Bitboard attacks(0ULL);
+    const int file = static_cast<int>(square.file().internal());
+    const int rank = static_cast<int>(square.rank().internal());
+
+    for (const auto &offset : offsets) {
+        const int newFile = file + offset[0];
+        const int newRank = rank + offset[1];
+        if (newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8) {
+            attacks.set(Square(File(newFile), Rank(newRank)).index());
+        }
+    }
+
+    return attacks;
+}
+
+Bitboard naiveKingAttacks(Square square) {
+    assert(square != Square::NONE);
+    static constexpr int offsets[8][2] = {
+        { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 },
+        { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }
+    };
+    Bitboard attacks(0ULL);
+    const int file = static_cast<int>(square.file().internal());
+    const int rank = static_cast<int>(square.rank().internal());
+
+    for (const auto &offset : offsets) {
+        const int newFile = file + offset[0];
+        const int newRank = rank + offset[1];
+        if (newFile >= 0 && newFile < 8 && newRank >= 0 && newRank < 8) {
+            attacks.set(Square(File(newFile), Rank(newRank)).index());
+        }
+    }
+
+    return attacks;
+}
+
+Bitboard naiveSliderAttacks(Square square, Bitboard occupied, bool rookLike) {
+    assert(square != Square::NONE);
+    static constexpr int bishopDirections[4][2] = {{ 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 }};
+    static constexpr int rookDirections[4][2] = {{ 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }};
+
+    Bitboard attacks(0ULL);
+    const int file = static_cast<int>(square.file().internal());
+    const int rank = static_cast<int>(square.rank().internal());
+    const int (*directions)[2] = rookLike ? rookDirections : bishopDirections;
+
+    for (int i = 0; i < 4; ++i) {
+        const int fileOffset = directions[i][0];
+        const int rankOffset = directions[i][1];
+        int currentFile = file + fileOffset;
+        int currentRank = rank + rankOffset;
+
+        while (currentFile >= 0 && currentFile < 8 && currentRank >= 0 && currentRank < 8) {
+            const int index = Square(File(currentFile), Rank(currentRank)).index();
+            attacks.set(index);
+            if (occupied.get(index)) {
+                break;
+            }
+            currentFile += fileOffset;
+            currentRank += rankOffset;
+        }
+    }
+
+    return attacks;
+}
+
+Bitboard sliderRelevantMask(Square square, bool rookLike) {
+    const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) |
+        ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
+    return naiveSliderAttacks(square, Bitboard(0ULL), rookLike) & ~edges;
+}
+
+Bitboard singleStepExpected(Square square, Direction direction) {
+    const Square destination = square + direction;
+    if (destination == Square::NONE) {
+        return Bitboard(0ULL);
+    }
+    return Bitboard(0ULL).set(destination.index());
+}
 
 void testColor() {
     Color defaultColor;
@@ -179,8 +267,6 @@ void testSquare() {
     assert(h8.index() == 63);
     assert(fromValidIndex == Square::SQUARE_D4);
     assert(fromFileRank == Square::SQUARE_E4);
-    assert(Square(File::NONE, Rank::RANK_1) == Square::NONE);
-    assert(Square(File::FILE_A, Rank::NONE) == Square::NONE);
 
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
@@ -301,12 +387,12 @@ void testBitboard() {
     Bitboard e;
     assert(e.empty());
     e.set(0).set(63);
-    assert(e.check(0));
-    assert(e.check(63));
+    assert(e.get(0));
+    assert(e.get(63));
     assert(e.count() == 2);
     e.toggle(0);
-    assert(!e.check(0));
-    assert(e.check(63));
+    assert(!e.get(0));
+    assert(e.get(63));
     e.clear(63);
     assert(e.empty());
     e.set(5).set(9);
@@ -417,6 +503,135 @@ void testMoveList() {
     assert(!list.empty());
 }
 
+void testAttacksAndMagic() {
+    Attacks::init();
+
+    for (int rank = 0; rank < 8; ++rank) {
+        assert(Attacks::RANK_MASKS[rank] == Bitboard(Rank(rank)));
+    }
+
+    for (int file = 0; file < 8; ++file) {
+        assert(Attacks::FILE_MASKS[file] == Bitboard(File(file)));
+    }
+
+    for (int squareIndex = 0; squareIndex < 64; ++squareIndex) {
+        const Square square(squareIndex);
+        const Bitboard bit = Bitboard(0ULL).set(squareIndex);
+
+        assert(Attacks::shift<Direction::NORTH>(bit) == singleStepExpected(square, Direction::NORTH));
+        assert(Attacks::shift<Direction::EAST>(bit) == singleStepExpected(square, Direction::EAST));
+        assert(Attacks::shift<Direction::SOUTH>(bit) == singleStepExpected(square, Direction::SOUTH));
+        assert(Attacks::shift<Direction::WEST>(bit) == singleStepExpected(square, Direction::WEST));
+        assert(Attacks::shift<Direction::NORTH_EAST>(bit) == singleStepExpected(square, Direction::NORTH_EAST));
+        assert(Attacks::shift<Direction::SOUTH_EAST>(bit) == singleStepExpected(square, Direction::SOUTH_EAST));
+        assert(Attacks::shift<Direction::SOUTH_WEST>(bit) == singleStepExpected(square, Direction::SOUTH_WEST));
+        assert(Attacks::shift<Direction::NORTH_WEST>(bit) == singleStepExpected(square, Direction::NORTH_WEST));
+
+        Bitboard expectedWhitePawn(0ULL);
+        const Square whiteLeft = square + Direction::NORTH_WEST;
+        const Square whiteRight = square + Direction::NORTH_EAST;
+        if (whiteLeft != Square::NONE) {
+            expectedWhitePawn.set(whiteLeft.index());
+        }
+        if (whiteRight != Square::NONE) {
+            expectedWhitePawn.set(whiteRight.index());
+        }
+
+        Bitboard expectedBlackPawn(0ULL);
+        const Square blackLeft = square + Direction::SOUTH_EAST;
+        const Square blackRight = square + Direction::SOUTH_WEST;
+        if (blackLeft != Square::NONE) {
+            expectedBlackPawn.set(blackLeft.index());
+        }
+        if (blackRight != Square::NONE) {
+            expectedBlackPawn.set(blackRight.index());
+        }
+
+        assert(Attacks::pawn(Color::WHITE, square) == expectedWhitePawn);
+        assert(Attacks::pawn(Color::BLACK, square) == expectedBlackPawn);
+
+        Bitboard expectedWhiteLeft(0ULL);
+        Bitboard expectedWhiteRight(0ULL);
+        Bitboard expectedBlackLeft(0ULL);
+        Bitboard expectedBlackRight(0ULL);
+        if (whiteLeft != Square::NONE) {
+            expectedWhiteLeft.set(whiteLeft.index());
+        }
+        if (whiteRight != Square::NONE) {
+            expectedWhiteRight.set(whiteRight.index());
+        }
+        if (blackLeft != Square::NONE) {
+            expectedBlackLeft.set(blackLeft.index());
+        }
+        if (blackRight != Square::NONE) {
+            expectedBlackRight.set(blackRight.index());
+        }
+
+        assert(Attacks::pawnLeftAttacks<Color::WHITE>(bit) == expectedWhiteLeft);
+        assert(Attacks::pawnRightAttacks<Color::WHITE>(bit) == expectedWhiteRight);
+        assert(Attacks::pawnLeftAttacks<Color::BLACK>(bit) == expectedBlackLeft);
+        assert(Attacks::pawnRightAttacks<Color::BLACK>(bit) == expectedBlackRight);
+
+        assert(Attacks::knight(square) == naiveKnightAttacks(square));
+        assert(Attacks::king(square) == naiveKingAttacks(square));
+    }
+
+    constexpr Bitboard fullBoard(0xFFFFFFFFFFFFFFFFULL);
+    const Bitboard whiteFullExpected = Attacks::shift<Direction::NORTH_WEST>(fullBoard) | Attacks::shift<Direction::NORTH_EAST>(fullBoard);
+    const Bitboard blackFullExpected = Attacks::shift<Direction::SOUTH_WEST>(fullBoard) | Attacks::shift<Direction::SOUTH_EAST>(fullBoard);
+    assert((Attacks::pawnLeftAttacks<Color::WHITE>(fullBoard) | Attacks::pawnRightAttacks<Color::WHITE>(fullBoard)) == whiteFullExpected);
+    assert((Attacks::pawnLeftAttacks<Color::BLACK>(fullBoard) | Attacks::pawnRightAttacks<Color::BLACK>(fullBoard)) == blackFullExpected);
+
+    for (int squareIndex = 0; squareIndex < 64; ++squareIndex) {
+        const Square square(squareIndex);
+
+        const Bitboard rookMask = sliderRelevantMask(square, true);
+        const std::uint64_t rookMaskBits = rookMask.bits();
+        std::uint64_t rookOccupiedBits = 0ULL;
+        do {
+            const Bitboard occupied(rookOccupiedBits);
+            const Bitboard expected = naiveSliderAttacks(square, occupied, true);
+            const Bitboard actual = Attacks::rook(square, occupied);
+            assert(actual == expected);
+            assert(Attacks::slider<PieceType::ROOK>(square, occupied) == expected);
+
+            const Bitboard noisyOccupied(rookOccupiedBits | (~rookMaskBits));
+            assert(Attacks::rook(square, noisyOccupied) == expected);
+
+            rookOccupiedBits = (rookOccupiedBits - rookMaskBits) & rookMaskBits;
+        } while (rookOccupiedBits != 0ULL);
+
+        const Bitboard bishopMask = sliderRelevantMask(square, false);
+        const std::uint64_t bishopMaskBits = bishopMask.bits();
+        std::uint64_t bishopOccupiedBits = 0ULL;
+        do {
+            const Bitboard occupied(bishopOccupiedBits);
+            const Bitboard expected = naiveSliderAttacks(square, occupied, false);
+            const Bitboard actual = Attacks::bishop(square, occupied);
+            assert(actual == expected);
+            assert(Attacks::slider<PieceType::BISHOP>(square, occupied) == expected);
+
+            const Bitboard noisyOccupied(bishopOccupiedBits | (~bishopMaskBits));
+            assert(Attacks::bishop(square, noisyOccupied) == expected);
+
+            bishopOccupiedBits = (bishopOccupiedBits - bishopMaskBits) & bishopMaskBits;
+        } while (bishopOccupiedBits != 0ULL);
+
+        const Bitboard sampleOccupied = Bitboard(0x0102040810204080ULL) | Bitboard(0x8040201008040201ULL);
+        const Bitboard queenExpected = Attacks::rook(square, sampleOccupied) | Attacks::bishop(square, sampleOccupied);
+        assert(Attacks::queen(square, sampleOccupied) == queenExpected);
+        assert(Attacks::slider<PieceType::QUEEN>(square, sampleOccupied) == queenExpected);
+    }
+
+    Attacks::init();
+    for (int squareIndex = 0; squareIndex < 64; ++squareIndex) {
+        const Square square(squareIndex);
+        const Bitboard occupied = Bitboard(0x00FF00000000FF00ULL) | Bitboard(1ULL << squareIndex);
+        assert(Attacks::rook(square, occupied) == naiveSliderAttacks(square, occupied, true));
+        assert(Attacks::bishop(square, occupied) == naiveSliderAttacks(square, occupied, false));
+    }
+}
+
 int main() {
     testColor();
     testPieceType();
@@ -427,6 +642,7 @@ int main() {
     testBitboard();
     testMove();
     testMoveList();
+    testAttacksAndMagic();
 
     cout << "Success!" << endl;
 
