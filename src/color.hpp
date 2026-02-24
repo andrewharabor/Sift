@@ -40,4 +40,4 @@ private:
     ColorEnum color_;
 };
 
-}  // namespace Clownfish
+}

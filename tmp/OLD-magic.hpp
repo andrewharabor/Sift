@@ -169,4 +169,4 @@ private:
     static inline Bitboard sliderSlow(Square square, Bitboard occupied);
 };
 
-}  // namespace Clownfish
+}

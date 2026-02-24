@@ -131,4 +131,4 @@ private:
     std::uint64_t bitboard_;
 };
 
-} // namespace Clownfish
+}

@@ -183,4 +183,4 @@ private:
     PieceEnum piece_;
 };
 
-}  // namespace Clownfish
+}

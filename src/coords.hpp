@@ -316,4 +316,4 @@ private:
     SquareEnum square_;
 };
 
-}  // namespace Clownfish
+}

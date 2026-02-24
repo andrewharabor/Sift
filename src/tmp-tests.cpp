@@ -5,7 +5,6 @@
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
-#include "magic.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 
