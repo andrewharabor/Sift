@@ -26,24 +26,29 @@ public:
     constexpr static MoveType EN_PASSANT = MoveType::EN_PASSANT;
     constexpr static MoveType CASTLING = MoveType::CASTLING;
 
+    constexpr static std::uint16_t NULL_MOVE = 0;
+
     constexpr Move() noexcept : move_(0) {}
     constexpr Move(std::uint16_t move) noexcept : move_(move) {}
 
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
     constexpr bool operator!=(const Move &other) const noexcept { return move_ != other.move_; }
 
-    template<MoveType MT>
+    template<MoveType MT = MoveType::NORMAL>
     static constexpr Move create(Square from, Square to, PieceType promotion = PieceType::NONE) noexcept {
+        assert(from != Square::NONE && to != Square::NONE);
         const std::uint16_t typeBits = static_cast<std::uint16_t>(MT);
         std::uint16_t promotionBits = 0;
         if constexpr (MT == MoveType::PROMOTION) {
             assert(promotion >= PieceType(PieceType::KNIGHT) && promotion <= PieceType(PieceType::QUEEN));
-            promotionBits = static_cast<std::uint16_t>((static_cast<int>(promotion.internal()) - static_cast<int>(PieceType::KNIGHT)) << 12);
+            promotionBits = static_cast<std::uint16_t>((promotion - PieceType(PieceType::KNIGHT)) << 12);
         }
         const std::uint16_t fromBits = static_cast<std::uint16_t>(from.index() << 6);
         const std::uint16_t toBits = static_cast<std::uint16_t>(to.index());
         return Move(typeBits | promotionBits | fromBits | toBits);
     }
+
+    static constexpr Move createNull() noexcept { return Move(NULL_MOVE); }
 
     constexpr Square from() const noexcept { return Square((move_ >> 6) & 0x3F); }
     constexpr Square to() const noexcept { return Square(move_ & 0x3F); }
@@ -54,13 +59,17 @@ public:
         if (type() != MoveType::PROMOTION) {
             return PieceType::NONE;
         }
-        return PieceType(((move_ >> 12) & 3) + static_cast<int>(PieceType::KNIGHT));
+        return PieceType(((move_ >> 12) & 3) + PieceType(PieceType::KNIGHT));
     }
 
-    constexpr std::uint16_t move() const noexcept { return move_; }
+    constexpr void setScore(std::int16_t score) noexcept { score_ = score; }
+    constexpr std::int16_t score() const noexcept { return score_; }
+
+    constexpr std::uint16_t internal() const noexcept { return move_; }
 
 private:
     std::uint16_t move_;
+    std::int16_t score_;
 };
 
 class MoveList {

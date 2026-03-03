@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 
@@ -55,6 +56,8 @@ public:
             initSliders(Square(i), BISHOP_TABLE, BISHOP_MAGICS[i], sliderSlow<PieceType::BISHOP>);
             initSliders(Square(i), ROOK_TABLE, ROOK_MAGICS[i], sliderSlow<PieceType::ROOK>);
         }
+
+        SQUARES_BETWEEN_BITBOARDS = initSquaresBetween();
     }
 
     template<Color::ColorEnum C>
@@ -83,10 +86,10 @@ public:
         }
     }
 
-    static constexpr Bitboard pawn(Color color, Square square) noexcept {
+    static constexpr Bitboard pawn(Square square, Color color) noexcept {
         assert(color != Color::NONE);
         assert(square != Square::NONE);
-        return PAWN_ATTACKS[static_cast<int>(color.internal())][square.index()];
+        return PAWN_ATTACKS[color][square.index()];
     }
 
     static constexpr Bitboard knight(Square square) noexcept {
@@ -130,6 +133,11 @@ public:
         }
     }
 
+    static Bitboard between(Square from, Square to) noexcept {
+        assert(from != Square::NONE && to != Square::NONE);
+        return SQUARES_BETWEEN_BITBOARDS[static_cast<std::size_t>(from.index())][static_cast<std::size_t>(to.index())];
+    }
+
 private:
     struct Magic {
         std::uint64_t mask;
@@ -140,7 +148,7 @@ private:
     };
 
     static constexpr Bitboard PAWN_ATTACKS[2][64] = {
-        { 0x200, 0x500, 0xa00, 0x1400,
+        {0x200, 0x500, 0xa00, 0x1400,
             0x2800, 0x5000, 0xa000, 0x4000,
             0x20000, 0x50000, 0xa0000, 0x140000,
             0x280000, 0x500000, 0xa00000, 0x400000,
@@ -155,9 +163,9 @@ private:
             0x200000000000000, 0x500000000000000, 0xa00000000000000, 0x1400000000000000,
             0x2800000000000000, 0x5000000000000000, 0xa000000000000000, 0x4000000000000000,
             0x0, 0x0, 0x0, 0x0,
-            0x0, 0x0, 0x0, 0x0 },
+            0x0, 0x0, 0x0, 0x0},
 
-        { 0x0, 0x0, 0x0, 0x0,
+        {0x0, 0x0, 0x0, 0x0,
             0x0, 0x0, 0x0, 0x0,
             0x2, 0x5, 0xa, 0x14,
             0x28, 0x50, 0xa0, 0x40,
@@ -172,8 +180,7 @@ private:
             0x20000000000, 0x50000000000, 0xa0000000000, 0x140000000000,
             0x280000000000, 0x500000000000, 0xa00000000000, 0x400000000000,
             0x2000000000000, 0x5000000000000, 0xa000000000000, 0x14000000000000,
-            0x28000000000000, 0x50000000000000, 0xa0000000000000, 0x40000000000000
-        }
+            0x28000000000000, 0x50000000000000, 0xa0000000000000, 0x40000000000000}
     };
 
     static constexpr Bitboard KNIGHT_ATTACKS[64] = {
@@ -189,7 +196,8 @@ private:
         0x5088008850000000, 0xA0100010A0000000, 0x4020002040000000, 0x0400040200000000, 0x0800080500000000,
         0x1100110A00000000, 0x2200221400000000, 0x4400442800000000, 0x8800885000000000, 0x100010A000000000,
         0x2000204000000000, 0x0004020000000000, 0x0008050000000000, 0x00110A0000000000, 0x0022140000000000,
-        0x0044280000000000, 0x0088500000000000, 0x0010A00000000000, 0x0020400000000000};
+        0x0044280000000000, 0x0088500000000000, 0x0010A00000000000, 0x0020400000000000
+    };
 
     static constexpr Bitboard KING_ATTACKS[64] = {
         0x0000000000000302, 0x0000000000000705, 0x0000000000000E0A, 0x0000000000001C14, 0x0000000000003828,
@@ -204,7 +212,8 @@ private:
         0x0070507000000000, 0x00E0A0E000000000, 0x00C040C000000000, 0x0302030000000000, 0x0705070000000000,
         0x0E0A0E0000000000, 0x1C141C0000000000, 0x3828380000000000, 0x7050700000000000, 0xE0A0E00000000000,
         0xC040C00000000000, 0x0203000000000000, 0x0507000000000000, 0x0A0E000000000000, 0x141C000000000000,
-        0x2838000000000000, 0x5070000000000000, 0xA0E0000000000000, 0x40C0000000000000};
+        0x2838000000000000, 0x5070000000000000, 0xA0E0000000000000, 0x40C0000000000000
+    };
 
     static constexpr std::uint64_t ROOK_MAGICS[64] = {
         0x8a80104000800020ULL, 0x140002000100040ULL,  0x2801880a0017001ULL,  0x100081001000420ULL,
@@ -222,7 +231,8 @@ private:
         0x101002200408200ULL,  0x40802000401080ULL,   0x4008142004410100ULL, 0x2060820c0120200ULL,
         0x1001004080100ULL,    0x20c020080040080ULL,  0x2935610830022400ULL, 0x44440041009200ULL,
         0x280001040802101ULL,  0x2100190040002085ULL, 0x80c0084100102001ULL, 0x4024081001000421ULL,
-        0x20030a0244872ULL,    0x12001008414402ULL,   0x2006104900a0804ULL,  0x1004081002402ULL};
+        0x20030a0244872ULL,    0x12001008414402ULL,   0x2006104900a0804ULL,  0x1004081002402ULL
+    };
 
     static constexpr std::uint64_t BISHOP_MAGICS[64] = {
         0x40040844404084ULL,   0x2004208a004208ULL,   0x10190041080202ULL,   0x108060845042010ULL,
@@ -240,7 +250,8 @@ private:
         0x500861011240000ULL,  0x180806108200800ULL,  0x4000020e01040044ULL, 0x300000261044000aULL,
         0x802241102020002ULL,  0x20906061210001ULL,   0x5a84841004010310ULL, 0x4010801011c04ULL,
         0xa010109502200ULL,    0x4a02012000ULL,       0x500201010098b028ULL, 0x8040002811040900ULL,
-        0x28000010020204ULL,   0x6000020202d0240ULL,  0x8918844842082200ULL, 0x4010011029020020ULL};
+        0x28000010020204ULL,   0x6000020202d0240ULL,  0x8918844842082200ULL, 0x4010011029020020ULL
+    };
 
     static inline Bitboard ROOK_ATTACKS[0x19000] = {};
     static inline Bitboard BISHOP_ATTACKS[0x1480] = {};
@@ -268,18 +279,18 @@ private:
     }
 
     template<PieceType::PieceTypeEnum PT>
-    static Bitboard sliderSlow(Square square, Bitboard occupied) {
+    static Bitboard sliderSlow(Square square, Bitboard occupied) noexcept {
         static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK);
         assert(square != Square::NONE);
         static constexpr int directions[2][4][2] = {
-            { { 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 } },
-            { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
+            {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}},
+            {{0, 1}, {1, 0}, {0, -1}, {-1, 0}}
         };
         const bool isRook = (PT == PieceType::ROOK);
         Bitboard attacks = 0ULL;
 
-        int file = static_cast<int>(square.file().internal());
-        int rank = static_cast<int>(square.rank().internal());
+        int file = square.file();
+        int rank = square.rank();
         for (int i = 0; i < 4; i++) {
             int fileOffset = directions[isRook][i][0];
             int rankOffset = directions[isRook][i][1];
@@ -295,6 +306,37 @@ private:
         }
 
         return attacks;
+    }
+
+    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_BETWEEN_BITBOARDS = {};
+
+    static std::array<std::array<Bitboard, 64>, 64> initSquaresBetween() noexcept {
+        std::array<std::array<Bitboard, 64>, 64> betweenBitboards = {};
+
+        auto path = [](PieceType pieceType, Square square, Bitboard occupied) {
+            if (pieceType == PieceType::BISHOP) {
+                return bishop(square, occupied);
+            } else {
+                return rook(square, occupied);
+            }
+        };
+
+        for (int from = 0; from < 64; from++) {
+            for (int to = 0; to < 64; to++) {
+                for (PieceType pieceType : {PieceType::BISHOP, PieceType::ROOK}) {
+                    Square square1 = Square(from);
+                    Square square2 = Square(to);
+                    const size_t index1 = static_cast<std::size_t>(square1.index());
+                    const size_t index2 = static_cast<std::size_t>(square2.index());
+                    if (path(pieceType, square1, 0ULL).get(square2.index())) {
+                        betweenBitboards[index1][index2] = path(pieceType, square1, Bitboard(square1)) & path(pieceType, square2, Bitboard(square2));
+                    }
+                    betweenBitboards[index1][index2].set(square2.index());
+                }
+            }
+        }
+
+        return betweenBitboards;
     }
 };
 

@@ -20,9 +20,9 @@ public:
 
     constexpr Color() noexcept : color_(ColorEnum::NONE) {}
     constexpr Color(ColorEnum color) noexcept : color_(color) {}
-    constexpr Color(int color) noexcept : color_(static_cast<ColorEnum>(color)) { assert(isValid(color)); }
+    constexpr Color(int color) noexcept : color_(static_cast<ColorEnum>(color)) { assert(valid(color)); }
 
-    constexpr Color operator!() const noexcept {
+    constexpr Color operator~() const noexcept {
         if (color_ == ColorEnum::NONE) {
             return Color::NONE;
         }
@@ -31,11 +31,12 @@ public:
 
     constexpr bool operator==(const Color &other) const noexcept { return color_ == other.color_; }
     constexpr bool operator!=(const Color &other) const noexcept { return color_ != other.color_; }
+    constexpr operator int() const noexcept { return static_cast<int>(color_); }
 
     constexpr ColorEnum internal() const noexcept { return color_; }
 
 private:
-    static constexpr bool isValid(int color) noexcept { return color >= 0 && color < 3; }
+    static constexpr bool valid(int color) noexcept { return color >= 0 && color < 3; }
 
     ColorEnum color_;
 };

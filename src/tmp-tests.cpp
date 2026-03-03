@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <unordered_set>
 
 #include "attacks.hpp"
 #include "bitboard.hpp"
@@ -7,6 +8,8 @@
 #include "coords.hpp"
 #include "move.hpp"
 #include "piece.hpp"
+#include "position.hpp"
+#include "zobrist.hpp"
 
 
 using namespace std;
@@ -19,8 +22,8 @@ Bitboard naiveKnightAttacks(Square square) {
         { -1, -2 }, { -2, -1 }, { -2, 1 }, { -1, 2 }
     };
     Bitboard attacks(0ULL);
-    const int file = static_cast<int>(square.file().internal());
-    const int rank = static_cast<int>(square.rank().internal());
+    const int file = square.file();
+    const int rank = square.rank();
 
     for (const auto &offset : offsets) {
         const int newFile = file + offset[0];
@@ -40,8 +43,8 @@ Bitboard naiveKingAttacks(Square square) {
         { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 }
     };
     Bitboard attacks(0ULL);
-    const int file = static_cast<int>(square.file().internal());
-    const int rank = static_cast<int>(square.rank().internal());
+    const int file = square.file();
+    const int rank = square.rank();
 
     for (const auto &offset : offsets) {
         const int newFile = file + offset[0];
@@ -60,8 +63,8 @@ Bitboard naiveSliderAttacks(Square square, Bitboard occupied, bool rookLike) {
     static constexpr int rookDirections[4][2] = {{ 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }};
 
     Bitboard attacks(0ULL);
-    const int file = static_cast<int>(square.file().internal());
-    const int rank = static_cast<int>(square.rank().internal());
+    const int file = square.file();
+    const int rank = square.rank();
     const int (*directions)[2] = rookLike ? rookDirections : bishopDirections;
 
     for (int i = 0; i < 4; ++i) {
@@ -108,13 +111,16 @@ void testColor() {
 
     assert(defaultColor == Color::NONE);
     assert(whiteColor != blackColor);
-    assert(!whiteColor == Color::BLACK);
-    assert(!blackColor == Color::WHITE);
+    assert(~whiteColor == Color::BLACK);
+    assert(~blackColor == Color::WHITE);
     assert(Color::WHITE != Color::BLACK);
     assert(defaultColor == Color::NONE);
-    assert(static_cast<int>(Color::WHITE) == 0);
-    assert(static_cast<int>(Color::BLACK) == 1);
-    assert(static_cast<int>(Color::NONE) == 2);
+    const int whiteInt = Color(Color::WHITE);
+    const int blackInt = Color(Color::BLACK);
+    const int noneInt = Color(Color::NONE);
+    assert(whiteInt == 0);
+    assert(blackInt == 1);
+    assert(noneInt == 2);
     assert(whiteFromInt == Color::WHITE);
     assert(blackFromInt == Color::BLACK);
     assert(noneFromInt == Color::NONE);
@@ -249,10 +255,14 @@ void testDirection() {
     assert(Direction() == Direction::NONE);
     assert(north != east);
     assert(none == Direction::NONE);
-    assert(static_cast<int>(Direction::NORTH) == 8);
-    assert(static_cast<int>(Direction::SOUTH) == -8);
-    assert(static_cast<int>(Direction::EAST) == 1);
-    assert(static_cast<int>(Direction::WEST) == -1);
+    const int northInt = Direction(Direction::NORTH);
+    const int southInt = Direction(Direction::SOUTH);
+    const int eastInt = Direction(Direction::EAST);
+    const int westInt = Direction(Direction::WEST);
+    assert(northInt == 8);
+    assert(southInt == -8);
+    assert(eastInt == 1);
+    assert(westInt == -1);
 }
 
 void testSquare() {
@@ -416,7 +426,7 @@ void testBitboard() {
 
 void testMove() {
     Move defaultMove;
-    assert(defaultMove.move() == 0);
+    assert(defaultMove.internal() == 0);
     assert(defaultMove.from() == Square::SQUARE_A1);
     assert(defaultMove.to() == Square::SQUARE_A1);
     assert(defaultMove.type() == Move::NORMAL);
@@ -427,7 +437,7 @@ void testMove() {
     assert(normalMove.to() == Square::SQUARE_E4);
     assert(normalMove.type() == Move::NORMAL);
     assert(normalMove.promotion() == PieceType::NONE);
-    assert(normalMove.move() != 0);
+    assert(normalMove.internal() != 0);
 
     Move enPassantMove = Move::create<Move::EN_PASSANT>(Square::SQUARE_E5, Square::SQUARE_D6);
     assert(enPassantMove.from() == Square::SQUARE_E5);
@@ -449,7 +459,7 @@ void testMove() {
     Move promotionToKnight = Move::create<Move::PROMOTION>(Square::SQUARE_B7, Square::SQUARE_B8, PieceType::KNIGHT);
     assert(promotionToKnight.promotion() == PieceType::KNIGHT);
 
-    Move copiedMove(normalMove.move());
+    Move copiedMove(normalMove.internal());
     assert(copiedMove == normalMove);
     assert(copiedMove != promotionMove);
 }
@@ -546,8 +556,8 @@ void testAttacksAndMagic() {
             expectedBlackPawn.set(blackRight.index());
         }
 
-        assert(Attacks::pawn(Color::WHITE, square) == expectedWhitePawn);
-        assert(Attacks::pawn(Color::BLACK, square) == expectedBlackPawn);
+        assert(Attacks::pawn(square, Color::WHITE) == expectedWhitePawn);
+        assert(Attacks::pawn(square, Color::BLACK) == expectedBlackPawn);
 
         Bitboard expectedWhiteLeft(0ULL);
         Bitboard expectedWhiteRight(0ULL);
@@ -631,6 +641,47 @@ void testAttacksAndMagic() {
     }
 }
 
+void testZobrist() {
+    assert(Zobrist::piece(Piece::BLACK_PAWN, Square::SQUARE_A1) == 0x9D39247E33776D41ULL);
+    assert(Zobrist::piece(Piece::WHITE_PAWN, Square::SQUARE_A1) == 0x5355F900C2A82DC7ULL);
+    assert(Zobrist::sideToMove() == 0xF8D626AAAF278509ULL);
+
+    assert(Zobrist::piece(Piece::WHITE_KNIGHT, Square::SQUARE_C3) == Zobrist::piece(Piece::WHITE_KNIGHT, Square::SQUARE_C3));
+    assert(Zobrist::piece(Piece::WHITE_KNIGHT, Square::SQUARE_C3) != Zobrist::piece(Piece::WHITE_KNIGHT, Square::SQUARE_C4));
+    assert(Zobrist::piece(Piece::WHITE_KNIGHT, Square::SQUARE_C3) != Zobrist::piece(Piece::BLACK_KNIGHT, Square::SQUARE_C3));
+
+    assert(Zobrist::castling(0) == 0ULL);
+    for (int bit = 0; bit < 4; ++bit) {
+        assert(Zobrist::castling(1 << bit) == Zobrist::castlingIndex(bit));
+    }
+
+    for (int rights = 0; rights < 16; ++rights) {
+        std::uint64_t expected = 0ULL;
+        for (int bit = 0; bit < 4; ++bit) {
+            if ((rights & (1 << bit)) != 0) {
+                expected ^= Zobrist::castlingIndex(bit);
+            }
+        }
+        assert(Zobrist::castling(rights) == expected);
+    }
+
+    std::unordered_set<std::uint64_t> enPassantHashes;
+    for (int file = 0; file < 8; ++file) {
+        const std::uint64_t hash = Zobrist::enPassant(File(file));
+        assert(hash != 0ULL);
+        enPassantHashes.insert(hash);
+    }
+    assert(enPassantHashes.size() == 8);
+
+    std::unordered_set<std::uint64_t> castlingIndexHashes;
+    for (int bit = 0; bit < 4; ++bit) {
+        const std::uint64_t hash = Zobrist::castlingIndex(bit);
+        assert(hash != 0ULL);
+        castlingIndexHashes.insert(hash);
+    }
+    assert(castlingIndexHashes.size() == 4);
+}
+
 int main() {
     testColor();
     testPieceType();
@@ -642,6 +693,7 @@ int main() {
     testMove();
     testMoveList();
     testAttacksAndMagic();
+    testZobrist();
 
     cout << "Success!" << endl;
 

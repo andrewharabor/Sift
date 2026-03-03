@@ -45,20 +45,19 @@ public:
 
     constexpr File() noexcept : file_(FileEnum::NONE) {}
     constexpr File(FileEnum file) noexcept : file_(file) {}
-    constexpr File(int file) noexcept : file_(static_cast<FileEnum>(file)) { assert(isValid(file)); }
+    constexpr File(int file) noexcept : file_(static_cast<FileEnum>(file)) { assert(file >= 0 && file < 8); }
 
     constexpr bool operator==(const File &other) const noexcept { return file_ == other.file_; }
     constexpr bool operator!=(const File &other) const noexcept { return file_ != other.file_; }
-    constexpr bool operator<(const File &other) const noexcept { return static_cast<int>(file_) < static_cast<int>(other.file_); }
-    constexpr bool operator>(const File &other) const noexcept { return static_cast<int>(file_) > static_cast<int>(other.file_); }
-    constexpr bool operator<=(const File &other) const noexcept { return static_cast<int>(file_) <= static_cast<int>(other.file_); }
-    constexpr bool operator>=(const File &other) const noexcept { return static_cast<int>(file_) >= static_cast<int>(other.file_); }
+    constexpr bool operator<(const File &other) const noexcept { return file_ < other.file_; }
+    constexpr bool operator>(const File &other) const noexcept { return file_ > other.file_; }
+    constexpr bool operator<=(const File &other) const noexcept { return file_ <= other.file_; }
+    constexpr bool operator>=(const File &other) const noexcept { return file_ >= other.file_; }
+    constexpr operator int() const noexcept { return static_cast<int>(file_); }
 
     constexpr FileEnum internal() const noexcept { return file_; }
 
 private:
-    static constexpr bool isValid(int file) noexcept { return file >= 0 && file < 8; }
-
     FileEnum file_;
 };
 
@@ -88,20 +87,24 @@ public:
 
     constexpr Rank() noexcept : rank_(RankEnum::NONE) {}
     constexpr Rank(RankEnum rank) noexcept : rank_(rank) {}
-    constexpr Rank(int rank) noexcept : rank_(static_cast<RankEnum>(rank)) { assert(isValid(rank)); }
+    constexpr Rank(int rank) noexcept : rank_(static_cast<RankEnum>(rank)) { assert(rank >= 0 && rank < 8); }
 
     constexpr bool operator==(const Rank &other) const noexcept { return rank_ == other.rank_; }
     constexpr bool operator!=(const Rank &other) const noexcept { return rank_ != other.rank_; }
-    constexpr bool operator<(const Rank &other) const noexcept { return static_cast<int>(rank_) < static_cast<int>(other.rank_); }
-    constexpr bool operator>(const Rank &other) const noexcept { return static_cast<int>(rank_) > static_cast<int>(other.rank_); }
-    constexpr bool operator<=(const Rank &other) const noexcept { return static_cast<int>(rank_) <= static_cast<int>(other.rank_); }
-    constexpr bool operator>=(const Rank &other) const noexcept { return static_cast<int>(rank_) >= static_cast<int>(other.rank_); }
+    constexpr bool operator<(const Rank &other) const noexcept { return rank_ < other.rank_; }
+    constexpr bool operator>(const Rank &other) const noexcept { return rank_ > other.rank_; }
+    constexpr bool operator<=(const Rank &other) const noexcept { return rank_ <= other.rank_; }
+    constexpr bool operator>=(const Rank &other) const noexcept { return rank_ >= other.rank_; }
+    constexpr operator int() const noexcept { return static_cast<int>(rank_); }
+
+    constexpr bool backRank(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return static_cast<int>(rank_) == (color * 7);
+    };
 
     constexpr RankEnum internal() const noexcept { return rank_; }
 
 private:
-    static constexpr bool isValid(int rank) noexcept { return rank >= 0 && rank < 8; }
-
     RankEnum rank_;
 };
 
@@ -131,12 +134,15 @@ public:
 
     constexpr Direction() noexcept : direction_(DirectionEnum::NONE) {}
     constexpr Direction(DirectionEnum direction) noexcept : direction_(direction) {}
-    constexpr Direction(int direction) noexcept : direction_(static_cast<DirectionEnum>(direction)) { assert(isValid(direction)); }
+    constexpr Direction(int direction) noexcept : direction_(static_cast<DirectionEnum>(direction)) {
+        assert(direction == 8 || direction == 1 || direction == -8 || direction == -1 ||
+            direction == 9 || direction == -7 || direction == -9 || direction == 7 || direction == 0);
+    }
 
     constexpr Direction(DirectionEnum direction, Color color) noexcept : direction_(direction) {
         assert(color != Color::NONE);
         if (color == Color::BLACK) {
-            direction_ = static_cast<DirectionEnum>(-static_cast<int>(direction));
+            direction_ = static_cast<DirectionEnum>(-static_cast<int>(direction_));
         }
     }
 
@@ -150,14 +156,11 @@ public:
         return Direction(static_cast<DirectionEnum>(-static_cast<int>(direction_)));
     }
 
+    constexpr operator int() const noexcept { return static_cast<int>(direction_); }
+
     constexpr DirectionEnum internal() const noexcept { return direction_; }
 
 private:
-    constexpr bool isValid(int direction) const noexcept {
-        return direction == 8 || direction == 1 || direction == -8 || direction == -1 ||
-            direction == 9 || direction == -7 || direction == -9 || direction == 7 || direction == 0;
-    }
-
     DirectionEnum direction_;
 };
 
@@ -187,19 +190,22 @@ public:
 
     constexpr Square() noexcept : square_(SquareEnum::NONE) {}
     constexpr Square(SquareEnum square) noexcept : square_(square) {}
-    constexpr Square(int index) noexcept : square_(static_cast<SquareEnum>(index)) { assert(isValid(index)); }
+    constexpr Square(int index) noexcept : square_(static_cast<SquareEnum>(index)) { assert(index >= 0 && index < 64); }
 
     constexpr Square(File file, Rank rank) noexcept : square_(SquareEnum::NONE) {
         assert(file != File::NONE && rank != Rank::NONE);
-        square_ = static_cast<SquareEnum>(static_cast<int>(rank.internal()) * 8 + static_cast<int>(file.internal()));
+        square_ = static_cast<SquareEnum>(rank * 8 + file);
     }
 
     constexpr bool operator==(const Square &other) const noexcept { return square_ == other.square_; }
     constexpr bool operator!=(const Square &other) const noexcept { return square_ != other.square_; }
-    constexpr bool operator<(const Square &other) const noexcept { return static_cast<int>(square_) < static_cast<int>(other.square_); }
-    constexpr bool operator>(const Square &other) const noexcept { return static_cast<int>(square_) > static_cast<int>(other.square_); }
-    constexpr bool operator<=(const Square &other) const noexcept { return static_cast<int>(square_) <= static_cast<int>(other.square_); }
-    constexpr bool operator>=(const Square &other) const noexcept { return static_cast<int>(square_) >= static_cast<int>(other.square_); }
+    constexpr bool operator<(const Square &other) const noexcept { return square_ < other.square_; }
+    constexpr bool operator>(const Square &other) const noexcept { return square_ > other.square_; }
+    constexpr bool operator<=(const Square &other) const noexcept { return square_ <= other.square_; }
+    constexpr bool operator>=(const Square &other) const noexcept { return square_ >= other.square_; }
+    constexpr operator int() const noexcept { return static_cast<int>(square_); }
+
+    constexpr Square operator^(const Square &other) const noexcept { return Square(static_cast<SquareEnum>(index() ^ other.index())); }
 
     constexpr Square &operator++() noexcept {
         if (square_ == SquareEnum::NONE) {
@@ -281,8 +287,8 @@ public:
             return Square::NONE;
         }
 
-        const int newIndex = index() + static_cast<int>(direction.internal());
-        if (!isValid(newIndex)) {
+        const int newIndex = index() + direction;
+        if (newIndex < 0 || newIndex >= 64) {
             return Square::NONE;
         }
         return Square(static_cast<SquareEnum>(newIndex));
@@ -290,6 +296,14 @@ public:
 
     constexpr Square operator-(Direction direction) const noexcept {
         return *this + (-direction);
+    }
+
+    constexpr Square &mirror() noexcept {
+        if (square_ == SquareEnum::NONE) {
+            return *this;
+        }
+        square_ = static_cast<SquareEnum>(index() ^ 56);
+        return *this;
     }
 
     constexpr File file() const noexcept {
@@ -306,13 +320,49 @@ public:
         return Rank(index() / 8);
     }
 
+    constexpr Square relative(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return Square(index() ^ (color * 56));
+    }
+
+    static constexpr bool sameColor(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        return ((9 * (square1 ^ square2).index()) & 8) == 0;
+    }
+
+    static constexpr int indexDistance(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        return std::abs(square1.index() - square2.index());
+    }
+
+    static constexpr Square kingCastlingSquare(Color color, bool kingSide) noexcept {
+        assert(color != Color::NONE);
+        if (kingSide) {
+            return Square(SquareEnum::SQUARE_G1).relative(color);
+        } else {
+            return Square(SquareEnum::SQUARE_C1).relative(color);
+        }
+    }
+
+    static constexpr Square rookCastlingSquare(Color color, bool kingSide) noexcept {
+        assert(color != Color::NONE);
+        if (kingSide) {
+            return Square(SquareEnum::SQUARE_F1).relative(color);
+        } else {
+            return Square(SquareEnum::SQUARE_D1).relative(color);
+        }
+    }
+
+    constexpr Square enPassantSquare() const noexcept {
+        assert(rank() == Rank::RANK_3 || rank() == Rank::RANK_4 || rank() == Rank::RANK_5 || rank() == Rank::RANK_6);
+        return Square(index() ^ 8);
+    }
+
     constexpr int index() const noexcept { return static_cast<int>(square_); }
 
     constexpr SquareEnum internal() const noexcept { return square_; }
 
 private:
-    static constexpr bool isValid(int index) noexcept { return index >= 0 && index < 64; }
-
     SquareEnum square_;
 };
 

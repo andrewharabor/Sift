@@ -15,12 +15,17 @@ public:
 
     constexpr Bitboard(File file) noexcept : bitboard_(0) {
         assert(file != File::NONE);
-        bitboard_ = 0x0101010101010101ULL << static_cast<int>(file.internal());
+        bitboard_ = 0x0101010101010101ULL << file;
     }
 
     constexpr Bitboard(Rank rank) noexcept : bitboard_(0) {
         assert(rank != Rank::NONE);
-        bitboard_ = 0xFFULL << (static_cast<int>(rank.internal()) * 8);
+        bitboard_ = 0xFFULL << (rank * 8);
+    }
+
+    constexpr Bitboard(Square square) noexcept : bitboard_(0) {
+        assert(square != Square::NONE);
+        bitboard_ = 1ULL << square.index();
     }
 
     constexpr bool operator==(const Bitboard &other) const noexcept { return bitboard_ == other.bitboard_; }
@@ -52,6 +57,8 @@ public:
     constexpr bool operator!=(std::uint64_t bits) const noexcept { return bitboard_ != bits; }
     constexpr bool operator&&(std::uint64_t bits) const noexcept { return bitboard_ && bits; }
     constexpr bool operator||(std::uint64_t bits) const noexcept { return bitboard_ || bits; }
+
+    constexpr explicit operator bool() const noexcept { return bitboard_ != 0; }
 
     constexpr Bitboard operator&(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ & bits); }
     constexpr Bitboard operator|(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ | bits); }
