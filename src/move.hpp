@@ -6,7 +6,7 @@
 #include <iterator>
 #include <utility>
 
-#include "coords.hpp"
+#include "coordinates.hpp"
 #include "piece.hpp"
 
 

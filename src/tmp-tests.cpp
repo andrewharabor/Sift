@@ -5,7 +5,7 @@
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coords.hpp"
+#include "coordinates.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "position.hpp"

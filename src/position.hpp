@@ -4,15 +4,17 @@
 #include <bit>
 #include <concepts>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coords.hpp"
+#include "coordinates.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "zobrist.hpp"
+
 
 namespace Clownfish {
 
@@ -122,6 +124,45 @@ public:
         std::uint8_t rights_;
     };
 
+    void reset() {
+        occupancyBitboards_.fill(0ULL);
+        pieceBitboards_.fill(0ULL);
+        board_.fill(Piece::NONE);
+
+        hash_ = 0ULL;
+        castlingRights_.clear();
+        enPassantSquare_ = Square::NONE;
+        sideToMove_ = Color::WHITE;
+        halfmoveClock_ = 0;
+        plies_ = 0;
+        stateHistory_.clear();
+    }
+
+    bool setFen(std::string_view fen) noexcept {
+        reset();
+
+        while (!fen.empty() && fen[0] == ' ') {
+            fen.remove_prefix(1);
+        }
+
+        if (fen.empty()) {
+            return false;
+        }
+    }
+
+    constexpr bool operator==(const Position &other) const noexcept {
+        return hash_ == other.hash_ &&
+            castlingRights_ == other.castlingRights_ &&
+            enPassantSquare_ == other.enPassantSquare_ &&
+            sideToMove_ == other.sideToMove_ &&
+            halfmoveClock_ == other.halfmoveClock_ &&
+            plies_ == other.plies_ &&
+            pieceBitboards_ == other.pieceBitboards_ &&
+            occupancyBitboards_ == other.occupancyBitboards_ &&
+            board_ == other.board_ &&
+            castlingPathBitboards_ == other.castlingPathBitboards_;
+    }
+
     std::uint64_t hash() const noexcept { return hash_; }
     CastlingRights castlingRights() const noexcept { return castlingRights_; }
     Square enPassantSquare() const noexcept { return enPassantSquare_; }
@@ -132,6 +173,234 @@ public:
     Bitboard castlingPath(Color color, bool kingSide) const noexcept {
         assert(color != Color::NONE);
         return castlingPathBitboards_[static_cast<std::size_t>(color)][kingSide];
+    }
+
+    void placePiece(Piece piece, Square square) noexcept {
+        assert(piece != Piece::NONE && square != Square::NONE);
+        assert(pieceAt(square) == Piece::NONE);
+        const PieceType pieceType = piece.type();
+        const Color color = piece.color();
+        const int index = square.index();
+        pieceBitboards_[static_cast<std::size_t>(pieceType)].set(index);
+        occupancyBitboards_[static_cast<std::size_t>(color)].set(index);
+        board_[static_cast<std::size_t>(index)] = piece;
+    }
+
+    void removePiece(Piece piece, Square square) {
+        assert(piece != Piece::NONE && square != Square::NONE);
+        assert(pieceAt(square) == piece);
+        const PieceType pieceType = piece.type();
+        const Color color = piece.color();
+        const int index = square.index();
+        pieceBitboards_[static_cast<std::size_t>(pieceType)].clear(index);
+        occupancyBitboards_[static_cast<std::size_t>(color)].clear(index);
+        board_[static_cast<std::size_t>(index)] = Piece::NONE;
+    }
+
+    void make(Move move) noexcept {
+        assert(move != Move::NULL_MOVE);
+        assert(pieceAt(move.from()).color() == sideToMove_);
+
+        const bool capture = isCapture(move);
+        const Piece capturedPiece = pieceAt(move.to());
+        const PieceType pieceType = pieceAt(move.from()).type();
+
+        stateHistory_.emplace_back(State{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, capturedPiece});
+
+        halfmoveClock_++;
+        plies_++;
+
+        if (enPassantSquare_ != Square::NONE) {
+            hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
+            enPassantSquare_ = Square::NONE;
+        }
+
+        if (capture) {
+            removePiece(capturedPiece, move.to());
+            halfmoveClock_ = 0;
+            hash_ ^= Zobrist::piece(capturedPiece, move.to());
+
+            if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
+                const Square kingSq = kingSquare(~sideToMove_);
+                const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.to().file()) {
+                    castlingRights_.clear(castlingSide);
+                    hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                }
+            }
+        }
+
+        if (pieceType == PieceType::KING && castlingRights_.get(sideToMove_)) {
+            hash_ ^= Zobrist::castling(castlingRights_.hash());
+            castlingRights_.clear(sideToMove_);
+            hash_ ^= Zobrist::castling(castlingRights_.hash());
+        } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
+            const Square kingSq = kingSquare(sideToMove_);
+            const auto castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
+            if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.from().file()) {
+                castlingRights_.clear(castlingSide);
+                hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+            }
+        } else if (pieceType == PieceType::PAWN) {
+            halfmoveClock_ = 0;
+
+            if (Square::indexDistance(move.from(), move.to()) == 16) {
+                Bitboard enPassantMask = Attacks::pawn(move.to().enPassantSquare(), sideToMove_);
+                if (enPassantMask & pieces(PieceType::PAWN, ~sideToMove_)) {
+                    assert(pieceAt(move.to().enPassantSquare()) == Piece::NONE);
+                    enPassantSquare_ = move.to().enPassantSquare();
+                    hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
+                }
+            }
+        }
+
+        if (move.type() == Move::CASTLING) {
+            assert(pieceAt(move.from()).type() == PieceType::KING);
+            assert(pieceAt(move.to()).type() == PieceType::ROOK);
+
+            const bool kingSide = move.to() > move.from();
+            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingSide);
+            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingSide);
+            const Piece king = pieceAt(move.from());
+            const Piece rook = pieceAt(move.to());
+
+            assert(king == Piece(PieceType::KING, sideToMove_));
+            assert(rook == Piece(PieceType::ROOK, sideToMove_));
+
+            removePiece(king, move.from());
+            removePiece(rook, move.to());
+            placePiece(king, kingTo);
+            placePiece(rook, rookTo);
+
+            hash_ ^= Zobrist::piece(king, move.from());
+            hash_ ^= Zobrist::piece(king, kingTo);
+            hash_ ^= Zobrist::piece(rook, move.to());
+            hash_ ^= Zobrist::piece(rook, rookTo);
+        } else if (move.type() == Move::PROMOTION) {
+            const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
+            const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
+            assert(promotionPiece != Piece::NONE);
+
+            removePiece(pawn, move.from());
+            placePiece(promotionPiece, move.to());
+
+            hash_ ^= Zobrist::piece(pawn, move.from());
+            hash_ ^= Zobrist::piece(promotionPiece, move.to());
+        } else {
+            assert(pieceAt(move.from()) != Piece::NONE);
+            assert(pieceAt(move.to()) == Piece::NONE);
+            const Piece movedPiece = pieceAt(move.from());
+
+            removePiece(movedPiece, move.from());
+            placePiece(movedPiece, move.to());
+
+            hash_ ^= Zobrist::piece(movedPiece, move.from());
+            hash_ ^= Zobrist::piece(movedPiece, move.to());
+        }
+
+        if (move.type() == Move::EN_PASSANT) {
+            assert(pieceAt(move.to().enPassantSquare()) == PieceType::PAWN);
+            Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
+            removePiece(pawn, move.to().enPassantSquare());
+            hash_ ^= Zobrist::piece(pawn, move.to().enPassantSquare());
+        }
+
+        sideToMove_ = ~sideToMove_;
+        hash_ ^= Zobrist::sideToMove();
+    }
+
+    void unmake(const Move move) {
+        assert(move != Move::NULL_MOVE);
+
+        const State &previousState = stateHistory_.back();
+
+
+        hash_ = previousState.hash;
+        castlingRights_ = previousState.castlingRights;
+        enPassantSquare_ = previousState.enPassantSquare;
+        halfmoveClock_ = previousState.halfmoveClock;
+        plies_--;
+        sideToMove_ = ~sideToMove_;
+
+        if (move.type() == Move::CASTLING) {
+            const bool kingSide = move.to() > move.from();
+            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingSide);
+            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingSide);
+            const Piece king = Piece(PieceType::KING, sideToMove_);
+            const Piece rook = Piece(PieceType::ROOK, sideToMove_);
+
+            assert(pieceAt(kingTo) == king);
+            assert(pieceAt(rookTo) == rook);
+            assert(king == Piece(PieceType::KING, sideToMove_));
+            assert(rook == Piece(PieceType::ROOK, sideToMove_));
+
+            removePiece(king, kingTo);
+            removePiece(rook, rookTo);
+            placePiece(king, move.from());
+            placePiece(rook, move.to());
+        } else if (move.type() == Move::PROMOTION) {
+            const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
+            const Piece promotionPiece = pieceAt(move.to());
+
+            assert(promotionPiece.type() == move.promotion());
+
+            removePiece(promotionPiece, move.to());
+            placePiece(pawn, move.from());
+
+            if (previousState.capturedPiece != Piece::NONE) {
+                assert(pieceAt(move.to()) == Piece::NONE);
+                placePiece(previousState.capturedPiece, move.to());
+            }
+        } else {
+            assert(pieceAt(move.to()) != Piece::NONE);
+            assert(pieceAt(move.from()) == Piece::NONE);
+
+            const Piece movedPiece = pieceAt(move.to());
+
+            removePiece(movedPiece, move.to());
+            placePiece(movedPiece, move.from());
+
+            if (move.type() == Move::EN_PASSANT) {
+                Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
+                Square pawnSquare = Square(move.to().file(), move.from().rank());
+
+                assert(pieceAt(pawnSquare) == Piece::NONE);
+
+                placePiece(pawn, pawnSquare);
+            } else if (previousState.capturedPiece != Piece::NONE) {
+                assert(pieceAt(move.to()) == Piece::NONE);
+                placePiece(previousState.capturedPiece, move.to());
+            }
+        }
+
+        stateHistory_.pop_back();
+    }
+
+    void makeNull() {
+        stateHistory_.emplace_back(State{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, Piece::NONE});
+
+        if (enPassantSquare_ != Square::NONE) {
+            hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
+            enPassantSquare_ = Square::NONE;
+        }
+
+        sideToMove_ = ~sideToMove_;
+        hash_ ^= Zobrist::sideToMove();
+
+        plies_++;
+    }
+
+    void unmakeNull() {
+        const State &previousState = stateHistory_.back();
+
+        hash_ = previousState.hash;
+        castlingRights_ = previousState.castlingRights;
+        enPassantSquare_ = previousState.enPassantSquare;
+        halfmoveClock_ = previousState.halfmoveClock;
+        plies_--;
+        sideToMove_ = ~sideToMove_;
+
+        stateHistory_.pop_back();
     }
 
     constexpr std::uint64_t zobrist() const noexcept {
@@ -254,6 +523,11 @@ public:
 
     constexpr Bitboard occupied() const noexcept { return occupancyBitboards_[0] | occupancyBitboards_[1]; }
 
+    constexpr Piece pieceAt(Square square) const noexcept {
+        assert(square != Square::NONE);
+        return board_[static_cast<std::size_t>(square.index())];
+    }
+
     constexpr Bitboard pieces(PieceType pieceType) const noexcept {
         assert(pieceType != PieceType::NONE);
         return pieceBitboards_[static_cast<std::size_t>(pieceType)];
@@ -275,11 +549,6 @@ public:
     constexpr Square kingSquare(Color color) const noexcept {
         assert(color != Color::NONE);
         return pieces(PieceType::KING, color).lsb();
-    }
-
-    constexpr Piece pieceAt(Square square) const noexcept {
-        assert(square != Square::NONE);
-        return board_[static_cast<std::size_t>(square.index())];
     }
 
     constexpr bool attacked(Square square, Color color) const noexcept {
@@ -407,7 +676,7 @@ public:
 
     constexpr bool nonPawnMaterial(Color color) const noexcept {
         assert(color != Color::NONE);
-        return bool(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
+        return static_cast<bool>(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
     }
 
     bool repetition(int count = 1) const noexcept {

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "coords.hpp"
+#include "coordinates.hpp"
 #include "piece.hpp"
 
 

@@ -6,7 +6,7 @@
 
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coords.hpp"
+#include "coordinates.hpp"
 #include "piece.hpp"
 
 

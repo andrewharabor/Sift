@@ -3,7 +3,7 @@
 #include <bit>
 #include <cstdint>
 
-#include "coords.hpp"
+#include "coordinates.hpp"
 
 
 namespace Clownfish {
