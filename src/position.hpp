@@ -138,6 +138,20 @@ public:
         stateHistory_.clear();
     }
 
+    bool setFen(std::string_view fen) noexcept {
+        reset();
+
+        while (!fen.empty() && fen[0] == ' ') {
+            fen.remove_prefix(1);
+        }
+
+        if (fen.empty()) {
+            return false;
+        }
+
+        // TODO 1552
+    }
+
     constexpr bool operator==(const Position &other) const noexcept {
         return hash_ == other.hash_ &&
             castlingRights_ == other.castlingRights_ &&
