@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "color.hpp"
@@ -60,6 +61,27 @@ public:
     constexpr bool operator<=(const PieceType &other) const noexcept { return pieceType_ <= other.pieceType_; }
     constexpr bool operator>=(const PieceType &other) const noexcept { return pieceType_ >= other.pieceType_; }
     constexpr operator int() const noexcept { return static_cast<int>(pieceType_); }
+
+    constexpr explicit operator std::string() const noexcept {
+        if (pieceType_ == PieceTypeEnum::NONE) {
+            return " ";
+        } else if (pieceType_ == PieceTypeEnum::PAWN) {
+            return "P";
+        } else if (pieceType_ == PieceTypeEnum::KNIGHT) {
+            return "N";
+        } else if (pieceType_ == PieceTypeEnum::BISHOP) {
+            return "B";
+        } else if (pieceType_ == PieceTypeEnum::ROOK) {
+            return "R";
+        } else if (pieceType_ == PieceTypeEnum::QUEEN) {
+            return "Q";
+        } else if (pieceType_ == PieceTypeEnum::KING) {
+            return "K";
+        } else {
+            assert(false);
+            return "";
+        }
+    }
 
     constexpr PieceTypeEnum internal() const noexcept { return pieceType_; }
 
@@ -150,6 +172,39 @@ public:
     constexpr bool operator<=(const Piece &other) const noexcept { return piece_ <= other.piece_; }
     constexpr bool operator>=(const Piece &other) const noexcept { return piece_ >= other.piece_; }
     constexpr operator int() const noexcept { return static_cast<int>(piece_); }
+
+    constexpr explicit operator std::string() const noexcept {
+        if (piece_ == PieceEnum::NONE) {
+            return " ";
+        } else if (piece_ == PieceEnum::WHITE_PAWN) {
+            return "P";
+        } else if (piece_ == PieceEnum::WHITE_KNIGHT) {
+            return "N";
+        } else if (piece_ == PieceEnum::WHITE_BISHOP) {
+            return "B";
+        } else if (piece_ == PieceEnum::WHITE_ROOK) {
+            return "R";
+        } else if (piece_ == PieceEnum::WHITE_QUEEN) {
+            return "Q";
+        } else if (piece_ == PieceEnum::WHITE_KING) {
+            return "K";
+        } else if (piece_ == PieceEnum::BLACK_PAWN) {
+            return "p";
+        } else if (piece_ == PieceEnum::BLACK_KNIGHT) {
+            return "n";
+        } else if (piece_ == PieceEnum::BLACK_BISHOP) {
+            return "b";
+        } else if (piece_ == PieceEnum::BLACK_ROOK) {
+            return "r";
+        } else if (piece_ == PieceEnum::BLACK_QUEEN) {
+            return "q";
+        } else if (piece_ == PieceEnum::BLACK_KING) {
+            return "k";
+        } else {
+            assert(false);
+            return "";
+        }
+    }
 
     constexpr bool operator==(const PieceType &other) const noexcept { return type() == other; }
     constexpr bool operator!=(const PieceType &other) const noexcept { return type() != other; }

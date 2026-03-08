@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 #include "color.hpp"
 
@@ -47,6 +50,12 @@ public:
     constexpr File(FileEnum file) noexcept : file_(file) {}
     constexpr File(int file) noexcept : file_(static_cast<FileEnum>(file)) { assert(file >= 0 && file < 8); }
 
+    constexpr File(std::string_view file) noexcept {
+        assert(file.size() == 1);
+        assert(file[0] >= 'a' && file[0] <= 'h');
+        file_ = static_cast<FileEnum>(file[0] - 'a');
+    }
+
     constexpr bool operator==(const File &other) const noexcept { return file_ == other.file_; }
     constexpr bool operator!=(const File &other) const noexcept { return file_ != other.file_; }
     constexpr bool operator<(const File &other) const noexcept { return file_ < other.file_; }
@@ -54,6 +63,7 @@ public:
     constexpr bool operator<=(const File &other) const noexcept { return file_ <= other.file_; }
     constexpr bool operator>=(const File &other) const noexcept { return file_ >= other.file_; }
     constexpr operator int() const noexcept { return static_cast<int>(file_); }
+    constexpr explicit operator std::string() const noexcept { return std::string(1, static_cast<char>(file_) + 'a'); }
 
     constexpr FileEnum internal() const noexcept { return file_; }
 
@@ -89,6 +99,12 @@ public:
     constexpr Rank(RankEnum rank) noexcept : rank_(rank) {}
     constexpr Rank(int rank) noexcept : rank_(static_cast<RankEnum>(rank)) { assert(rank >= 0 && rank < 8); }
 
+    constexpr Rank(std::string_view rank) noexcept {
+        assert(rank.size() == 1);
+        assert(rank[0] >= '1' && rank[0] <= '8');
+        rank_ = static_cast<RankEnum>(rank[0] - '1');
+    }
+
     constexpr bool operator==(const Rank &other) const noexcept { return rank_ == other.rank_; }
     constexpr bool operator!=(const Rank &other) const noexcept { return rank_ != other.rank_; }
     constexpr bool operator<(const Rank &other) const noexcept { return rank_ < other.rank_; }
@@ -96,6 +112,7 @@ public:
     constexpr bool operator<=(const Rank &other) const noexcept { return rank_ <= other.rank_; }
     constexpr bool operator>=(const Rank &other) const noexcept { return rank_ >= other.rank_; }
     constexpr operator int() const noexcept { return static_cast<int>(rank_); }
+    constexpr explicit operator std::string() const noexcept { return std::string(1, static_cast<char>(rank_) + '1'); }
 
     constexpr bool backRank(Color color) const noexcept {
         assert(color != Color::NONE);
@@ -197,6 +214,15 @@ public:
         square_ = static_cast<SquareEnum>(rank * 8 + file);
     }
 
+    constexpr Square(std::string_view square) noexcept : square_(SquareEnum::NONE) {
+        assert(square.size() == 2);
+        const char fileChar = square[0];
+        const char rankChar = square[1];
+        assert(fileChar >= 'a' && fileChar <= 'h');
+        assert(rankChar >= '1' && rankChar <= '8');
+        square_ = static_cast<SquareEnum>((rankChar - '1') * 8 + (fileChar - 'a'));
+    }
+
     constexpr bool operator==(const Square &other) const noexcept { return square_ == other.square_; }
     constexpr bool operator!=(const Square &other) const noexcept { return square_ != other.square_; }
     constexpr bool operator<(const Square &other) const noexcept { return square_ < other.square_; }
@@ -204,6 +230,15 @@ public:
     constexpr bool operator<=(const Square &other) const noexcept { return square_ <= other.square_; }
     constexpr bool operator>=(const Square &other) const noexcept { return square_ >= other.square_; }
     constexpr operator int() const noexcept { return static_cast<int>(square_); }
+
+    constexpr explicit operator std::string() const noexcept {
+        if (square_ == SquareEnum::NONE) {
+            return "";
+        }
+        const char fileChar = static_cast<char>(file()) + 'a';
+        const char rankChar = static_cast<char>(rank()) + '1';
+        return std::string{fileChar, rankChar};
+    }
 
     constexpr Square operator^(const Square &other) const noexcept { return Square(static_cast<SquareEnum>(index() ^ other.index())); }
 

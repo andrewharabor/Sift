@@ -4,6 +4,8 @@
 #include <bit>
 #include <concepts>
 #include <cstdint>
+#include <limits>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -107,7 +109,7 @@ public:
             return static_cast<CastlingSide>(1 << shift);
         }
 
-        constexpr File rookFile(CastlingSide side) const noexcept {
+        static constexpr File rookFile(CastlingSide side) noexcept {
             if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::BLACK_KINGSIDE) {
                 return File::FILE_H;
             } else if (side == CastlingSide::WHITE_QUEENSIDE || side == CastlingSide::BLACK_QUEENSIDE) {
@@ -124,7 +126,13 @@ public:
         std::uint8_t rights_;
     };
 
-    void reset() {
+    explicit Position(std::string_view fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
+        stateHistory_.reserve(256);
+        assert(set(fen));
+        initCastlingPathBitboards();
+    }
+
+    void reset() noexcept {
         occupancyBitboards_.fill(0ULL);
         pieceBitboards_.fill(0ULL);
         board_.fill(Piece::NONE);
@@ -138,7 +146,7 @@ public:
         stateHistory_.clear();
     }
 
-    bool setFen(std::string_view fen) noexcept {
+    bool set(std::string_view fen) {
         reset();
 
         while (!fen.empty() && fen[0] == ' ') {
@@ -149,7 +157,171 @@ public:
             return false;
         }
 
-        // TODO 1552
+        const std::vector<std::string_view> parts = splitStringView(fen, ' ');
+        const std::string_view board = parts.size() > 0 ? parts[0] : "";
+        const std::string_view side = parts.size() > 1 ? parts[1] : "w";
+        const std::string_view castling = parts.size() > 2 ? parts[2] : "-";
+        const std::string_view enPassant = parts.size() > 3 ? parts[3] : "-";
+        const std::string_view halfmoves = parts.size() > 4 ? parts[4] : "0";
+        const std::string_view fullmoves = parts.size() > 5 ? parts[5] : "1";
+
+        if (board.empty()) {
+            return false;
+        }
+
+        int index = 56;
+        for (char c : board) {
+            if (c == '/') {
+                index -= 16;
+            } else if (c >= '0' && c <= '8') {
+                index += c - '0';
+            } else {
+                if (index < 0 || index >= 64) {
+                    return false;
+                }
+
+                const Piece piece = Piece(std::string_view(&c, 1));
+                if (piece == Piece::NONE || pieceAt(Square(index)) != Piece::NONE) {
+                    return false;
+                }
+                placePiece(piece, Square(index));
+                hash_ ^= Zobrist::piece(piece, Square(index));
+                index++;
+            }
+        }
+
+        if (pieces(PieceType::KING, Color::WHITE).empty() || pieces(PieceType::KING, Color::BLACK).empty()) {
+            return false;
+        }
+
+        if (side != "w" && side != "b") {
+            return false;
+        }
+        sideToMove_ = (side == "w") ? Color::WHITE : Color::BLACK;
+        if (sideToMove_ == Color::WHITE) {
+            hash_ ^= Zobrist::sideToMove();
+        }
+
+        if (castling != "-" && !castling.empty()) {
+            for (char c : castling) {
+                if (c == 'K') {
+                    castlingRights_.set(CastlingRights::WHITE_KINGSIDE);
+                } else if (c == 'Q') {
+                    castlingRights_.set(CastlingRights::WHITE_QUEENSIDE);
+                } else if (c == 'k') {
+                    castlingRights_.set(CastlingRights::BLACK_KINGSIDE);
+                } else if (c == 'q') {
+                    castlingRights_.set(CastlingRights::BLACK_QUEENSIDE);
+                } else {
+                    return false;
+                }
+            }
+            hash_ ^= Zobrist::castling(castlingRights_.hash());
+        } else if (castling != "-") {
+            return false;
+        }
+
+        if (enPassant != "-") {
+            if (enPassant.size() != 2) {
+                return false;
+            }
+            const char fileChar = enPassant[0];
+            const char rankChar = enPassant[1];
+            if (fileChar < 'a' || fileChar > 'h' || rankChar < '1' || rankChar > '8') {
+                return false;
+            }
+
+            enPassantSquare_ = Square(enPassant);
+            if (enPassantSquare_ != Square::NONE && !((sideToMove_ == Color::WHITE && enPassantSquare_.rank() == Rank::RANK_6) ||
+                (sideToMove_ == Color::BLACK && enPassantSquare_.rank() == Rank::RANK_3))) {
+                return false;
+            }
+            hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
+        }
+
+        try {
+            halfmoveClock_ = static_cast<std::uint8_t>(std::stoi(std::string(halfmoves)));
+            if (halfmoveClock_ < 0) {
+                return false;
+            }
+        } catch (const std::invalid_argument &) {
+            return false;
+        }
+
+        try {
+            plies_ = static_cast<std::uint16_t>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
+            if (plies_ < 0) {
+                return false;
+            }
+        } catch (const std::invalid_argument &) {
+            return false;
+        }
+
+        assert(hash_ == zobrist());
+
+        return true;
+    }
+
+    std::string fen() const {
+        std::string str;
+        str.reserve(100);
+
+        for (int rank = 7; rank >= 0; rank--) {
+            int emptyCount = 0;
+            for (int file = 0; file < 8; file++) {
+                const Piece piece = pieceAt(Square(file, rank));
+                if (piece == Piece::NONE) {
+                    emptyCount++;
+                } else {
+                    if (emptyCount > 0) {
+                        str += std::to_string(emptyCount);
+                        emptyCount = 0;
+                    }
+                    str += static_cast<std::string>(piece);
+                }
+            }
+            if (emptyCount > 0) {
+                str += std::to_string(emptyCount);
+            }
+            if (rank > 0) {
+                str += '/';
+            }
+        }
+
+        str += ' ';
+        str += (sideToMove_ == Color::WHITE) ? 'w' : 'b';
+
+        str += ' ';
+        if (castlingRights_.empty()) {
+            str += '-';
+        } else {
+            if (castlingRights_.get(CastlingRights::WHITE_KINGSIDE)) {
+                str += 'K';
+            }
+            if (castlingRights_.get(CastlingRights::WHITE_QUEENSIDE)) {
+                str += 'Q';
+            }
+            if (castlingRights_.get(CastlingRights::BLACK_KINGSIDE)) {
+                str += 'k';
+            }
+            if (castlingRights_.get(CastlingRights::BLACK_QUEENSIDE)) {
+                str += 'q';
+            }
+        }
+
+        str += ' ';
+        if (enPassantSquare_ == Square::NONE) {
+            str += '-';
+        } else {
+            str += static_cast<std::string>(enPassantSquare_);
+        }
+
+        str += ' ';
+        str += std::to_string(halfmoveClock_);
+        str += ' ';
+        str += std::to_string(fullMoveNumber());
+
+        return str;
     }
 
     constexpr bool operator==(const Position &other) const noexcept {
@@ -172,7 +344,7 @@ public:
     std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
     std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
 
-    Bitboard castlingPath(Color color, bool kingSide) const noexcept {
+    constexpr Bitboard castlingPath(Color color, bool kingSide) const noexcept {
         assert(color != Color::NONE);
         return castlingPathBitboards_[static_cast<std::size_t>(color)][kingSide];
     }
@@ -188,7 +360,7 @@ public:
         board_[static_cast<std::size_t>(index)] = piece;
     }
 
-    void removePiece(Piece piece, Square square) {
+    void removePiece(Piece piece, Square square) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
         assert(pieceAt(square) == piece);
         const PieceType pieceType = piece.type();
@@ -199,7 +371,7 @@ public:
         board_[static_cast<std::size_t>(index)] = Piece::NONE;
     }
 
-    void make(Move move) noexcept {
+    void make(Move move) {
         assert(move != Move::NULL_MOVE);
         assert(pieceAt(move.from()).color() == sideToMove_);
 
@@ -218,16 +390,19 @@ public:
         }
 
         if (capture) {
-            removePiece(capturedPiece, move.to());
             halfmoveClock_ = 0;
-            hash_ ^= Zobrist::piece(capturedPiece, move.to());
 
-            if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
-                const Square kingSq = kingSquare(~sideToMove_);
-                const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
-                if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.to().file()) {
-                    castlingRights_.clear(castlingSide);
-                    hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+            if (move.type() != Move::EN_PASSANT) {
+                removePiece(capturedPiece, move.to());
+                hash_ ^= Zobrist::piece(capturedPiece, move.to());
+
+                if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
+                    const Square kingSq = kingSquare(~sideToMove_);
+                    const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                    if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
+                        castlingRights_.clear(castlingSide);
+                        hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                    }
                 }
             }
         }
@@ -239,7 +414,7 @@ public:
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
             const auto castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
-            if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.from().file()) {
+            if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
                 castlingRights_.clear(castlingSide);
                 hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
@@ -311,7 +486,7 @@ public:
         hash_ ^= Zobrist::sideToMove();
     }
 
-    void unmake(const Move move) {
+    void unmake(const Move move) noexcept {
         assert(move != Move::NULL_MOVE);
 
         const State &previousState = stateHistory_.back();
@@ -392,7 +567,7 @@ public:
         plies_++;
     }
 
-    void unmakeNull() {
+    void unmakeNull() noexcept {
         const State &previousState = stateHistory_.back();
 
         hash_ = previousState.hash;
@@ -450,7 +625,7 @@ public:
             if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                 const Square kingSq = kingSquare(~sideToMove_);
                 const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
-                if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.to().file()) {
+                if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
                     key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
             }
@@ -465,7 +640,7 @@ public:
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
             const auto castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
-            if (castlingRights_.get(castlingSide) && castlingRights_.rookFile(castlingSide) == move.from().file()) {
+            if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
                 key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
         } else if (pieceType == PieceType::PAWN && Square::indexDistance(move.from(), move.to()) == 16) {
@@ -682,10 +857,14 @@ public:
     }
 
     bool repetition(int count = 1) const noexcept {
+        if (stateHistory_.size() < 2) {
+            return false;
+        }
+
         std::uint8_t seen = 0;
-        const std::size_t size = stateHistory_.size();
-        for (std::size_t i = size - 1; i >= 0 && i >= size - halfmoveClock_ - 1; i -= 2) {
-            if (stateHistory_[i].hash == hash_) {
+        const int size = static_cast<int>(stateHistory_.size());
+        for (int i = size - 2; i >= 0 && i >= size - halfmoveClock_ - 1; i -= 2) {
+            if (stateHistory_[static_cast<std::size_t>(i)].hash == hash_) {
                 seen++;
             }
             if (seen == count) {
@@ -697,7 +876,7 @@ public:
 
     constexpr bool halfMoveDraw() const noexcept { return halfmoveClock_ >= 100; }
 
-    std::pair<GameResultReason, GameResult> halfMoveDrawResult(const MoveList moveList) const noexcept {
+    std::pair<GameResultReason, GameResult> halfMoveDrawResult(const MoveList &moveList) const noexcept {
         if (moveList.empty() && check()) {
             return {GameResultReason::CHECKMATE, GameResult::LOSS};
         }
@@ -738,7 +917,7 @@ public:
         return false;
     }
 
-    constexpr std::pair<GameResultReason, GameResult> gameOver(const MoveList moveList) const noexcept {
+    constexpr std::pair<GameResultReason, GameResult> gameOver(const MoveList &moveList) const noexcept {
         if (halfMoveDraw()) {
             return halfMoveDrawResult(moveList);
         }
@@ -781,6 +960,35 @@ private:
     std::uint16_t plies_;
 
     std::array<std::array<Bitboard, 2>, 2> castlingPathBitboards_;
+
+    constexpr void initCastlingPathBitboards() noexcept {
+        castlingPathBitboards_ = {};
+        for (Color color : {Color::WHITE, Color::BLACK}) {
+            const Square kingFrom = kingSquare(color);
+            for (CastlingRights::CastlingSide side : {CastlingRights::WHITE_KINGSIDE, CastlingRights::WHITE_QUEENSIDE, CastlingRights::BLACK_KINGSIDE, CastlingRights::BLACK_QUEENSIDE}) {
+                const Square rookFrom = Square(CastlingRights::rookFile(side), kingFrom.rank());
+                const bool kingSide = (side == CastlingRights::WHITE_KINGSIDE || side == CastlingRights::BLACK_KINGSIDE);
+                const Square kingTo = Square::kingCastlingSquare(color, kingSide);
+                const Square rookTo = Square::rookCastlingSquare(color, kingSide);
+                castlingPathBitboards_[static_cast<std::size_t>(color)][static_cast<std::size_t>(kingSide)] =
+                    Attacks::between(kingFrom, kingTo) | Attacks::between(rookFrom, rookTo) & ~(Bitboard(kingFrom) | Bitboard(rookFrom));
+            }
+        }
+    }
+
+    static std::vector<std::string_view> splitStringView(std::string_view string, char delimiter = ' ') {
+        std::vector<std::string_view> result;
+        std::size_t start = 0;
+        while (start < string.size()) {
+            std::size_t end = string.find(delimiter, start);
+            if (end == std::string_view::npos) {
+                end = string.size();
+            }
+            result.push_back(string.substr(start, end - start));
+            start = end + 1;
+        }
+        return result;
+    }
 };
 
 }

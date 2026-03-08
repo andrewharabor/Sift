@@ -329,7 +329,7 @@ private:
                     const size_t index1 = static_cast<std::size_t>(square1.index());
                     const size_t index2 = static_cast<std::size_t>(square2.index());
                     if (path(pieceType, square1, 0ULL).get(square2.index())) {
-                        betweenBitboards[index1][index2] = path(pieceType, square1, Bitboard(square1)) & path(pieceType, square2, Bitboard(square2));
+                        betweenBitboards[index1][index2] = path(pieceType, square1, Bitboard(square2)) & path(pieceType, square2, Bitboard(square1));
                     }
                     betweenBitboards[index1][index2].set(square2.index());
                 }
