@@ -23,9 +23,7 @@ public:
     constexpr Color(int color) noexcept : color_(static_cast<ColorEnum>(color)) { assert(valid(color)); }
 
     constexpr Color operator~() const noexcept {
-        if (color_ == ColorEnum::NONE) {
-            return Color::NONE;
-        }
+        assert(color_ != ColorEnum::NONE);
         return Color(static_cast<ColorEnum>(1 - static_cast<int>(color_)));
     }
 

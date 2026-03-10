@@ -175,9 +175,7 @@ public:
     constexpr bool operator!=(const Direction &other) const noexcept { return direction_ != other.direction_; }
 
     constexpr Direction operator-() const noexcept {
-        if (direction_ == DirectionEnum::NONE) {
-            return Direction::NONE;
-        }
+        assert(direction_ != DirectionEnum::NONE);
         return Direction(static_cast<DirectionEnum>(-static_cast<int>(direction_)));
     }
 
@@ -257,90 +255,54 @@ public:
 
     constexpr Square operator^(const Square &other) const noexcept { return Square(static_cast<SquareEnum>(index() ^ other.index())); }
 
-    constexpr Square &operator++() noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return *this;
-        }
-        if (index() >= 63) {
-            square_ = SquareEnum::NONE;
+    // constexpr Square &operator++() noexcept {
+    //     assert(square_ != SquareEnum::NONE);
+    //     if (index() >= 63) {
+    //         square_ = SquareEnum::NONE;
 
-        } else {
-            square_ = static_cast<SquareEnum>(index() + 1);
-        }
-        return *this;
-    }
+    //     } else {
+    //         square_ = static_cast<SquareEnum>(index() + 1);
+    //     }
+    //     return *this;
+    // }
 
-    constexpr Square operator++(int) noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return *this;
-        }
-        Square tmp = *this;
-        if (index() >= 63) {
-            square_ = SquareEnum::NONE;
-        } else {
-            square_ = static_cast<SquareEnum>(index() + 1);
-        }
-        return tmp;
-    }
+    // constexpr Square operator++(int) noexcept {
+    //     assert(square_ != SquareEnum::NONE);
+    //     Square tmp = *this;
+    //     if (index() >= 63) {
+    //         square_ = SquareEnum::NONE;
+    //     } else {
+    //         square_ = static_cast<SquareEnum>(index() + 1);
+    //     }
+    //     return tmp;
+    // }
 
-    constexpr Square &operator--() noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return *this;
-        }
-        if (index() <= 0) {
-            square_ = SquareEnum::NONE;
-        } else {
-            square_ = static_cast<SquareEnum>(index() - 1);
-        }
-        return *this;
-    }
+    // constexpr Square &operator--() noexcept {
+    //     assert(square_ != SquareEnum::NONE);
+    //     if (index() <= 0) {
+    //         square_ = SquareEnum::NONE;
+    //     } else {
+    //         square_ = static_cast<SquareEnum>(index() - 1);
+    //     }
+    //     return *this;
+    // }
 
-    constexpr Square operator--(int) noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return *this;
-        }
-        Square tmp = *this;
-        if (index() <= 0) {
-            square_ = SquareEnum::NONE;
-        } else {
-            square_ = static_cast<SquareEnum>(index() - 1);
-        }
-        return tmp;
-    }
+    // constexpr Square operator--(int) noexcept {
+    //     assert(square_ != SquareEnum::NONE);
+    //     Square tmp = *this;
+    //     if (index() <= 0) {
+    //         square_ = SquareEnum::NONE;
+    //     } else {
+    //         square_ = static_cast<SquareEnum>(index() - 1);
+    //     }
+    //     return tmp;
+    // }
 
     constexpr Square operator+(Direction direction) const noexcept {
-        if (square_ == SquareEnum::NONE || direction == Direction::NONE) {
-            return *this;
-        }
-
-        const File currentFile = file();
-        const Rank currentRank = rank();
-        assert(currentFile != File::NONE && currentRank != Rank::NONE);
-
-        if ((direction == Direction::EAST || direction == Direction::NORTH_EAST || direction == Direction::SOUTH_EAST)
-            && currentFile == File::FILE_H) {
-            return Square::NONE;
-        }
-
-        if ((direction == Direction::WEST || direction == Direction::NORTH_WEST || direction == Direction::SOUTH_WEST)
-            && currentFile == File::FILE_A) {
-            return Square::NONE;
-        }
-
-        if ((direction == Direction::NORTH || direction == Direction::NORTH_EAST || direction == Direction::NORTH_WEST)
-            && currentRank == Rank::RANK_8) {
-            return Square::NONE;
-        }
-
-        if ((direction == Direction::SOUTH || direction == Direction::SOUTH_EAST || direction == Direction::SOUTH_WEST)
-            && currentRank == Rank::RANK_1) {
-            return Square::NONE;
-        }
-
+        assert(square_ != SquareEnum::NONE);
+        assert(direction != Direction::NONE);
         const int newIndex = index() + direction;
-        if (newIndex < 0 || newIndex >= 64) {
-            return Square::NONE;
-        }
+        assert(newIndex >= 0 && newIndex < 64);
         return Square(static_cast<SquareEnum>(newIndex));
     }
 
@@ -349,24 +311,18 @@ public:
     }
 
     constexpr Square &mirror() noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return *this;
-        }
+        assert(square_ != SquareEnum::NONE);
         square_ = static_cast<SquareEnum>(index() ^ 56);
         return *this;
     }
 
     constexpr File file() const noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return File::NONE;
-        }
+        assert(square_ != SquareEnum::NONE);
         return File(index() % 8);
     }
 
     constexpr Rank rank() const noexcept {
-        if (square_ == SquareEnum::NONE) {
-            return Rank::NONE;
-        }
+        assert(square_ != SquareEnum::NONE);
         return Rank(index() / 8);
     }
 

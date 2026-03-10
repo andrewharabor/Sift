@@ -1,9 +1,24 @@
 
 SHELL := /bin/zsh
 CXX := /usr/bin/clang++
-CXXFLAGS := -std=c++23 -g -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always -fsanitize=undefined,address
+
+MODE ?= release
+
+BASE_CXXFLAGS := -std=c++23 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
+CXXFLAGS := $(BASE_CXXFLAGS)
 LDFLAGS :=
 LDLIBS :=
+
+ifeq ($(MODE),release)
+	CXXFLAGS += -O3 -DNDEBUG
+else ifeq ($(MODE),debug)
+	CXXFLAGS += -O0 -g3
+else ifeq ($(MODE),sanitize)
+	CXXFLAGS += -O1 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
+	LDFLAGS += -fsanitize=undefined,address
+else
+	$(error Invalid MODE '$(MODE)'. Use MODE=release, MODE=debug, or MODE=sanitize)
+endif
 
 TARGET_EXEC := main
 BUILD_DIR := build

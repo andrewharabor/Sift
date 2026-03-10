@@ -142,6 +142,7 @@ public:
 
     explicit Position(std::string_view fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
         stateHistory_.reserve(256);
+        set(fen);
         assert(set(fen));
     }
 
