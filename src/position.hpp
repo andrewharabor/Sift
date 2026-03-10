@@ -2,7 +2,6 @@
 
 #include <array>
 #include <bit>
-#include <concepts>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -62,6 +61,9 @@ public:
         constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<std::uint8_t>(side)) {}
         constexpr CastlingRights(std::uint8_t rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
 
+        constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
+        constexpr operator int() const noexcept { return static_cast<int>(rights_); }
+
         constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<std::uint8_t>(side); }
         constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<std::uint8_t>(side)) != 0; }
 
@@ -94,8 +96,20 @@ public:
         constexpr int hash() const noexcept { return static_cast<int>(rights_); }
         static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<std::uint8_t>(side)); }
 
-        constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
-        constexpr operator int() const noexcept { return static_cast<int>(rights_); }
+        static constexpr Color color(CastlingSide side) noexcept {
+            if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::WHITE_QUEENSIDE) {
+                return Color::WHITE;
+            } else if (side == CastlingSide::BLACK_KINGSIDE || side == CastlingSide::BLACK_QUEENSIDE) {
+                return Color::BLACK;
+            } else {
+                assert(false);
+                return Color::NONE;
+            }
+        }
+
+        static constexpr bool kingside(CastlingSide side) noexcept {
+            return side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::BLACK_KINGSIDE;
+        }
 
         static constexpr CastlingSide closestSide(Square square, Square kingSquare, Color color) noexcept {
             assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
@@ -129,7 +143,6 @@ public:
     explicit Position(std::string_view fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
         stateHistory_.reserve(256);
         assert(set(fen));
-        initCastlingPathBitboards();
     }
 
     void reset() noexcept {
@@ -144,6 +157,13 @@ public:
         halfmoveClock_ = 0;
         plies_ = 0;
         stateHistory_.clear();
+
+        castlingPathBitboards_ = {
+            Bitboard(Square::SQUARE_F1) | Bitboard(Square::SQUARE_G1),
+            Bitboard(Square::SQUARE_B1) | Bitboard(Square::SQUARE_C1) | Bitboard(Square::SQUARE_D1),
+            Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
+            Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
+        };
     }
 
     bool set(std::string_view fen) {
@@ -344,9 +364,8 @@ public:
     std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
     std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
 
-    constexpr Bitboard castlingPath(Color color, bool kingSide) const noexcept {
-        assert(color != Color::NONE);
-        return castlingPathBitboards_[static_cast<std::size_t>(color)][kingSide];
+    constexpr Bitboard castlingPath(CastlingRights::CastlingSide castlingSide) const noexcept {
+        return castlingPathBitboards_[static_cast<std::size_t>(CastlingRights::hashIndex(castlingSide))];
     }
 
     void placePiece(Piece piece, Square square) noexcept {
@@ -398,7 +417,7 @@ public:
 
                 if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                     const Square kingSq = kingSquare(~sideToMove_);
-                    const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                    const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                     if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
                         castlingRights_.clear(castlingSide);
                         hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
@@ -413,7 +432,7 @@ public:
             hash_ ^= Zobrist::castling(castlingRights_.hash());
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
-            const auto castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
             if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
                 castlingRights_.clear(castlingSide);
                 hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
@@ -435,9 +454,9 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const bool kingSide = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingSide);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingSide);
+            const bool kingside = move.to() > move.from();
+            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
+            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
             const Piece king = pieceAt(move.from());
             const Piece rook = pieceAt(move.to());
 
@@ -500,9 +519,9 @@ public:
         sideToMove_ = ~sideToMove_;
 
         if (move.type() == Move::CASTLING) {
-            const bool kingSide = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingSide);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingSide);
+            const bool kingside = move.to() > move.from();
+            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
+            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
             const Piece king = Piece(PieceType::KING, sideToMove_);
             const Piece rook = Piece(PieceType::ROOK, sideToMove_);
 
@@ -624,7 +643,7 @@ public:
 
             if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                 const Square kingSq = kingSquare(~sideToMove_);
-                const auto castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                 if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
                     key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
@@ -639,7 +658,7 @@ public:
             key ^= Zobrist::castling(newRights.hash());
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
-            const auto castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
             if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
                 key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
@@ -655,9 +674,9 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const bool kingSide = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingSide);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingSide);
+            const bool kingside = move.to() > move.from();
+            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
+            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
             const Piece king = pieceAt(move.from());
             const Piece rook = pieceAt(move.to());
             assert(king == Piece(PieceType::KING, sideToMove_) && rook == Piece(PieceType::ROOK, sideToMove_));
@@ -714,14 +733,6 @@ public:
         assert(pieceType != PieceType::NONE && color != Color::NONE);
         return pieceBitboards_[static_cast<std::size_t>(pieceType)] & occupancyBitboards_[static_cast<std::size_t>(color)];
     }
-
-    template<typename... Pieces>
-        requires ((sizeof...(Pieces) > 0) && (std::convertible_to<Pieces, PieceType> && ...))
-    constexpr Bitboard pieces(Pieces... pieces) const noexcept {
-        assert((... && (static_cast<PieceType>(pieces) != PieceType::NONE)));
-        return (pieceBitboards_[static_cast<std::size_t>(static_cast<PieceType>(pieces))] | ...);
-    }
-
 
     constexpr Square kingSquare(Color color) const noexcept {
         assert(color != Color::NONE);
@@ -959,22 +970,7 @@ private:
     std::uint8_t halfmoveClock_;
     std::uint16_t plies_;
 
-    std::array<std::array<Bitboard, 2>, 2> castlingPathBitboards_;
-
-    constexpr void initCastlingPathBitboards() noexcept {
-        castlingPathBitboards_ = {};
-        for (Color color : {Color::WHITE, Color::BLACK}) {
-            const Square kingFrom = kingSquare(color);
-            for (CastlingRights::CastlingSide side : {CastlingRights::WHITE_KINGSIDE, CastlingRights::WHITE_QUEENSIDE, CastlingRights::BLACK_KINGSIDE, CastlingRights::BLACK_QUEENSIDE}) {
-                const Square rookFrom = Square(CastlingRights::rookFile(side), kingFrom.rank());
-                const bool kingSide = (side == CastlingRights::WHITE_KINGSIDE || side == CastlingRights::BLACK_KINGSIDE);
-                const Square kingTo = Square::kingCastlingSquare(color, kingSide);
-                const Square rookTo = Square::rookCastlingSquare(color, kingSide);
-                castlingPathBitboards_[static_cast<std::size_t>(color)][static_cast<std::size_t>(kingSide)] =
-                    Attacks::between(kingFrom, kingTo) | Attacks::between(rookFrom, rookTo) & ~(Bitboard(kingFrom) | Bitboard(rookFrom));
-            }
-        }
-    }
+    std::array<Bitboard, 4> castlingPathBitboards_;
 
     static std::vector<std::string_view> splitStringView(std::string_view string, char delimiter = ' ') {
         std::vector<std::string_view> result;

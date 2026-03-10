@@ -28,27 +28,29 @@ public:
 
     constexpr static std::uint16_t NULL_MOVE = 0;
 
-    constexpr Move() noexcept : move_(0) {}
-    constexpr Move(std::uint16_t move) noexcept : move_(move) {}
+    constexpr Move() noexcept : move_(NULL_MOVE), score_(0) {}
+    constexpr Move(std::uint16_t move) noexcept : move_(move), score_(0) {}
+
+    constexpr Move(Square from, Square to, MoveType type = MoveType::NORMAL, PieceType promotion = PieceType::NONE) noexcept
+        : move_(NULL_MOVE), score_(0) {
+        assert(from != Square::NONE && to != Square::NONE);
+
+        const std::uint16_t typeBits = static_cast<std::uint16_t>(type);
+        std::uint16_t promotionBits = 0;
+        if (type == MoveType::PROMOTION) {
+            assert(promotion >= PieceType(PieceType::KNIGHT) && promotion <= PieceType(PieceType::QUEEN));
+            promotionBits = static_cast<std::uint16_t>((promotion - PieceType(PieceType::KNIGHT)) << 12);
+        } else {
+            assert(promotion == PieceType::NONE);
+        }
+
+        const std::uint16_t fromBits = static_cast<std::uint16_t>(from.index() << 6);
+        const std::uint16_t toBits = static_cast<std::uint16_t>(to.index());
+        move_ = static_cast<std::uint16_t>(typeBits | promotionBits | fromBits | toBits);
+    }
 
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
     constexpr bool operator!=(const Move &other) const noexcept { return move_ != other.move_; }
-
-    template<MoveType MT = MoveType::NORMAL>
-    static constexpr Move create(Square from, Square to, PieceType promotion = PieceType::NONE) noexcept {
-        assert(from != Square::NONE && to != Square::NONE);
-        const std::uint16_t typeBits = static_cast<std::uint16_t>(MT);
-        std::uint16_t promotionBits = 0;
-        if constexpr (MT == MoveType::PROMOTION) {
-            assert(promotion >= PieceType(PieceType::KNIGHT) && promotion <= PieceType(PieceType::QUEEN));
-            promotionBits = static_cast<std::uint16_t>((promotion - PieceType(PieceType::KNIGHT)) << 12);
-        }
-        const std::uint16_t fromBits = static_cast<std::uint16_t>(from.index() << 6);
-        const std::uint16_t toBits = static_cast<std::uint16_t>(to.index());
-        return Move(typeBits | promotionBits | fromBits | toBits);
-    }
-
-    static constexpr Move createNull() noexcept { return Move(NULL_MOVE); }
 
     constexpr Square from() const noexcept { return Square((move_ >> 6) & 0x3F); }
     constexpr Square to() const noexcept { return Square(move_ & 0x3F); }

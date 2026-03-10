@@ -61,25 +61,12 @@ public:
     }
 
     template<Color::ColorEnum C>
-    static constexpr Bitboard pawnLeftAttacks(const Bitboard pawns) noexcept {
+    static constexpr Bitboard allPawns(const Bitboard pawns) noexcept {
         static_assert(C != Color::NONE);
         if constexpr (C == Color::WHITE) {
-            return shift<Direction::NORTH_WEST>(pawns);
+            return shift<Direction::NORTH_WEST>(pawns) | shift<Direction::NORTH_EAST>(pawns);
         } else if constexpr (C == Color::BLACK) {
-            return shift<Direction::SOUTH_EAST>(pawns);
-        } else {
-            static_assert(false);
-            return Bitboard();
-        }
-    }
-
-    template<Color::ColorEnum C>
-    static constexpr Bitboard pawnRightAttacks(const Bitboard pawns) noexcept {
-        static_assert(C != Color::NONE);
-        if constexpr (C == Color::WHITE) {
-            return shift<Direction::NORTH_EAST>(pawns);
-        } else if constexpr (C == Color::BLACK) {
-            return shift<Direction::SOUTH_WEST>(pawns);
+            return shift<Direction::SOUTH_EAST>(pawns) | shift<Direction::SOUTH_WEST>(pawns);
         } else {
             static_assert(false);
             return Bitboard();

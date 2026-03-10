@@ -99,6 +99,13 @@ public:
     constexpr Rank(RankEnum rank) noexcept : rank_(rank) {}
     constexpr Rank(int rank) noexcept : rank_(static_cast<RankEnum>(rank)) { assert(rank >= 0 && rank < 8); }
 
+    constexpr Rank(RankEnum rank, Color color) noexcept : rank_(rank) {
+        assert(color != Color::NONE);
+        if (color == Color::BLACK) {
+            rank_ = static_cast<RankEnum>(7 - static_cast<int>(rank_));
+        }
+    }
+
     constexpr Rank(std::string_view rank) noexcept {
         assert(rank.size() == 1);
         assert(rank[0] >= '1' && rank[0] <= '8');
@@ -151,6 +158,7 @@ public:
 
     constexpr Direction() noexcept : direction_(DirectionEnum::NONE) {}
     constexpr Direction(DirectionEnum direction) noexcept : direction_(direction) {}
+
     constexpr Direction(int direction) noexcept : direction_(static_cast<DirectionEnum>(direction)) {
         assert(direction == 8 || direction == 1 || direction == -8 || direction == -1 ||
             direction == 9 || direction == -7 || direction == -9 || direction == 7 || direction == 0);
@@ -212,6 +220,13 @@ public:
     constexpr Square(File file, Rank rank) noexcept : square_(SquareEnum::NONE) {
         assert(file != File::NONE && rank != Rank::NONE);
         square_ = static_cast<SquareEnum>(rank * 8 + file);
+    }
+
+    constexpr Square(SquareEnum square, Color color) noexcept : square_(square) {
+        assert(color != Color::NONE);
+        if (color == Color::BLACK) {
+            square_ = static_cast<SquareEnum>(static_cast<int>(square) ^ 56);
+        }
     }
 
     constexpr Square(std::string_view square) noexcept : square_(SquareEnum::NONE) {
@@ -355,9 +370,12 @@ public:
         return Rank(index() / 8);
     }
 
-    constexpr Square relative(Color color) const noexcept {
+    constexpr bool backRank(Color color) const noexcept {
         assert(color != Color::NONE);
-        return Square(index() ^ (color * 56));
+        if (color == Color::WHITE) {
+            return rank() == Rank::RANK_1;
+        }
+        return rank() == Rank::RANK_8;
     }
 
     static constexpr bool sameColor(Square square1, Square square2) noexcept {
@@ -370,22 +388,20 @@ public:
         return std::abs(square1.index() - square2.index());
     }
 
-    static constexpr Square kingCastlingSquare(Color color, bool kingSide) noexcept {
+    static constexpr Square kingCastlingSquare(Color color, bool kingside) noexcept {
         assert(color != Color::NONE);
-        if (kingSide) {
-            return Square(SquareEnum::SQUARE_G1).relative(color);
-        } else {
-            return Square(SquareEnum::SQUARE_C1).relative(color);
+        if (kingside) {
+            return Square(SquareEnum::SQUARE_G1, color);
         }
+        return Square(SquareEnum::SQUARE_C1, color);
     }
 
-    static constexpr Square rookCastlingSquare(Color color, bool kingSide) noexcept {
+    static constexpr Square rookCastlingSquare(Color color, bool kingside) noexcept {
         assert(color != Color::NONE);
-        if (kingSide) {
-            return Square(SquareEnum::SQUARE_F1).relative(color);
-        } else {
-            return Square(SquareEnum::SQUARE_D1).relative(color);
+        if (kingside) {
+            return Square(SquareEnum::SQUARE_F1, color);
         }
+        return Square(SquareEnum::SQUARE_D1, color);
     }
 
     constexpr Square enPassantSquare() const noexcept {
