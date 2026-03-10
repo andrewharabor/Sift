@@ -137,6 +137,7 @@ public:
         while (queens) {
             attackedSquares |= Attacks::queen(static_cast<int>(queens.pop()), occupied);
         }
+        attackedSquares |= Attacks::king(position.kingSquare(COLOR));
 
         return attackedSquares;
     }
