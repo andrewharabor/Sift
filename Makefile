@@ -1,8 +1,23 @@
 
+BUILD ?= engine
+MODE ?= release
+
 SHELL := /bin/zsh
 CXX := /usr/bin/clang++
 
-MODE ?= release
+SRC_DIRS :=
+BUILD_DIR := build
+TARGET_EXEC :=
+
+ifeq ($(BUILD),engine)
+	SRC_DIRS := src
+	TARGET_EXEC := Clownfish
+else ifeq ($(BUILD),benchmark)
+	SRC_DIRS := benchmark
+	TARGET_EXEC := Clownfish
+else
+	$(error Invalid BUILD '$(BUILD)'. Use BUILD=engine or BUILD=benchmark)
+endif
 
 BASE_CXXFLAGS := -std=c++23 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
 CXXFLAGS := $(BASE_CXXFLAGS)
@@ -19,10 +34,6 @@ else ifeq ($(MODE),sanitize)
 else
 	$(error Invalid MODE '$(MODE)'. Use MODE=release, MODE=debug, or MODE=sanitize)
 endif
-
-TARGET_EXEC := main
-BUILD_DIR := build
-SRC_DIRS := src
 
 SRCS := $(shell find $(SRC_DIRS) -name '*.cpp')
 OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
