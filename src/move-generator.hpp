@@ -14,15 +14,23 @@
 
 namespace Clownfish {
 
-enum PieceFlag : std::uint8_t {
+enum class PieceFlag : std::uint8_t {
     PAWN = 1 << 0,
     KNIGHT = 1 << 1,
     BISHOP = 1 << 2,
     ROOK = 1 << 3,
     QUEEN = 1 << 4,
     KING = 1 << 5,
-    ALL = PAWN | KNIGHT | BISHOP | ROOK | QUEEN | KING
+    ALL = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5)
 };
+
+constexpr bool operator&(PieceFlag left, PieceFlag right) noexcept {
+    return (static_cast<std::uint8_t>(left) & static_cast<std::uint8_t>(right)) != 0;
+}
+
+constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
+    return static_cast<PieceFlag>(static_cast<std::uint8_t>(left) | static_cast<std::uint8_t>(right));
+}
 
 class MoveGenerator {
 public:
@@ -143,7 +151,7 @@ public:
     }
 
     template<MoveGenerationType MGT = MoveGenerationType::ALL>
-    static void legal(const Position &position, MoveList &moveList, std::uint8_t pieces = PieceFlag::ALL) {
+    static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
         moveList.clear();
         if (position.sideToMove() == Color::WHITE) {
             legal<Color::WHITE, MGT>(position, moveList, pieces);
@@ -393,7 +401,7 @@ private:
     }
 
     template<Color::ColorEnum C, MoveGenerationType MGT>
-    static void legal(const Position &position, MoveList &moveList, std::uint8_t pieces = PieceFlag::ALL) {
+    static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
 
