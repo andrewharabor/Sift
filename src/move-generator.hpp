@@ -32,14 +32,14 @@ constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
     return static_cast<PieceFlag>(static_cast<std::uint8_t>(left) | static_cast<std::uint8_t>(right));
 }
 
+enum class MoveGenerationType {
+    ALL,
+    CAPTURES,
+    QUIET,
+};
+
 class MoveGenerator {
 public:
-    enum class MoveGenerationType {
-        ALL,
-        CAPTURES,
-        QUIET,
-    };
-
     template<Color::ColorEnum C>
     static std::pair<Bitboard, int> checkMask(const Position &position, Square kingSquare, Bitboard occupied) {
         static_assert(C != Color::NONE);
