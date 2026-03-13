@@ -255,49 +255,6 @@ public:
 
     constexpr Square operator^(const Square &other) const noexcept { return Square(static_cast<SquareEnum>(index() ^ other.index())); }
 
-    // constexpr Square &operator++() noexcept {
-    //     assert(square_ != SquareEnum::NONE);
-    //     if (index() >= 63) {
-    //         square_ = SquareEnum::NONE;
-
-    //     } else {
-    //         square_ = static_cast<SquareEnum>(index() + 1);
-    //     }
-    //     return *this;
-    // }
-
-    // constexpr Square operator++(int) noexcept {
-    //     assert(square_ != SquareEnum::NONE);
-    //     Square tmp = *this;
-    //     if (index() >= 63) {
-    //         square_ = SquareEnum::NONE;
-    //     } else {
-    //         square_ = static_cast<SquareEnum>(index() + 1);
-    //     }
-    //     return tmp;
-    // }
-
-    // constexpr Square &operator--() noexcept {
-    //     assert(square_ != SquareEnum::NONE);
-    //     if (index() <= 0) {
-    //         square_ = SquareEnum::NONE;
-    //     } else {
-    //         square_ = static_cast<SquareEnum>(index() - 1);
-    //     }
-    //     return *this;
-    // }
-
-    // constexpr Square operator--(int) noexcept {
-    //     assert(square_ != SquareEnum::NONE);
-    //     Square tmp = *this;
-    //     if (index() <= 0) {
-    //         square_ = SquareEnum::NONE;
-    //     } else {
-    //         square_ = static_cast<SquareEnum>(index() - 1);
-    //     }
-    //     return tmp;
-    // }
-
     constexpr Square operator+(Direction direction) const noexcept {
         assert(square_ != SquareEnum::NONE);
         assert(direction != Direction::NONE);
@@ -342,22 +299,6 @@ public:
     static constexpr int indexDistance(Square square1, Square square2) noexcept {
         assert(square1 != Square::NONE && square2 != Square::NONE);
         return std::abs(square1.index() - square2.index());
-    }
-
-    static constexpr Square kingCastlingSquare(Color color, bool kingside) noexcept {
-        assert(color != Color::NONE);
-        if (kingside) {
-            return Square(SquareEnum::SQUARE_G1, color);
-        }
-        return Square(SquareEnum::SQUARE_C1, color);
-    }
-
-    static constexpr Square rookCastlingSquare(Color color, bool kingside) noexcept {
-        assert(color != Color::NONE);
-        if (kingside) {
-            return Square(SquareEnum::SQUARE_F1, color);
-        }
-        return Square(SquareEnum::SQUARE_D1, color);
     }
 
     constexpr Square enPassantSquare() const noexcept {

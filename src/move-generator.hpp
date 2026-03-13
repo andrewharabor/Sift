@@ -387,13 +387,12 @@ private:
                 continue;
             }
 
-            const bool kingside = Position::CastlingRights::kingside(castlingSide);
-            const Square kingTo = Square::kingCastlingSquare(COLOR, kingside);
+            const Square kingTo = Position::CastlingRights::kingTo(castlingSide);
             if (Attacks::between(kingSquare, kingTo) & attacked) {
                 continue;
             }
 
-            const Square rookFrom = Square(Position::CastlingRights::rookFile(castlingSide), Rank(Rank::RANK_1, COLOR));
+            const Square rookFrom = Position::CastlingRights::rookFrom(castlingSide);
             moves |= Bitboard(rookFrom);
         }
 

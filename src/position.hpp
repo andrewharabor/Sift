@@ -123,14 +123,27 @@ public:
             return static_cast<CastlingSide>(1 << shift);
         }
 
-        static constexpr File rookFile(CastlingSide side) noexcept {
-            if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::BLACK_KINGSIDE) {
-                return File::FILE_H;
-            } else if (side == CastlingSide::WHITE_QUEENSIDE || side == CastlingSide::BLACK_QUEENSIDE) {
-                return File::FILE_A;
+        static constexpr Square rookFrom(CastlingSide side) noexcept {
+            if (kingside(side)) {
+                return Square(Square::SQUARE_H1, color(side));
             } else {
-                assert(false);
-                return File::NONE;
+                return Square(Square::SQUARE_A1, color(side));
+            }
+        }
+
+        static constexpr Square kingTo(CastlingSide side) noexcept {
+            if (kingside(side)) {
+                return Square(Square::SQUARE_G1, color(side));
+            } else {
+                return Square(Square::SQUARE_C1, color(side));
+            }
+        }
+
+        static constexpr Square rookTo(CastlingSide side) noexcept {
+            if (kingside(side)) {
+                return Square(Square::SQUARE_F1, color(side));
+            } else {
+                return Square(Square::SQUARE_D1, color(side));
             }
         }
 
@@ -202,9 +215,6 @@ public:
                 }
 
                 const Piece piece = Piece(std::string_view(&c, 1));
-                if (piece == Piece::NONE || pieceAt(Square(index)) != Piece::NONE) {
-                    return false;
-                }
                 placePiece(piece, Square(index));
                 hash_ ^= Zobrist::piece(piece, Square(index));
                 index++;
@@ -253,30 +263,11 @@ public:
             }
 
             enPassantSquare_ = Square(enPassant);
-            if (enPassantSquare_ != Square::NONE && !((sideToMove_ == Color::WHITE && enPassantSquare_.rank() == Rank::RANK_6) ||
-                (sideToMove_ == Color::BLACK && enPassantSquare_.rank() == Rank::RANK_3))) {
-                return false;
-            }
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
         }
 
-        try {
-            halfmoveClock_ = static_cast<std::uint8_t>(std::stoi(std::string(halfmoves)));
-            if (halfmoveClock_ < 0) {
-                return false;
-            }
-        } catch (const std::invalid_argument &) {
-            return false;
-        }
-
-        try {
-            plies_ = static_cast<std::uint16_t>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
-            if (plies_ < 0) {
-                return false;
-            }
-        } catch (const std::invalid_argument &) {
-            return false;
-        }
+        halfmoveClock_ = static_cast<std::uint8_t>(std::stoi(std::string(halfmoves)));
+        plies_ = static_cast<std::uint16_t>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
         assert(hash_ == zobrist());
 
@@ -419,7 +410,7 @@ public:
                 if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                     const Square kingSq = kingSquare(~sideToMove_);
                     const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
-                    if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
+                    if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
                         castlingRights_.clear(castlingSide);
                         hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
                     }
@@ -434,7 +425,7 @@ public:
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
             const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
-            if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
+            if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
                 castlingRights_.clear(castlingSide);
                 hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
@@ -455,9 +446,9 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const bool kingside = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = pieceAt(move.from());
             const Piece rook = pieceAt(move.to());
 
@@ -520,9 +511,9 @@ public:
         sideToMove_ = ~sideToMove_;
 
         if (move.type() == Move::CASTLING) {
-            const bool kingside = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = Piece(PieceType::KING, sideToMove_);
             const Piece rook = Piece(PieceType::ROOK, sideToMove_);
 
@@ -645,7 +636,7 @@ public:
             if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                 const Square kingSq = kingSquare(~sideToMove_);
                 const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
-                if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.to().file()) {
+                if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
                     key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
             }
@@ -660,7 +651,7 @@ public:
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
             const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
-            if (castlingRights_.get(castlingSide) && CastlingRights::rookFile(castlingSide) == move.from().file()) {
+            if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
                 key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
         } else if (pieceType == PieceType::PAWN && Square::indexDistance(move.from(), move.to()) == 16) {
@@ -675,9 +666,9 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const bool kingside = move.to() > move.from();
-            const Square rookTo = Square::rookCastlingSquare(sideToMove_, kingside);
-            const Square kingTo = Square::kingCastlingSquare(sideToMove_, kingside);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = pieceAt(move.from());
             const Piece rook = pieceAt(move.to());
             assert(king == Piece(PieceType::KING, sideToMove_) && rook == Piece(PieceType::ROOK, sideToMove_));
@@ -851,7 +842,8 @@ public:
                 return CheckType::NONE;
             }
         } else if (move.type() == Move::CASTLING) {
-            Square rookTo = Square::rookCastlingSquare(sideToMove_, to > from);
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
             if (Attacks::rook(kingSq, occ) & Bitboard(rookTo)) {
                 return CheckType::DISCOVERED;
             } else {
