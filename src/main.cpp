@@ -15,6 +15,7 @@
 #include "move-generator.hpp"
 #include "piece.hpp"
 #include "position.hpp"
+#include "simd.hpp"
 #include "zobrist.hpp"
 
 
@@ -236,6 +237,257 @@ void assertSequenceRoundTrip(Position position, const std::vector<Move> &sequenc
         position.unmake(sequence[index - 1]);
         assert(position == snapshots[index - 1]);
         assert(position.hash() == position.zobrist());
+    }
+}
+
+std::int16_t checkedInt16(int value) {
+    assert(value >= -32768 && value <= 32767);
+    return static_cast<std::int16_t>(value);
+}
+
+std::int16_t deterministicBufferValue(std::size_t index, int seed, int minValue, int maxValue) {
+    assert(minValue <= maxValue);
+    const std::uint32_t indexValue = static_cast<std::uint32_t>(index + 1U);
+    const std::uint32_t seedValue = static_cast<std::uint32_t>(seed + 101);
+    const std::uint32_t mixed = (indexValue * 2654435761U) ^ (seedValue * 2246822519U);
+    const int range = (maxValue - minValue) + 1;
+    const int offset = static_cast<int>(mixed % static_cast<std::uint32_t>(range));
+    return static_cast<std::int16_t>(minValue + offset);
+}
+
+void fillAlignedBuffer(AlignedBuffer &buffer, int seed, int minValue, int maxValue) {
+    for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+        buffer[i] = deterministicBufferValue(i, seed, minValue, maxValue);
+    }
+}
+
+int32_t scalarScrelu(std::int16_t input) {
+    int32_t value = static_cast<int32_t>(input);
+    if (value < 0) {
+        value = 0;
+    }
+    const int32_t quantA = static_cast<int32_t>(Constants::NNUE_QUANT_A);
+    if (value > quantA) {
+        value = quantA;
+    }
+    return value * value;
+}
+
+int32_t scalarSIMDForward(const AlignedBuffer &inputs, const AlignedBuffer &weights) {
+    int32_t output = 0;
+    for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+        output += scalarScrelu(inputs[i]) * static_cast<int32_t>(weights[i]);
+    }
+    return output;
+}
+
+void assertAlignedBuffersEqual(const AlignedBuffer &actual, const AlignedBuffer &expected) {
+    for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+        assert(actual[i] == expected[i]);
+    }
+}
+
+void testSIMDBufferAndConstants() {
+    AlignedBuffer buffer;
+
+    assert((reinterpret_cast<std::uintptr_t>(buffer.data()) % 64U) == 0U);
+    assert(SIMD::ITERATIONS == (Constants::NNUE_LAYER_SIZE / Constants::SIMD_LANES));
+    assert((SIMD::ITERATIONS * Constants::SIMD_LANES) == Constants::NNUE_LAYER_SIZE);
+
+    for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+        assert(buffer[i] == 0);
+    }
+
+    buffer[0] = static_cast<std::int16_t>(17);
+    buffer[Constants::NNUE_LAYER_SIZE - 1] = static_cast<std::int16_t>(-29);
+
+    const AlignedBuffer &constBuffer = buffer;
+    assert(constBuffer.data()[0] == static_cast<std::int16_t>(17));
+    assert(constBuffer[Constants::NNUE_LAYER_SIZE - 1] == static_cast<std::int16_t>(-29));
+}
+
+void testSIMDForward() {
+    for (int caseIndex = 0; caseIndex < 10; ++caseIndex) {
+        AlignedBuffer inputs;
+        AlignedBuffer weights;
+
+        fillAlignedBuffer(inputs, 11 + (caseIndex * 23), -320, 420);
+        fillAlignedBuffer(weights, 97 + (caseIndex * 29), -12, 12);
+
+        const int32_t expected = scalarSIMDForward(inputs, weights);
+        const int32_t actual = SIMD::forward(inputs, weights);
+        assert(actual == expected);
+    }
+
+    const int quantA = static_cast<int>(Constants::NNUE_QUANT_A);
+    AlignedBuffer boundaryInputs;
+    AlignedBuffer boundaryWeights;
+    for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+        const std::size_t bucket = i % 6U;
+        if (bucket == 0U) {
+            boundaryInputs[i] = static_cast<std::int16_t>(-512);
+        } else if (bucket == 1U) {
+            boundaryInputs[i] = static_cast<std::int16_t>(-1);
+        } else if (bucket == 2U) {
+            boundaryInputs[i] = static_cast<std::int16_t>(0);
+        } else if (bucket == 3U) {
+            boundaryInputs[i] = static_cast<std::int16_t>(quantA);
+        } else if (bucket == 4U) {
+            boundaryInputs[i] = static_cast<std::int16_t>(quantA + 1);
+        } else {
+            boundaryInputs[i] = static_cast<std::int16_t>(1024);
+        }
+
+        const int weightValue = static_cast<int>(i % 9U) - 4;
+        boundaryWeights[i] = static_cast<std::int16_t>(weightValue);
+    }
+
+    assert(SIMD::forward(boundaryInputs, boundaryWeights) == scalarSIMDForward(boundaryInputs, boundaryWeights));
+
+    AlignedBuffer negativeInputs;
+    AlignedBuffer arbitraryWeights;
+    fillAlignedBuffer(negativeInputs, 333, -1000, -1);
+    fillAlignedBuffer(arbitraryWeights, 777, -16, 16);
+    assert(SIMD::forward(negativeInputs, arbitraryWeights) == 0);
+}
+
+void testSIMDForwardSingleActiveIndex() {
+    const int quantA = static_cast<int>(Constants::NNUE_QUANT_A);
+    AlignedBuffer inputs;
+    AlignedBuffer weights;
+
+    for (std::size_t activeIndex = 0; activeIndex < Constants::NNUE_LAYER_SIZE; ++activeIndex) {
+        const std::size_t bucket = activeIndex % 5U;
+        if (bucket == 0U) {
+            inputs[activeIndex] = static_cast<std::int16_t>(-64);
+        } else if (bucket == 1U) {
+            inputs[activeIndex] = static_cast<std::int16_t>(0);
+        } else if (bucket == 2U) {
+            inputs[activeIndex] = static_cast<std::int16_t>(67);
+        } else if (bucket == 3U) {
+            inputs[activeIndex] = static_cast<std::int16_t>(quantA);
+        } else {
+            inputs[activeIndex] = static_cast<std::int16_t>(quantA + 64);
+        }
+
+        const int weightValue = static_cast<int>(activeIndex % 7U) - 3;
+        weights[activeIndex] = static_cast<std::int16_t>(weightValue);
+
+        assert(SIMD::forward(inputs, weights) == scalarSIMDForward(inputs, weights));
+
+        inputs[activeIndex] = 0;
+        weights[activeIndex] = 0;
+    }
+}
+
+void testSIMDArithmeticPrimitives() {
+    for (int caseIndex = 0; caseIndex < 8; ++caseIndex) {
+        AlignedBuffer inputs;
+        AlignedBuffer outputsSeed;
+        AlignedBuffer add1;
+        AlignedBuffer add2;
+        AlignedBuffer sub1;
+        AlignedBuffer sub2;
+
+        fillAlignedBuffer(inputs, 100 + (caseIndex * 17), -1000, 1000);
+        fillAlignedBuffer(outputsSeed, 200 + (caseIndex * 19), -1000, 1000);
+        fillAlignedBuffer(add1, 300 + (caseIndex * 23), -1000, 1000);
+        fillAlignedBuffer(add2, 400 + (caseIndex * 29), -1000, 1000);
+        fillAlignedBuffer(sub1, 500 + (caseIndex * 31), -1000, 1000);
+        fillAlignedBuffer(sub2, 600 + (caseIndex * 37), -1000, 1000);
+
+        const AlignedBuffer inputsBefore = inputs;
+        const AlignedBuffer add1Before = add1;
+        const AlignedBuffer add2Before = add2;
+        const AlignedBuffer sub1Before = sub1;
+        const AlignedBuffer sub2Before = sub2;
+
+        AlignedBuffer expectedAdd = outputsSeed;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(outputsSeed[i]) + static_cast<int>(inputs[i]);
+            expectedAdd[i] = checkedInt16(value);
+        }
+        AlignedBuffer actualAdd = outputsSeed;
+        SIMD::add(inputs, actualAdd);
+        assertAlignedBuffersEqual(actualAdd, expectedAdd);
+
+        AlignedBuffer expectedSub = outputsSeed;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(outputsSeed[i]) - static_cast<int>(inputs[i]);
+            expectedSub[i] = checkedInt16(value);
+        }
+        AlignedBuffer actualSub = outputsSeed;
+        SIMD::sub(inputs, actualSub);
+        assertAlignedBuffersEqual(actualSub, expectedSub);
+
+        AlignedBuffer expectedAddSub;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]);
+            expectedAddSub[i] = checkedInt16(value);
+        }
+        AlignedBuffer actualAddSub;
+        SIMD::addSub(inputs, actualAddSub, add1, sub1);
+        assertAlignedBuffersEqual(actualAddSub, expectedAddSub);
+
+        AlignedBuffer expectedAddSub2;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
+            expectedAddSub2[i] = checkedInt16(value);
+        }
+        AlignedBuffer actualAddSub2;
+        SIMD::addSub2(inputs, actualAddSub2, add1, sub1, sub2);
+        assertAlignedBuffersEqual(actualAddSub2, expectedAddSub2);
+
+        AlignedBuffer expectedAdd2Sub2;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) + static_cast<int>(add2[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
+            expectedAdd2Sub2[i] = checkedInt16(value);
+        }
+        AlignedBuffer actualAdd2Sub2;
+        SIMD::add2Sub2(inputs, actualAdd2Sub2, add1, add2, sub1, sub2);
+        assertAlignedBuffersEqual(actualAdd2Sub2, expectedAdd2Sub2);
+
+        assertAlignedBuffersEqual(inputs, inputsBefore);
+        assertAlignedBuffersEqual(add1, add1Before);
+        assertAlignedBuffersEqual(add2, add2Before);
+        assertAlignedBuffersEqual(sub1, sub1Before);
+        assertAlignedBuffersEqual(sub2, sub2Before);
+    }
+}
+
+void testSIMDComposedOperationRelationships() {
+    for (int caseIndex = 0; caseIndex < 6; ++caseIndex) {
+        AlignedBuffer inputs;
+        AlignedBuffer base;
+        AlignedBuffer add1;
+        AlignedBuffer sub1;
+        AlignedBuffer sub2;
+        AlignedBuffer zeros;
+
+        fillAlignedBuffer(inputs, 700 + (caseIndex * 17), -900, 900);
+        fillAlignedBuffer(base, 800 + (caseIndex * 19), -900, 900);
+        fillAlignedBuffer(add1, 900 + (caseIndex * 23), -900, 900);
+        fillAlignedBuffer(sub1, 1000 + (caseIndex * 29), -900, 900);
+        fillAlignedBuffer(sub2, 1100 + (caseIndex * 31), -900, 900);
+
+        AlignedBuffer roundTrip = base;
+        SIMD::add(inputs, roundTrip);
+        SIMD::sub(inputs, roundTrip);
+        assertAlignedBuffersEqual(roundTrip, base);
+
+        AlignedBuffer addSubResult;
+        SIMD::addSub(inputs, addSubResult, add1, sub1);
+
+        AlignedBuffer addSub2WithZero;
+        SIMD::addSub2(inputs, addSub2WithZero, add1, sub1, zeros);
+        assertAlignedBuffersEqual(addSub2WithZero, addSubResult);
+
+        AlignedBuffer addSub2Result;
+        SIMD::addSub2(inputs, addSub2Result, add1, sub1, sub2);
+
+        AlignedBuffer add2Sub2WithZero;
+        SIMD::add2Sub2(inputs, add2Sub2WithZero, add1, zeros, sub1, sub2);
+        assertAlignedBuffersEqual(add2Sub2WithZero, addSub2Result);
     }
 }
 
@@ -806,10 +1058,10 @@ void testMoveList() {
     assert(list.size() == 0);
     assert(list.begin() == list.end());
 
-    for (std::size_t i = 0; i < MoveList::MAX_MOVES; ++i) {
+    for (std::size_t i = 0; i < Constants::MAX_MOVES; ++i) {
         list.add(Move(Square::SQUARE_A1, Square((i + 1) % 64), Move::NORMAL));
     }
-    assert(list.size() == MoveList::MAX_MOVES);
+    assert(list.size() == Constants::MAX_MOVES);
     assert(!list.empty());
 }
 
@@ -2334,6 +2586,11 @@ int main() {
     testMoveExtras();
     testMoveList();
     testMoveListExtras();
+    testSIMDBufferAndConstants();
+    testSIMDForward();
+    testSIMDForwardSingleActiveIndex();
+    testSIMDArithmeticPrimitives();
+    testSIMDComposedOperationRelationships();
     testAttacksAndMagic();
     testAttacksBetween();
     testAttacksBetweenSymmetry();
