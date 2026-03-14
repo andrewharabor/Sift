@@ -4,8 +4,8 @@
 #include <cassert>
 #include <cstdint>
 #include <iterator>
-#include <utility>
 
+#include "constants.hpp"
 #include "coordinates.hpp"
 #include "piece.hpp"
 
@@ -76,8 +76,6 @@ private:
 
 class MoveList {
 public:
-    constexpr static std::size_t MAX_MOVES = 256;
-
     constexpr Move &at(std::size_t index) noexcept {
         assert(index < size_);
         return moveList_[index];
@@ -117,12 +115,12 @@ public:
     constexpr const Move *end() const noexcept { return &moveList_[size_]; }
 
     constexpr void add(const Move &move) noexcept {
-        assert(size_ < MAX_MOVES);
+        assert(size_ < Constants::MAX_MOVES);
         moveList_[size_++] = move;
     }
 
     constexpr void add(Move &&move) noexcept {
-        assert(size_ < MAX_MOVES);
+        assert(size_ < Constants::MAX_MOVES);
         moveList_[size_++] = std::move(move);
     }
 
@@ -141,7 +139,7 @@ public:
     }
 
 private:
-    std::array<Move, MAX_MOVES> moveList_;
+    std::array<Move, Constants::MAX_MOVES> moveList_;
     std::size_t size_ = 0;
 
 };

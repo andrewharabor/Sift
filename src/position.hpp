@@ -11,6 +11,7 @@
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
+#include "constants.hpp"
 #include "coordinates.hpp"
 #include "move.hpp"
 #include "piece.hpp"
@@ -153,7 +154,7 @@ public:
         std::uint8_t rights_;
     };
 
-    explicit Position(std::string_view fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
+    explicit Position(std::string_view fen = Constants::FEN_STARTPOS) {
         stateHistory_.reserve(256);
         set(fen);
         assert(set(fen));

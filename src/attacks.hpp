@@ -3,7 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
-#ifdef USE_PEXT
+#if defined(USE_PEXT)
 #include <immintrin.h>
 #endif
 
@@ -263,7 +263,7 @@ private:
         std::uint64_t occupied = 0ULL;
         Magic &entry = table[square.index()];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
-#ifndef USE_PEXT
+#if !defined(USE_PEXT)
         entry.magic = magic;
         entry.shift = 64 - static_cast<std::uint64_t>(Bitboard(entry.mask).count());
 #endif
@@ -338,6 +338,6 @@ private:
 
         return betweenBitboards;
     }
-    };
+};
 
 }
