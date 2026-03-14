@@ -3,6 +3,9 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#ifdef USE_PEXT
+#include <immintrin.h>
+#endif
 
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -126,6 +129,13 @@ public:
     }
 
 private:
+#ifdef USE_PEXT
+    struct Magic {
+        std::uint64_t mask;
+        Bitboard *attacks;
+        std::uint64_t hashIndex(Bitboard bitboard) const noexcept { return _pext_u64(bitboard.bits(), mask); }
+    };
+#else
     struct Magic {
         std::uint64_t mask;
         std::uint64_t magic;
@@ -133,6 +143,7 @@ private:
         Bitboard *attacks;
         std::uint64_t hashIndex(Bitboard bitboard) const noexcept { return (bitboard & mask).bits() * magic >> shift; }
     };
+#endif
 
     static constexpr Bitboard PAWN_ATTACKS[2][64] = {
         {0x200, 0x500, 0xa00, 0x1400,
@@ -246,14 +257,16 @@ private:
     static inline Magic ROOK_TABLE[64] = {};
     static inline Magic BISHOP_TABLE[64] = {};
 
-    static void initSliders(Square square, Magic table[], std::uint64_t magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
+    static void initSliders(Square square, Magic table[], [[maybe_unused]] std::uint64_t magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
         assert(square != Square::NONE);
         const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) | ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
         std::uint64_t occupied = 0ULL;
         Magic &entry = table[square.index()];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
+#ifndef USE_PEXT
         entry.magic = magic;
         entry.shift = 64 - static_cast<std::uint64_t>(Bitboard(entry.mask).count());
+#endif
 
         if (square.index() < 63) {
             table[square.index() + 1].attacks = entry.attacks + (1ULL << Bitboard(entry.mask).count());
@@ -325,6 +338,6 @@ private:
 
         return betweenBitboards;
     }
-};
+    };
 
 }

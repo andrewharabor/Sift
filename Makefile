@@ -62,8 +62,8 @@ else
 endif
 
 ifeq ($(ARCH),x86-64-avx2)
-    CPPFLAGS += -DUSE_AVX2
-    CXXFLAGS += -m64 -mavx2 -mpopcnt
+    CPPFLAGS += -DUSE_AVX2 -DUSE_PEXT
+    CXXFLAGS += -m64 -mavx2 -mbmi2 -mpopcnt
     LDFLAGS += -m64
 else ifeq ($(ARCH),x86-64-modern)
     CPPFLAGS += -DUSE_SSE
@@ -104,13 +104,14 @@ DEPS := $(OBJS:%.o=%.d)
 
 -include $(DEPS)
 
-$(BUILD_DIR)/%.o: %.cpp
-	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
-
+.DEFAULT_GOAL := $(TARGET_EXEC)
 
 $(TARGET_EXEC): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+
+$(BUILD_DIR)/%.o: %.cpp
+	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:
