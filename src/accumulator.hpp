@@ -13,7 +13,6 @@ namespace Clownfish {
 class Accumulator {
 public:
     constexpr Accumulator() : accumulators_{} {}
-    constexpr Accumulator(const Accumulator &other) : accumulators_(other.accumulators_) {}
 
     constexpr AlignedVector &data(Color color) noexcept {
         assert(color != Color::NONE);

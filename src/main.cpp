@@ -13,6 +13,7 @@
 #include "coordinates.hpp"
 #include "move.hpp"
 #include "move-generator.hpp"
+#include "nnue.hpp"
 #include "piece.hpp"
 #include "position.hpp"
 #include "simd.hpp"
@@ -2217,7 +2218,7 @@ void testMoveGeneratorPerftReferenceCounts() {
             }
             runPerftCase(positionReference, depthReference, "slow");
         }
-    }
+}
 #else
     std::size_t skippedSlowCases = 0;
     for (const PerftPositionReference &positionReference : positions) {
