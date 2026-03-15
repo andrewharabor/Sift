@@ -160,51 +160,54 @@ public:
         struct Change {
             Piece piece;
             Square square;
-            bool added;
         };
 
-        constexpr BoardChanges() : pieceChanges_{}, size_(0) {}
+        constexpr BoardChanges() : additions_{}, removals_{}, sizeAdd_(0), sizeRemove_(0) {}
 
-        constexpr BoardChanges(const Position &position, const Move move) : pieceChanges_{}, size_(0) {
+        constexpr BoardChanges(const Position &position, const Move move) : additions_{}, removals_{}, sizeAdd_(0), sizeRemove_(0) {
             const Piece capturedPiece = position.pieceAt(move.to());
             if (move.type() == Move::CASTLING) {
                 const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), position.sideToMove());
-                remove(position.pieceAt(move.from()), move.from());
-                remove(position.pieceAt(move.to()), move.to());
-                add(position.pieceAt(move.from()), CastlingRights::kingTo(castlingSide));
-                add(position.pieceAt(move.to()), CastlingRights::rookTo(castlingSide));
+                addRemoval(position.pieceAt(move.from()), move.from());
+                addRemoval(position.pieceAt(move.to()), move.to());
+                addAddition(position.pieceAt(move.from()), CastlingRights::kingTo(castlingSide));
+                addAddition(position.pieceAt(move.to()), CastlingRights::rookTo(castlingSide));
             } else if (move.type() == Move::PROMOTION) {
                 const Piece pawn = Piece(PieceType::PAWN, position.sideToMove());
                 const Piece promotionPiece = Piece(move.promotion(), position.sideToMove());
-                remove(pawn, move.from());
+                addRemoval(pawn, move.from());
                 if (capturedPiece != Piece::NONE) {
-                    remove(capturedPiece, move.to());
+                    addRemoval(capturedPiece, move.to());
                 }
-                add(promotionPiece, move.to());
+                addAddition(promotionPiece, move.to());
             } else if (move.type() == Move::EN_PASSANT) {
                 const Piece pawn = position.pieceAt(move.from());
-                remove(pawn, move.from());
-                remove(Piece(PieceType::PAWN, ~position.sideToMove()), Square(move.to().file(), move.from().rank()));
-                add(pawn, move.to());
+                addRemoval(pawn, move.from());
+                addRemoval(Piece(PieceType::PAWN, ~position.sideToMove()), Square(move.to().file(), move.from().rank()));
+                addAddition(pawn, move.to());
             } else {
                 const Piece piece = position.pieceAt(move.from());
-                remove(piece, move.from());
+                addRemoval(piece, move.from());
                 if (capturedPiece != Piece::NONE) {
-                    remove(capturedPiece, move.to());
+                    addRemoval(capturedPiece, move.to());
                 }
-                add(piece, move.to());
+                addAddition(piece, move.to());
             }
         }
 
-        constexpr const std::array<Change, 4> &changes() const noexcept { return pieceChanges_; }
-        constexpr std::uint8_t size() const noexcept { return size_; }
+        constexpr const std::array<Change, 2> &additions() const noexcept { return additions_; }
+        constexpr const std::array<Change, 2> &removals() const noexcept { return removals_; }
+        constexpr std::uint8_t sizeAdd() const noexcept { return sizeAdd_; }
+        constexpr std::uint8_t sizeRemove() const noexcept { return sizeRemove_; }
 
     private:
-        constexpr void remove(Piece piece, Square square) noexcept { pieceChanges_[size_++] = {piece, square, false}; }
-        constexpr void add(Piece piece, Square square) noexcept { pieceChanges_[size_++] = {piece, square, true}; }
+        constexpr void addAddition(Piece piece, Square square) noexcept { additions_[sizeAdd_++] = {piece, square}; }
+        constexpr void addRemoval(Piece piece, Square square) noexcept { removals_[sizeRemove_++] = {piece, square}; }
 
-        std::array<Change, 4> pieceChanges_;
-        std::uint8_t size_;
+        std::array<Change, 2> additions_;
+        std::array<Change, 2> removals_;
+        std::uint8_t sizeAdd_;
+        std::uint8_t sizeRemove_;
     };
 
     explicit Position(std::string_view fen = Constants::FEN_STARTPOS) {

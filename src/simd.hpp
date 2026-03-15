@@ -69,23 +69,53 @@ public:
         return horizontalSum(sum);
     }
 
-    static void add(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
-        Register *pOutputs = reinterpret_cast<Register *>(outputs.data());
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs++, pOutputs++) {
-            *pOutputs = _mm256_add_epi16(*pOutputs, *pInputs);
+    static void add(AlignedVector &data, const AlignedVector &add) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++) {
+            *pData = _mm256_add_epi16(*pData, *pAdd);
         }
     }
 
-    static void sub(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
-        Register *pOutputs = reinterpret_cast<Register *>(outputs.data());
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs++, pOutputs++) {
-            *pOutputs = _mm256_sub_epi16(*pOutputs, *pInputs);
+    static void sub(AlignedVector &data, const AlignedVector &sub) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pSub = reinterpret_cast<const Register *>(sub.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pSub++) {
+            *pData = _mm256_sub_epi16(*pData, *pSub);
         }
     }
 
-#elif defined (USE_SSE)
+    static void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        const Register *pSub = reinterpret_cast<const Register *>(sub.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++, pSub++) {
+            *pData = _mm256_sub_epi16(_mm256_add_epi16(*pData, *pAdd), *pSub);
+        }
+    }
+
+    static void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        const Register *pSub1 = reinterpret_cast<const Register *>(sub1.data());
+        const Register *pSub2 = reinterpret_cast<const Register *>(sub2.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++, pSub1++, pSub2++) {
+            *pData = _mm256_sub_epi16(_mm256_sub_epi16(_mm256_add_epi16(*pData, *pAdd), *pSub1), *pSub2);
+        }
+    }
+
+    static void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd1 = reinterpret_cast<const Register *>(add1.data());
+        const Register *pAdd2 = reinterpret_cast<const Register *>(add2.data());
+        const Register *pSub1 = reinterpret_cast<const Register *>(sub1.data());
+        const Register *pSub2 = reinterpret_cast<const Register *>(sub2.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd1++, pAdd2++, pSub1++, pSub2++) {
+            *pData = _mm256_sub_epi16(_mm256_sub_epi16(_mm256_add_epi16(_mm256_add_epi16(*pData, *pAdd1), *pAdd2), *pSub1), *pSub2);
+        }
+    }
+
+#elif defined(USE_SSE)
     using Register = __m128i;
 
     static std::int32_t horizontalSum(Register value) noexcept {
@@ -115,19 +145,49 @@ public:
         return horizontalSum(sum);
     }
 
-    static void add(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
-        Register *pOutputs = reinterpret_cast<Register *>(outputs.data());
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs++, pOutputs++) {
-            *pOutputs = _mm_add_epi16(*pOutputs, *pInputs);
+    static void add(AlignedVector &data, const AlignedVector &add) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++) {
+            *pData = _mm_add_epi16(*pData, *pAdd);
         }
     }
 
-    static void sub(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
-        Register *pOutputs = reinterpret_cast<Register *>(outputs.data());
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs++, pOutputs++) {
-            *pOutputs = _mm_sub_epi16(*pOutputs, *pInputs);
+    static void sub(AlignedVector &data, const AlignedVector &sub) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pSub = reinterpret_cast<const Register *>(sub.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pSub++) {
+            *pData = _mm_sub_epi16(*pData, *pSub);
+        }
+    }
+
+    static void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        const Register *pSub = reinterpret_cast<const Register *>(sub.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++, pSub++) {
+            *pData = _mm_sub_epi16(_mm_add_epi16(*pData, *pAdd), *pSub);
+        }
+    }
+
+    static void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd = reinterpret_cast<const Register *>(add.data());
+        const Register *pSub1 = reinterpret_cast<const Register *>(sub1.data());
+        const Register *pSub2 = reinterpret_cast<const Register *>(sub2.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd++, pSub1++, pSub2++) {
+            *pData = _mm_sub_epi16(_mm_sub_epi16(_mm_add_epi16(*pData, *pAdd), *pSub1), *pSub2);
+        }
+    }
+
+    static void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        Register *pData = reinterpret_cast<Register *>(data.data());
+        const Register *pAdd1 = reinterpret_cast<const Register *>(add1.data());
+        const Register *pAdd2 = reinterpret_cast<const Register *>(add2.data());
+        const Register *pSub1 = reinterpret_cast<const Register *>(sub1.data());
+        const Register *pSub2 = reinterpret_cast<const Register *>(sub2.data());
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData++, pAdd1++, pAdd2++, pSub1++, pSub2++) {
+            *pData = _mm_sub_epi16(_mm_sub_epi16(_mm_add_epi16(_mm_add_epi16(*pData, *pAdd1), *pAdd2), *pSub1), *pSub2);
         }
     }
 
@@ -159,31 +219,57 @@ public:
         return horizontalSum(sum);
     }
 
-    static void add(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const std::int16_t *pInputs = inputs.data();
-        std::int16_t *pOutputs = outputs.data();
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs += Constants::SIMD_LANES, pOutputs += Constants::SIMD_LANES) {
-            int16x8_t registerInputs = vld1q_s16(pInputs);
-            int16x8_t registerOutputs = vld1q_s16(pOutputs);
-            vst1q_s16(pOutputs, vaddq_s16(registerOutputs, registerInputs));
+    static void add(AlignedVector &data, const AlignedVector &add) noexcept {
+        std::int16_t *pData = data.data();
+        const std::int16_t *pAdd = add.data();
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData += Constants::SIMD_LANES, pAdd += Constants::SIMD_LANES) {
+            vst1q_s16(pData, vaddq_s16(vld1q_s16(pData), vld1q_s16(pAdd)));
         }
     }
 
-    static void sub(const AlignedVector &inputs, AlignedVector &outputs) noexcept {
-        const std::int16_t *pInputs = inputs.data();
-        std::int16_t *pOutputs = outputs.data();
-        for (std::size_t i = 0; i < ITERATIONS; i++, pInputs += Constants::SIMD_LANES, pOutputs += Constants::SIMD_LANES) {
-            int16x8_t registerInputs = vld1q_s16(pInputs);
-            int16x8_t registerOutputs = vld1q_s16(pOutputs);
-            vst1q_s16(pOutputs, vsubq_s16(registerOutputs, registerInputs));
+    static void sub(AlignedVector &data, const AlignedVector &sub) noexcept {
+        std::int16_t *pData = data.data();
+        const std::int16_t *pSub = sub.data();
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData += Constants::SIMD_LANES, pSub += Constants::SIMD_LANES) {
+            vst1q_s16(pData, vsubq_s16(vld1q_s16(pData), vld1q_s16(pSub)));
+        }
+    }
+
+    static void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) noexcept {
+        std::int16_t *pData = data.data();
+        const std::int16_t *pAdd = add.data();
+        const std::int16_t *pSub = sub.data();
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData += Constants::SIMD_LANES, pAdd += Constants::SIMD_LANES, pSub += Constants::SIMD_LANES) {
+            vst1q_s16(pData, vsubq_s16(vaddq_s16(vld1q_s16(pData), vld1q_s16(pAdd)), vld1q_s16(pSub)));
+        }
+    }
+
+    static void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        std::int16_t *pData = data.data();
+        const std::int16_t *pAdd = add.data();
+        const std::int16_t *pSub1 = sub1.data();
+        const std::int16_t *pSub2 = sub2.data();
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData += Constants::SIMD_LANES, pAdd += Constants::SIMD_LANES, pSub1 += Constants::SIMD_LANES, pSub2 += Constants::SIMD_LANES) {
+            vst1q_s16(pData, vsubq_s16(vsubq_s16(vaddq_s16(vld1q_s16(pData), vld1q_s16(pAdd)), vld1q_s16(pSub1)), vld1q_s16(pSub2)));
+        }
+    }
+
+    static void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) noexcept {
+        std::int16_t *pData = data.data();
+        const std::int16_t *pAdd1 = add1.data();
+        const std::int16_t *pAdd2 = add2.data();
+        const std::int16_t *pSub1 = sub1.data();
+        const std::int16_t *pSub2 = sub2.data();
+        for (std::size_t i = 0; i < ITERATIONS; i++, pData += Constants::SIMD_LANES, pAdd1 += Constants::SIMD_LANES, pAdd2 += Constants::SIMD_LANES, pSub1 += Constants::SIMD_LANES, pSub2 += Constants::SIMD_LANES) {
+            vst1q_s16(pData, vsubq_s16(vsubq_s16(vaddq_s16(vaddq_s16(vld1q_s16(pData), vld1q_s16(pAdd1)), vld1q_s16(pAdd2)), vld1q_s16(pSub1)), vld1q_s16(pSub2)));
         }
     }
 
 #else
 
-    static std::int32_t screlu(std::int16_t input) {
-        std::int16_t val = std::clamp(input, static_cast<std::int16_t>(0), static_cast<std::int16_t>(Constants::NNUE_QUANT_A));
-        return val * val;
+    static std::int32_t screlu(std::int16_t value) {
+        std::int16_t result = std::clamp(value, static_cast<std::int16_t>(0), static_cast<std::int16_t>(Constants::NNUE_QUANT_A));
+        return result * result;
     }
 
     static std::int32_t fullyConnected(const AlignedVector &inputs, const AlignedVector &weights) {
@@ -194,15 +280,33 @@ public:
         return output;
     }
 
-    static void add(const AlignedVector &inputs, AlignedVector &outputs) {
+    static void add(AlignedVector &data, const AlignedVector &add) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
-            outputs[i] += inputs[i];
+            data[i] += add[i];
         }
     }
 
-    static void sub(const AlignedVector &inputs, AlignedVector &outputs) {
+    static void sub(AlignedVector &data, const AlignedVector &sub) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
-            outputs[i] -= inputs[i];
+            data[i] -= sub[i];
+        }
+    }
+
+    static void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) {
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+            data[i] += add[i] - sub[i];
+        }
+    }
+
+    static void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) {
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+            data[i] += add[i] - sub1[i] - sub2[i];
+        }
+    }
+
+    static void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) {
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+            data[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
         }
     }
 

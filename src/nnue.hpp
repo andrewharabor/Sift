@@ -36,7 +36,7 @@ public:
                 const Square square = static_cast<int>(pieces.pop());
                 const Piece piece = board[static_cast<std::size_t>(square)];
                 const int featureIndex = NNUE::featureIndex(piece, square, color);
-                SIMD::add(hiddenWeights_[featureIndex], data);
+                SIMD::add(data, hiddenWeights_[featureIndex]);
             }
         }
     }
@@ -63,13 +63,49 @@ public:
             Accumulator &accumulator = accumulatorHistory_[length_];
             accumulator = accumulatorHistory_[length_ - 1];
             for (Color color : {Color::WHITE, Color::BLACK}) {
-                for (std::size_t i = 0; i < changes.size(); i++) {
-                    const Position::BoardChanges::Change &change = changes.changes()[i];
-                    const int featureIndex = NNUE::featureIndex(change.piece, change.square, color);
-                    if (change.added) {
-                        SIMD::add(hiddenWeights_[featureIndex], accumulator.data(color));
-                    } else {
-                        SIMD::sub(hiddenWeights_[featureIndex], accumulator.data(color));
+                AlignedVector &data = accumulator.data(color);
+                if (changes.sizeAdd() == 1 && changes.sizeRemove() == 0) {
+                    const Position::BoardChanges::Change &change = changes.additions()[0];
+                    const int index = NNUE::featureIndex(change.piece, change.square, color);
+                    SIMD::add(data, hiddenWeights_[index]);
+                } else if (changes.sizeAdd() == 0 && changes.sizeRemove() == 1) {
+                    const Position::BoardChanges::Change &change = changes.removals()[0];
+                    const int index = NNUE::featureIndex(change.piece, change.square, color);
+                    SIMD::sub(data, hiddenWeights_[index]);
+                } else if (changes.sizeAdd() == 1 && changes.sizeRemove() == 1) {
+                    const Position::BoardChanges::Change &add = changes.additions()[0];
+                    const Position::BoardChanges::Change &remove = changes.removals()[0];
+                    const int addIndex = NNUE::featureIndex(add.piece, add.square, color);
+                    const int removeIndex = NNUE::featureIndex(remove.piece, remove.square, color);
+                    SIMD::addSub(data, hiddenWeights_[addIndex], hiddenWeights_[removeIndex]);
+                } else if (changes.sizeAdd() == 1 && changes.sizeRemove() == 2) {
+                    const Position::BoardChanges::Change &add = changes.additions()[0];
+                    const Position::BoardChanges::Change &remove1 = changes.removals()[0];
+                    const Position::BoardChanges::Change &remove2 = changes.removals()[1];
+                    const int addIndex = NNUE::featureIndex(add.piece, add.square, color);
+                    const int removeIndex1 = NNUE::featureIndex(remove1.piece, remove1.square, color);
+                    const int removeIndex2 = NNUE::featureIndex(remove2.piece, remove2.square, color);
+                    SIMD::addSub2(data, hiddenWeights_[addIndex], hiddenWeights_[removeIndex1], hiddenWeights_[removeIndex2]);
+                } else if (changes.sizeAdd() == 2 && changes.sizeRemove() == 2) {
+                    const Position::BoardChanges::Change &add1 = changes.additions()[0];
+                    const Position::BoardChanges::Change &add2 = changes.additions()[1];
+                    const Position::BoardChanges::Change &remove1 = changes.removals()[0];
+                    const Position::BoardChanges::Change &remove2 = changes.removals()[1];
+                    const int addIndex1 = NNUE::featureIndex(add1.piece, add1.square, color);
+                    const int addIndex2 = NNUE::featureIndex(add2.piece, add2.square, color);
+                    const int removeIndex1 = NNUE::featureIndex(remove1.piece, remove1.square, color);
+                    const int removeIndex2 = NNUE::featureIndex(remove2.piece, remove2.square, color);
+                    SIMD::add2Sub2(data, hiddenWeights_[addIndex1], hiddenWeights_[addIndex2], hiddenWeights_[removeIndex1], hiddenWeights_[removeIndex2]);
+                } else {
+                    for (std::size_t i = 0; i < changes.sizeAdd(); i++) {
+                        const Position::BoardChanges::Change &change = changes.additions()[i];
+                        const int index = NNUE::featureIndex(change.piece, change.square, color);
+                        SIMD::add(data, hiddenWeights_[index]);
+                    }
+                    for (std::size_t i = 0; i < changes.sizeRemove(); i++) {
+                        const Position::BoardChanges::Change &change = changes.removals()[i];
+                        const int index = NNUE::featureIndex(change.piece, change.square, color);
+                        SIMD::sub(data, hiddenWeights_[index]);
                     }
                 }
             }

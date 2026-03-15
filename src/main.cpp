@@ -408,7 +408,7 @@ void testSIMDArithmeticPrimitives() {
             expectedAdd[i] = checkedInt16(value);
         }
         AlignedVector actualAdd = outputsSeed;
-        SIMD::add(inputs, actualAdd);
+        SIMD::add(actualAdd, inputs);
         assertAlignedBuffersEqual(actualAdd, expectedAdd);
 
         AlignedVector expectedSub = outputsSeed;
@@ -417,35 +417,35 @@ void testSIMDArithmeticPrimitives() {
             expectedSub[i] = checkedInt16(value);
         }
         AlignedVector actualSub = outputsSeed;
-        SIMD::sub(inputs, actualSub);
+        SIMD::sub(actualSub, inputs);
         assertAlignedBuffersEqual(actualSub, expectedSub);
 
-        // AlignedVector expectedAddSub;
-        // for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
-        //     const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]);
-        //     expectedAddSub[i] = checkedInt16(value);
-        // }
-        // AlignedVector actualAddSub;
-        // SIMD::addSub(inputs, actualAddSub, add1, sub1);
-        // assertAlignedBuffersEqual(actualAddSub, expectedAddSub);
+        AlignedVector expectedAddSub;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]);
+            expectedAddSub[i] = checkedInt16(value);
+        }
+        AlignedVector actualAddSub = inputs;
+        SIMD::addSub(actualAddSub, add1, sub1);
+        assertAlignedBuffersEqual(actualAddSub, expectedAddSub);
 
-        // AlignedVector expectedAddSub2;
-        // for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
-        //     const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
-        //     expectedAddSub2[i] = checkedInt16(value);
-        // }
-        // AlignedVector actualAddSub2;
-        // SIMD::addSub2(inputs, actualAddSub2, add1, sub1, sub2);
-        // assertAlignedBuffersEqual(actualAddSub2, expectedAddSub2);
+        AlignedVector expectedAddSub2;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
+            expectedAddSub2[i] = checkedInt16(value);
+        }
+        AlignedVector actualAddSub2 = inputs;
+        SIMD::addSub2(actualAddSub2, add1, sub1, sub2);
+        assertAlignedBuffersEqual(actualAddSub2, expectedAddSub2);
 
-        // AlignedVector expectedAdd2Sub2;
-        // for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
-        //     const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) + static_cast<int>(add2[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
-        //     expectedAdd2Sub2[i] = checkedInt16(value);
-        // }
-        // AlignedVector actualAdd2Sub2;
-        // SIMD::add2Sub2(inputs, actualAdd2Sub2, add1, add2, sub1, sub2);
-        // assertAlignedBuffersEqual(actualAdd2Sub2, expectedAdd2Sub2);
+        AlignedVector expectedAdd2Sub2;
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
+            const int value = static_cast<int>(inputs[i]) + static_cast<int>(add1[i]) + static_cast<int>(add2[i]) - static_cast<int>(sub1[i]) - static_cast<int>(sub2[i]);
+            expectedAdd2Sub2[i] = checkedInt16(value);
+        }
+        AlignedVector actualAdd2Sub2 = inputs;
+        SIMD::add2Sub2(actualAdd2Sub2, add1, add2, sub1, sub2);
+        assertAlignedBuffersEqual(actualAdd2Sub2, expectedAdd2Sub2);
 
         assertAlignedBuffersEqual(inputs, inputsBefore);
         assertAlignedBuffersEqual(add1, add1Before);
@@ -462,7 +462,7 @@ void testSIMDComposedOperationRelationships() {
         AlignedVector add1;
         AlignedVector sub1;
         AlignedVector sub2;
-        // AlignedVector zeros;
+        AlignedVector zeros;
 
         fillAlignedBuffer(inputs, 700 + (caseIndex * 17), -900, 900);
         fillAlignedBuffer(base, 800 + (caseIndex * 19), -900, 900);
@@ -471,23 +471,23 @@ void testSIMDComposedOperationRelationships() {
         fillAlignedBuffer(sub2, 1100 + (caseIndex * 31), -900, 900);
 
         AlignedVector roundTrip = base;
-        SIMD::add(inputs, roundTrip);
-        SIMD::sub(inputs, roundTrip);
+        SIMD::add(roundTrip, inputs);
+        SIMD::sub(roundTrip, inputs);
         assertAlignedBuffersEqual(roundTrip, base);
 
-        // AlignedVector addSubResult;
-        // SIMD::addSub(inputs, addSubResult, add1, sub1);
+        AlignedVector addSubResult = inputs;
+        SIMD::addSub(addSubResult, add1, sub1);
 
-        // AlignedVector addSub2WithZero;
-        // SIMD::addSub2(inputs, addSub2WithZero, add1, sub1, zeros);
-        // assertAlignedBuffersEqual(addSub2WithZero, addSubResult);
+        AlignedVector addSub2WithZero = inputs;
+        SIMD::addSub2(addSub2WithZero, add1, sub1, zeros);
+        assertAlignedBuffersEqual(addSub2WithZero, addSubResult);
 
-        // AlignedVector addSub2Result;
-        // SIMD::addSub2(inputs, addSub2Result, add1, sub1, sub2);
+        AlignedVector addSub2Result = inputs;
+        SIMD::addSub2(addSub2Result, add1, sub1, sub2);
 
-        // AlignedVector add2Sub2WithZero;
-        // SIMD::add2Sub2(inputs, add2Sub2WithZero, add1, zeros, sub1, sub2);
-        // assertAlignedBuffersEqual(add2Sub2WithZero, addSub2Result);
+        AlignedVector add2Sub2WithZero = inputs;
+        SIMD::add2Sub2(add2Sub2WithZero, add1, zeros, sub1, sub2);
+        assertAlignedBuffersEqual(add2Sub2WithZero, addSub2Result);
     }
 }
 
