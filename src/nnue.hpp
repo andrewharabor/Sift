@@ -1,6 +1,10 @@
 #pragma once
 
 #include <array>
+#include <cassert>
+#include <cstdint>
+#include <string_view>
+#include <vector>
 
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -9,36 +13,38 @@
 #include "piece.hpp"
 #include "position.hpp"
 #include "simd.hpp"
+#include "utils.hpp"
 
 
 namespace Clownfish {
 
 class NNUE {
 public:
-    constexpr NNUE() : hiddenWeights_{}, hiddenBiases_{}, outputWeights{}, outputBias_() {}
+    constexpr NNUE() : length_(0), accumulatorHistory_{}, cachedRootOccupied_{}, cachedRootBoard_{}, hiddenWeights_{}, hiddenBiases_{}, outputWeights{}, outputBias_() {}
 
-    // constexpr std::int32_t evaluate(Bitboard occupied, const std::array<Piece, 64> &board) const noexcept {
-    //     std::int32_t score = SIMD::fullyConnected(accumulator_.data(Color::WHITE), outputWeights[static_cast<std::size_t>(Color::WHITE)]);
-    //     score += SIMD::fullyConnected(accumulator_.data(Color::BLACK), outputWeights[static_cast<std::size_t>(Color::BLACK)]);
-    //     score /= Constants::NNUE_QUANT_A;
-    //     score += outputBias_;
-    //     score *= Constants::NNUE_SCALE;
-    //     score /= (Constants::NNUE_QUANT_A * Constants::NNUE_QUANT_B);
-    //     return score;
-    // }
-
-    void refresh(Accumulator &accumulator, Bitboard occupied, const std::array<Piece, 64> &board) noexcept {
-        for (Color color : {Color::WHITE, Color::BLACK}) {
-            AlignedVector &data = accumulator.data(color);
-            data = hiddenBiases_;
-            Bitboard pieces = occupied;
-            while (pieces) {
-                const Square square = static_cast<int>(pieces.pop());
-                const Piece piece = board[static_cast<std::size_t>(square)];
-                const std::size_t featureIndex = NNUE::featureIndex(piece, square, color);
-                SIMD::add(data, hiddenWeights_[featureIndex]);
-            }
+    explicit NNUE(std::string_view path) : length_(0), accumulatorHistory_{}, cachedRootOccupied_{}, cachedRootBoard_{}, hiddenWeights_{}, hiddenBiases_{}, outputWeights{}, outputBias_() {
+        if (!load(path)) {
+            assert(false);
         }
+    }
+
+    bool load(std::string_view path) noexcept {
+        std::vector<std::uint8_t> bytes = Utils::readBytes(path);
+        if (bytes.size() != fileSize()) {
+            return false;
+        }
+        return parseNetwork(bytes);
+    }
+
+    constexpr std::int16_t evaluate(const Position &position) noexcept {
+        update(position);
+        std::int32_t score = SIMD::forward(accumulatorHistory_[length_ - 1].data(position.sideToMove()), outputWeights[0]);
+        score += SIMD::forward(accumulatorHistory_[length_ - 1].data(~position.sideToMove()), outputWeights[1]);
+        score /= Constants::NNUE_QA;
+        score += outputBias_;
+        score *= Constants::NNUE_SCALE;
+        score /= (Constants::NNUE_QA * Constants::NNUE_QB);
+        return static_cast<std::int16_t>(score);
     }
 
     void update(const Position &position) noexcept {
@@ -113,8 +119,24 @@ public:
         }
     }
 
+    void refresh(Accumulator &accumulator, Bitboard occupied, const std::array<Piece, 64> &board) noexcept {
+        for (Color color : {Color::WHITE, Color::BLACK}) {
+            AlignedVector &data = accumulator.data(color);
+            data = hiddenBiases_;
+            Bitboard pieces = occupied;
+            while (pieces) {
+                const Square square = static_cast<int>(pieces.pop());
+                const Piece piece = board[static_cast<std::size_t>(square)];
+                const std::size_t featureIndex = NNUE::featureIndex(piece, square, color);
+                SIMD::add(data, hiddenWeights_[featureIndex]);
+            }
+        }
+    }
+
     static std::size_t featureIndex(Piece piece, Square square, Color color) noexcept {
-        assert(piece != Piece::NONE && square != Square::NONE && color != Color::NONE);
+        assert(piece != Piece::NONE);
+        assert(square != Square::NONE);
+        assert(color != Color::NONE);
 
         const int colorIndex = static_cast<int>(color);
         const int pieceTypeIndex = static_cast<int>(piece.type());
@@ -129,6 +151,52 @@ public:
     }
 
 private:
+    bool parseNetwork(const std::vector<std::uint8_t> &bytes) noexcept {
+        std::size_t offset = 0;
+
+        for (std::size_t feature = 0; feature < Constants::NNUE_INPUT_SIZE; feature++) {
+            for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+                hiddenWeights_[feature][i] = Utils::readInt16LE(bytes, offset);
+                offset += sizeof(std::int16_t);
+            }
+        }
+
+        for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+            hiddenBiases_[i] = Utils::readInt16LE(bytes, offset);
+            offset += sizeof(std::int16_t);
+        }
+
+        for (std::size_t color = 0; color < 2; color++) {
+            for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
+                outputWeights[color][i] = Utils::readInt16LE(bytes, offset);
+                offset += sizeof(std::int16_t);
+            }
+        }
+
+        outputBias_ = Utils::readInt16LE(bytes, offset);
+        offset += sizeof(std::int16_t);
+
+        return offset == networkSize();
+    }
+
+    static constexpr std::size_t networkSize() noexcept {
+        std::size_t size = 0;
+        size += Constants::NNUE_LAYER_SIZE * Constants::NNUE_INPUT_SIZE * sizeof(std::int16_t);
+        size += Constants::NNUE_LAYER_SIZE * sizeof(std::int16_t);
+        size += Constants::NNUE_LAYER_SIZE * 2 * sizeof(std::int16_t);
+        size += sizeof(std::int16_t);
+        return size;
+    }
+
+    static constexpr std::size_t fileSize() noexcept {
+        const std::size_t size = networkSize();
+        const std::size_t remainder = size % 64;
+        if (remainder == 0) {
+            return size;
+        }
+        return size + (64 - remainder);
+    }
+
     std::size_t length_;
     std::array<Accumulator, Constants::MAX_GAME_LENGTH + 1> accumulatorHistory_;
 

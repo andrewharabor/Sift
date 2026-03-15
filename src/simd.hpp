@@ -48,9 +48,9 @@ public:
         return _mm256_extract_epi32(value, 0) + _mm256_extract_epi32(value, 4);
     }
 
-    static std::int32_t fullyConnected(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
+    static std::int32_t forward(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
         Register min = _mm256_set1_epi16(0);
-        Register max = _mm256_set1_epi16(Constants::NNUE_QUANT_A);
+        Register max = _mm256_set1_epi16(Constants::NNUE_QA);
         Register sum = _mm256_setzero_si256();
 
         const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
@@ -124,9 +124,9 @@ public:
         return _mm_cvtsi128_si32(value);
     }
 
-    static std::int32_t fullyConnected(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
+    static std::int32_t forward(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
         Register min = _mm_set1_epi16(0);
-        Register max = _mm_set1_epi16(Constants::NNUE_QUANT_A);
+        Register max = _mm_set1_epi16(Constants::NNUE_QA);
         Register sum = _mm_setzero_si128();
 
         const Register *pInputs = reinterpret_cast<const Register *>(inputs.data());
@@ -197,9 +197,9 @@ public:
         return vaddvq_s32(value);
     }
 
-    static std::int32_t fullyConnected(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
+    static std::int32_t forward(const AlignedVector &inputs, const AlignedVector &weights) noexcept {
         int16x8_t min = vdupq_n_s16(0);
-        int16x8_t max = vdupq_n_s16(Constants::NNUE_QUANT_A);
+        int16x8_t max = vdupq_n_s16(Constants::NNUE_QA);
         int32x4_t sum = vdupq_n_s32(0);
 
         const std::int16_t *pInputs = inputs.data();
@@ -267,12 +267,12 @@ public:
 
 #else
 
-    static std::int32_t screlu(std::int16_t value) {
-        std::int16_t result = std::clamp(value, static_cast<std::int16_t>(0), static_cast<std::int16_t>(Constants::NNUE_QUANT_A));
+    static constexpr std::int32_t screlu(std::int16_t value) {
+        std::int16_t result = std::clamp(value, static_cast<std::int16_t>(0), static_cast<std::int16_t>(Constants::NNUE_QA));
         return result * result;
     }
 
-    static std::int32_t fullyConnected(const AlignedVector &inputs, const AlignedVector &weights) {
+    static constexpr std::int32_t forward(const AlignedVector &inputs, const AlignedVector &weights) {
         std::int32_t output = 0;
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             output += screlu(inputs[i]) * weights[i];
@@ -280,31 +280,31 @@ public:
         return output;
     }
 
-    static void add(AlignedVector &data, const AlignedVector &add) {
+    static constexpr void add(AlignedVector &data, const AlignedVector &add) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             data[i] += add[i];
         }
     }
 
-    static void sub(AlignedVector &data, const AlignedVector &sub) {
+    static constexpr void sub(AlignedVector &data, const AlignedVector &sub) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             data[i] -= sub[i];
         }
     }
 
-    static void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) {
+    static constexpr void addSub(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             data[i] += add[i] - sub[i];
         }
     }
 
-    static void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) {
+    static constexpr void addSub2(AlignedVector &data, const AlignedVector &add, const AlignedVector &sub1, const AlignedVector &sub2) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             data[i] += add[i] - sub1[i] - sub2[i];
         }
     }
 
-    static void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) {
+    static constexpr void add2Sub2(AlignedVector &data, const AlignedVector &add1, const AlignedVector &add2, const AlignedVector &sub1, const AlignedVector &sub2) {
         for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; i++) {
             data[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
         }

@@ -267,7 +267,7 @@ int32_t scalarScrelu(std::int16_t input) {
     if (value < 0) {
         value = 0;
     }
-    const int32_t quantA = static_cast<int32_t>(Constants::NNUE_QUANT_A);
+    const int32_t quantA = static_cast<int32_t>(Constants::NNUE_QA);
     if (value > quantA) {
         value = quantA;
     }
@@ -316,11 +316,11 @@ void testSIMDForward() {
         fillAlignedBuffer(weights, 97 + (caseIndex * 29), -12, 12);
 
         const int32_t expected = scalarSIMDForward(inputs, weights);
-        const int32_t actual = SIMD::fullyConnected(inputs, weights);
+        const int32_t actual = SIMD::forward(inputs, weights);
         assert(actual == expected);
     }
 
-    const int quantA = static_cast<int>(Constants::NNUE_QUANT_A);
+    const int quantA = static_cast<int>(Constants::NNUE_QA);
     AlignedVector boundaryInputs;
     AlignedVector boundaryWeights;
     for (std::size_t i = 0; i < Constants::NNUE_LAYER_SIZE; ++i) {
@@ -343,17 +343,17 @@ void testSIMDForward() {
         boundaryWeights[i] = static_cast<std::int16_t>(weightValue);
     }
 
-    assert(SIMD::fullyConnected(boundaryInputs, boundaryWeights) == scalarSIMDForward(boundaryInputs, boundaryWeights));
+    assert(SIMD::forward(boundaryInputs, boundaryWeights) == scalarSIMDForward(boundaryInputs, boundaryWeights));
 
     AlignedVector negativeInputs;
     AlignedVector arbitraryWeights;
     fillAlignedBuffer(negativeInputs, 333, -1000, -1);
     fillAlignedBuffer(arbitraryWeights, 777, -16, 16);
-    assert(SIMD::fullyConnected(negativeInputs, arbitraryWeights) == 0);
+    assert(SIMD::forward(negativeInputs, arbitraryWeights) == 0);
 }
 
 void testSIMDForwardSingleActiveIndex() {
-    const int quantA = static_cast<int>(Constants::NNUE_QUANT_A);
+    const int quantA = static_cast<int>(Constants::NNUE_QA);
     AlignedVector inputs;
     AlignedVector weights;
 
@@ -374,7 +374,7 @@ void testSIMDForwardSingleActiveIndex() {
         const int weightValue = static_cast<int>(activeIndex % 7U) - 3;
         weights[activeIndex] = static_cast<std::int16_t>(weightValue);
 
-        assert(SIMD::fullyConnected(inputs, weights) == scalarSIMDForward(inputs, weights));
+        assert(SIMD::forward(inputs, weights) == scalarSIMDForward(inputs, weights));
 
         inputs[activeIndex] = 0;
         weights[activeIndex] = 0;
@@ -2218,7 +2218,7 @@ void testMoveGeneratorPerftReferenceCounts() {
             }
             runPerftCase(positionReference, depthReference, "slow");
         }
-}
+    }
 #else
     std::size_t skippedSlowCases = 0;
     for (const PerftPositionReference &positionReference : positions) {
