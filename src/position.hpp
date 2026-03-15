@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "accumulator.hpp"
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -154,10 +155,63 @@ public:
         std::uint8_t rights_;
     };
 
+    class BoardChanges {
+    public:
+        struct Change {
+            Piece piece;
+            Square square;
+            bool added;
+        };
+
+        constexpr BoardChanges() : pieceChanges_{}, size_(0) {}
+
+        constexpr BoardChanges(const Position &position, const Move move) : pieceChanges_{}, size_(0) {
+            const Piece capturedPiece = position.pieceAt(move.to());
+            if (move.type() == Move::CASTLING) {
+                const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), position.sideToMove());
+                remove(position.pieceAt(move.from()), move.from());
+                remove(position.pieceAt(move.to()), move.to());
+                add(position.pieceAt(move.from()), CastlingRights::kingTo(castlingSide));
+                add(position.pieceAt(move.to()), CastlingRights::rookTo(castlingSide));
+            } else if (move.type() == Move::PROMOTION) {
+                const Piece pawn = Piece(PieceType::PAWN, position.sideToMove());
+                const Piece promotionPiece = Piece(move.promotion(), position.sideToMove());
+                remove(pawn, move.from());
+                if (capturedPiece != Piece::NONE) {
+                    remove(capturedPiece, move.to());
+                }
+                add(promotionPiece, move.to());
+            } else if (move.type() == Move::EN_PASSANT) {
+                const Piece pawn = position.pieceAt(move.from());
+                remove(pawn, move.from());
+                remove(Piece(PieceType::PAWN, ~position.sideToMove()), Square(move.to().file(), move.from().rank()));
+                add(pawn, move.to());
+            } else {
+                const Piece piece = position.pieceAt(move.from());
+                remove(piece, move.from());
+                if (capturedPiece != Piece::NONE) {
+                    remove(capturedPiece, move.to());
+                }
+                add(piece, move.to());
+            }
+        }
+
+        constexpr const std::array<Change, 4> &changes() const noexcept { return pieceChanges_; }
+        constexpr std::uint8_t size() const noexcept { return size_; }
+
+    private:
+        constexpr void remove(Piece piece, Square square) noexcept { pieceChanges_[size_++] = {piece, square, false}; }
+        constexpr void add(Piece piece, Square square) noexcept { pieceChanges_[size_++] = {piece, square, true}; }
+
+        std::array<Change, 4> pieceChanges_;
+        std::uint8_t size_;
+    };
+
     explicit Position(std::string_view fen = Constants::FEN_STARTPOS) {
-        stateHistory_.reserve(256);
-        set(fen);
-        assert(set(fen));
+        if (!set(fen)) {
+            assert(false);
+            reset();
+        }
     }
 
     void reset() noexcept {
@@ -171,7 +225,8 @@ public:
         sideToMove_ = Color::WHITE;
         halfmoveClock_ = 0;
         plies_ = 0;
-        stateHistory_.clear();
+
+        depth_ = 0;
 
         castlingPathBitboards_ = {
             Bitboard(Square::SQUARE_F1) | Bitboard(Square::SQUARE_G1),
@@ -179,6 +234,9 @@ public:
             Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
             Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
         };
+
+        rootOccupied_ = Bitboard();
+        rootBoard_.fill(Piece::NONE);
     }
 
     bool set(std::string_view fen) {
@@ -272,6 +330,9 @@ public:
 
         assert(hash_ == zobrist());
 
+        rootOccupied_ = occupied();
+        rootBoard_ = board_;
+
         return true;
     }
 
@@ -350,16 +411,24 @@ public:
             castlingPathBitboards_ == other.castlingPathBitboards_;
     }
 
-    std::uint64_t hash() const noexcept { return hash_; }
-    CastlingRights castlingRights() const noexcept { return castlingRights_; }
-    Square enPassantSquare() const noexcept { return enPassantSquare_; }
-    Color sideToMove() const noexcept { return sideToMove_; }
-    std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
-    std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
+    constexpr std::uint64_t hash() const noexcept { return hash_; }
+    constexpr CastlingRights castlingRights() const noexcept { return castlingRights_; }
+    constexpr Square enPassantSquare() const noexcept { return enPassantSquare_; }
+    constexpr Color sideToMove() const noexcept { return sideToMove_; }
+    constexpr std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
+    constexpr std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
+
+    constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
 
     constexpr Bitboard castlingPath(CastlingRights::CastlingSide castlingSide) const noexcept {
         return castlingPathBitboards_[static_cast<std::size_t>(CastlingRights::hashIndex(castlingSide))];
     }
+
+    constexpr std::size_t depth() const noexcept { return depth_; }
+    constexpr const std::array<BoardChanges, Constants::MAX_GAME_LENGTH> &changesHistory() const noexcept { return changesHistory_; }
+
+    constexpr Bitboard rootOccupied() const noexcept { return rootOccupied_; }
+    constexpr const std::array<Piece, 64> &rootBoard() const noexcept { return rootBoard_; }
 
     void placePiece(Piece piece, Square square) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
@@ -391,7 +460,9 @@ public:
         const Piece capturedPiece = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
-        stateHistory_.emplace_back(State{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, capturedPiece});
+        stateHistory_[depth_] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, capturedPiece};
+        changesHistory_[depth_] = BoardChanges(*this, move);
+        depth_++;
 
         halfmoveClock_++;
         plies_++;
@@ -501,8 +572,7 @@ public:
     void unmake(const Move move) noexcept {
         assert(move != Move::NULL_MOVE);
 
-        const State &previousState = stateHistory_.back();
-
+        const BoardState &previousState = stateHistory_[depth_ - 1];
 
         hash_ = previousState.hash;
         castlingRights_ = previousState.castlingRights;
@@ -562,11 +632,13 @@ public:
             }
         }
 
-        stateHistory_.pop_back();
+        depth_--;
     }
 
     void makeNull() {
-        stateHistory_.emplace_back(State{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, Piece::NONE});
+        stateHistory_[depth_] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, Piece::NONE};
+        changesHistory_[depth_] = BoardChanges();
+        depth_++;
 
         if (enPassantSquare_ != Square::NONE) {
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
@@ -580,7 +652,7 @@ public:
     }
 
     void unmakeNull() noexcept {
-        const State &previousState = stateHistory_.back();
+        const BoardState &previousState = stateHistory_[depth_ - 1];
 
         hash_ = previousState.hash;
         castlingRights_ = previousState.castlingRights;
@@ -589,7 +661,7 @@ public:
         plies_--;
         sideToMove_ = ~sideToMove_;
 
-        stateHistory_.pop_back();
+        depth_--;
     }
 
     constexpr std::uint64_t zobrist() const noexcept {
@@ -862,12 +934,12 @@ public:
     }
 
     bool repetition(int count = 1) const noexcept {
-        if (stateHistory_.size() < 2) {
+        if (depth_ < 2) {
             return false;
         }
 
         std::uint8_t seen = 0;
-        const int size = static_cast<int>(stateHistory_.size());
+        const int size = static_cast<int>(depth_);
         for (int i = size - 2; i >= 0 && i >= size - halfmoveClock_ - 1; i -= 2) {
             if (stateHistory_[static_cast<std::size_t>(i)].hash == hash_) {
                 seen++;
@@ -944,7 +1016,7 @@ public:
     }
 
 private:
-    struct State {
+    struct BoardState {
         std::uint64_t hash;
         CastlingRights castlingRights;
         Square enPassantSquare;
@@ -952,10 +1024,9 @@ private:
         Piece capturedPiece;
     };
 
-    std::vector<State> stateHistory_;
-    std::array<Bitboard, 6> pieceBitboards_;
-    std::array<Bitboard, 2> occupancyBitboards_;
-    std::array<Piece, 64> board_;
+    std::size_t depth_;
+    std::array<BoardState, Constants::MAX_GAME_LENGTH> stateHistory_;
+    std::array<BoardChanges, Constants::MAX_GAME_LENGTH> changesHistory_;
 
     std::uint64_t hash_;
     CastlingRights castlingRights_;
@@ -964,7 +1035,13 @@ private:
     std::uint8_t halfmoveClock_;
     std::uint16_t plies_;
 
+    std::array<Bitboard, 6> pieceBitboards_;
+    std::array<Bitboard, 2> occupancyBitboards_;
+    std::array<Piece, 64> board_;
     std::array<Bitboard, 4> castlingPathBitboards_;
+
+    Bitboard rootOccupied_;
+    std::array<Piece, 64> rootBoard_;
 
     static std::vector<std::string_view> splitStringView(std::string_view string, char delimiter = ' ') {
         std::vector<std::string_view> result;
