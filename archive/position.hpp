@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "accumulator.hpp"
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -15,7 +16,6 @@
 #include "coordinates.hpp"
 #include "move.hpp"
 #include "piece.hpp"
-#include "utils.hpp"
 #include "zobrist.hpp"
 
 
@@ -155,6 +155,61 @@ public:
         std::uint8_t rights_;
     };
 
+    class BoardChanges {
+    public:
+        struct Change {
+            Piece piece;
+            Square square;
+        };
+
+        constexpr BoardChanges() : additions_{}, removals_{}, sizeAdd_(0), sizeRemove_(0) {}
+
+        constexpr BoardChanges(const Position &position, const Move move) : additions_{}, removals_{}, sizeAdd_(0), sizeRemove_(0) {
+            const Piece capturedPiece = position.pieceAt(move.to());
+            if (move.type() == Move::CASTLING) {
+                const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), position.sideToMove());
+                addRemoval(position.pieceAt(move.from()), move.from());
+                addRemoval(position.pieceAt(move.to()), move.to());
+                addAddition(position.pieceAt(move.from()), CastlingRights::kingTo(castlingSide));
+                addAddition(position.pieceAt(move.to()), CastlingRights::rookTo(castlingSide));
+            } else if (move.type() == Move::PROMOTION) {
+                const Piece pawn = Piece(PieceType::PAWN, position.sideToMove());
+                const Piece promotionPiece = Piece(move.promotion(), position.sideToMove());
+                addRemoval(pawn, move.from());
+                if (capturedPiece != Piece::NONE) {
+                    addRemoval(capturedPiece, move.to());
+                }
+                addAddition(promotionPiece, move.to());
+            } else if (move.type() == Move::EN_PASSANT) {
+                const Piece pawn = position.pieceAt(move.from());
+                addRemoval(pawn, move.from());
+                addRemoval(Piece(PieceType::PAWN, ~position.sideToMove()), Square(move.to().file(), move.from().rank()));
+                addAddition(pawn, move.to());
+            } else {
+                const Piece piece = position.pieceAt(move.from());
+                addRemoval(piece, move.from());
+                if (capturedPiece != Piece::NONE) {
+                    addRemoval(capturedPiece, move.to());
+                }
+                addAddition(piece, move.to());
+            }
+        }
+
+        constexpr const std::array<Change, 2> &additions() const noexcept { return additions_; }
+        constexpr const std::array<Change, 2> &removals() const noexcept { return removals_; }
+        constexpr std::uint8_t sizeAdd() const noexcept { return sizeAdd_; }
+        constexpr std::uint8_t sizeRemove() const noexcept { return sizeRemove_; }
+
+    private:
+        constexpr void addAddition(Piece piece, Square square) noexcept { additions_[sizeAdd_++] = {piece, square}; }
+        constexpr void addRemoval(Piece piece, Square square) noexcept { removals_[sizeRemove_++] = {piece, square}; }
+
+        std::array<Change, 2> additions_;
+        std::array<Change, 2> removals_;
+        std::uint8_t sizeAdd_;
+        std::uint8_t sizeRemove_;
+    };
+
     explicit Position(std::string_view fen = Constants::FEN_STARTPOS) {
         if (!set(fen)) {
             assert(false);
@@ -182,6 +237,9 @@ public:
             Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
             Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
         };
+
+        rootOccupied_ = Bitboard();
+        rootBoard_.fill(Piece::NONE);
     }
 
     bool set(std::string_view fen) {
@@ -195,7 +253,7 @@ public:
             return false;
         }
 
-        const std::vector<std::string_view> parts = Utils::splitStringView(fen, ' ');
+        const std::vector<std::string_view> parts = splitStringView(fen, ' ');
         const std::string_view board = parts.size() > 0 ? parts[0] : "";
         const std::string_view side = parts.size() > 1 ? parts[1] : "w";
         const std::string_view castling = parts.size() > 2 ? parts[2] : "-";
@@ -274,6 +332,9 @@ public:
         plies_ = static_cast<std::uint16_t>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
         assert(hash_ == zobrist());
+
+        rootOccupied_ = occupied();
+        rootBoard_ = board_;
 
         return true;
     }
@@ -360,13 +421,17 @@ public:
     constexpr std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
     constexpr std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
 
-    constexpr std::size_t depth() const noexcept { return depth_; }
-
     constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
 
     constexpr Bitboard castlingPath(CastlingRights::CastlingSide castlingSide) const noexcept {
         return castlingPathBitboards_[static_cast<std::size_t>(CastlingRights::hashIndex(castlingSide))];
     }
+
+    constexpr std::size_t depth() const noexcept { return depth_; }
+    constexpr const std::array<BoardChanges, Constants::MAX_GAME_LENGTH> &changesHistory() const noexcept { return changesHistory_; }
+
+    constexpr Bitboard rootOccupied() const noexcept { return rootOccupied_; }
+    constexpr const std::array<Piece, 64> &rootBoard() const noexcept { return rootBoard_; }
 
     void placePiece(Piece piece, Square square) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
@@ -398,7 +463,9 @@ public:
         const Piece capturedPiece = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
-        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, capturedPiece};
+        stateHistory_[depth_] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, capturedPiece};
+        changesHistory_[depth_] = BoardChanges(*this, move);
+        depth_++;
 
         halfmoveClock_++;
         plies_++;
@@ -572,7 +639,9 @@ public:
     }
 
     void makeNull() {
-        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, Piece::NONE};
+        stateHistory_[depth_] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, Piece::NONE};
+        changesHistory_[depth_] = BoardChanges();
+        depth_++;
 
         if (enPassantSquare_ != Square::NONE) {
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
@@ -958,8 +1027,9 @@ private:
         Piece capturedPiece;
     };
 
-    std::array<BoardState, Constants::MAX_POSITION_DEPTH> stateHistory_;
     std::size_t depth_;
+    std::array<BoardState, Constants::MAX_GAME_LENGTH> stateHistory_;
+    std::array<BoardChanges, Constants::MAX_GAME_LENGTH> changesHistory_;
 
     std::uint64_t hash_;
     CastlingRights castlingRights_;
@@ -972,6 +1042,23 @@ private:
     std::array<Bitboard, 2> occupancyBitboards_;
     std::array<Piece, 64> board_;
     std::array<Bitboard, 4> castlingPathBitboards_;
+
+    Bitboard rootOccupied_;
+    std::array<Piece, 64> rootBoard_;
+
+    static std::vector<std::string_view> splitStringView(std::string_view string, char delimiter = ' ') {
+        std::vector<std::string_view> result;
+        std::size_t start = 0;
+        while (start < string.size()) {
+            std::size_t end = string.find(delimiter, start);
+            if (end == std::string_view::npos) {
+                end = string.size();
+            }
+            result.push_back(string.substr(start, end - start));
+            start = end + 1;
+        }
+        return result;
+    }
 };
 
 }
