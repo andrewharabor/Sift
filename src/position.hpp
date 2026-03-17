@@ -411,7 +411,7 @@ public:
         if (capture) {
             halfmoveClock_ = 0;
 
-            if (move.type() != Move::EN_PASSANT) {
+            if (move.type() != MoveType::EN_PASSANT) {
                 removePiece(capturedPiece, move.to());
                 hash_ ^= Zobrist::piece(capturedPiece, move.to());
 
@@ -450,7 +450,7 @@ public:
             }
         }
 
-        if (move.type() == Move::CASTLING) {
+        if (move.type() == MoveType::CASTLING) {
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
@@ -472,7 +472,7 @@ public:
             hash_ ^= Zobrist::piece(king, kingTo);
             hash_ ^= Zobrist::piece(rook, move.to());
             hash_ ^= Zobrist::piece(rook, rookTo);
-        } else if (move.type() == Move::PROMOTION) {
+        } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
             assert(promotionPiece != Piece::NONE);
@@ -494,7 +494,7 @@ public:
             hash_ ^= Zobrist::piece(movedPiece, move.to());
         }
 
-        if (move.type() == Move::EN_PASSANT) {
+        if (move.type() == MoveType::EN_PASSANT) {
             assert(pieceAt(move.to().enPassantSquare()) == PieceType::PAWN);
             Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
             removePiece(pawn, move.to().enPassantSquare());
@@ -517,7 +517,7 @@ public:
         plies_--;
         sideToMove_ = ~sideToMove_;
 
-        if (move.type() == Move::CASTLING) {
+        if (move.type() == MoveType::CASTLING) {
             const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             const Square kingTo = CastlingRights::kingTo(castlingSide);
@@ -533,7 +533,7 @@ public:
             removePiece(rook, rookTo);
             placePiece(king, move.from());
             placePiece(rook, move.to());
-        } else if (move.type() == Move::PROMOTION) {
+        } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = pieceAt(move.to());
 
@@ -555,7 +555,7 @@ public:
             removePiece(movedPiece, move.to());
             placePiece(movedPiece, move.from());
 
-            if (move.type() == Move::EN_PASSANT) {
+            if (move.type() == MoveType::EN_PASSANT) {
                 Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
                 Square pawnSquare = Square(move.to().file(), move.from().rank());
 
@@ -633,7 +633,7 @@ public:
             return key;
         }
 
-        const bool capture = (pieceAt(move.to()) != Piece::NONE) && (move.type() != Move::CASTLING);
+        const bool capture = (pieceAt(move.to()) != Piece::NONE) && (move.type() != MoveType::CASTLING);
         const Piece captured = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
@@ -669,7 +669,7 @@ public:
             }
         }
 
-        if (move.type() == Move::CASTLING) {
+        if (move.type() == MoveType::CASTLING) {
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
@@ -684,7 +684,7 @@ public:
             key ^= Zobrist::piece(king, kingTo);
             key ^= Zobrist::piece(rook, move.to());
             key ^= Zobrist::piece(rook, rookTo);
-        } else if (move.type() == Move::PROMOTION) {
+        } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
             assert(promotionPiece != Piece::NONE);
@@ -697,7 +697,7 @@ public:
             key ^= Zobrist::piece(movedPiece, move.to());
         }
 
-        if (move.type() == Move::EN_PASSANT) {
+        if (move.type() == MoveType::EN_PASSANT) {
             assert(pieceAt(move.to().enPassantSquare()) == PieceType::PAWN);
             Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
             key ^= Zobrist::piece(pawn, move.to().enPassantSquare());
@@ -773,7 +773,7 @@ public:
 
     constexpr bool isCapture(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
-        return (pieceAt(move.to()) != Piece::NONE && move.type() != Move::CASTLING) || move.type() == Move::EN_PASSANT;
+        return (pieceAt(move.to()) != Piece::NONE && move.type() != MoveType::CASTLING) || move.type() == MoveType::EN_PASSANT;
     }
 
     constexpr CheckType isCheck(const Move move) const noexcept {
@@ -792,20 +792,20 @@ public:
         const Bitboard toBitboard = Bitboard(to);
         const PieceType pieceType = pieceAt(move.from()).type();
 
-        Bitboard threats = 0ULL;
+        Bitboard checks = 0ULL;
         if (pieceType == PieceType::PAWN) {
-            threats = Attacks::pawn(kingSq, ~sideToMove_);
+            checks = Attacks::pawn(kingSq, ~sideToMove_);
         } else if (pieceType == PieceType::KNIGHT) {
-            threats = Attacks::knight(kingSq);
+            checks = Attacks::knight(kingSq);
         } else if (pieceType == PieceType::BISHOP) {
-            threats = Attacks::bishop(kingSq, occupied());
+            checks = Attacks::bishop(kingSq, occupied());
         } else if (pieceType == PieceType::ROOK) {
-            threats = Attacks::rook(kingSq, occupied());
+            checks = Attacks::rook(kingSq, occupied());
         } else if (pieceType == PieceType::QUEEN) {
-            threats = Attacks::queen(kingSq, occupied());
+            checks = Attacks::queen(kingSq, occupied());
         }
 
-        if (threats & toBitboard) {
+        if (checks & toBitboard) {
             return CheckType::DIRECT;
         }
 
@@ -814,16 +814,16 @@ public:
 
         Bitboard sniper = findSniper(kingSq, occ);
         if (sniper) {
-            if (!(Attacks::between(kingSq, sniper.lsb()) & toBitboard) || move.type() == Move::CASTLING) {
+            if (!(Attacks::between(kingSq, sniper.lsb()) & toBitboard) || move.type() == MoveType::CASTLING) {
                 return CheckType::DISCOVERED;
             } else {
                 return CheckType::NONE;
             }
         }
 
-        if (move.type() == Move::NORMAL) {
+        if (move.type() == MoveType::NORMAL) {
             return CheckType::NONE;
-        } else if (move.type() == Move::PROMOTION) {
+        } else if (move.type() == MoveType::PROMOTION) {
             Bitboard attacks = 0ULL;
             if (move.promotion() == PieceType::KNIGHT) {
                 attacks = Attacks::knight(to);
@@ -841,14 +841,14 @@ public:
             } else {
                 return CheckType::NONE;
             }
-        } else if (move.type() == Move::EN_PASSANT) {
+        } else if (move.type() == MoveType::EN_PASSANT) {
             Square captureSq = Square(to.file(), from.rank());
             if (findSniper(kingSq, (occ ^ Bitboard(captureSq)) | toBitboard)) {
                 return CheckType::DISCOVERED;
             } else {
                 return CheckType::NONE;
             }
-        } else if (move.type() == Move::CASTLING) {
+        } else if (move.type() == MoveType::CASTLING) {
             const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             if (Attacks::rook(kingSq, occ) & Bitboard(rookTo)) {

@@ -12,20 +12,15 @@
 
 namespace Clownfish {
 
+enum class MoveType : std::uint16_t {
+    NORMAL = 0,
+    PROMOTION = 1 << 14,
+    EN_PASSANT = 2 << 14,
+    CASTLING = 3 << 14
+};
+
 class Move {
 public:
-    enum class MoveType : std::uint16_t {
-        NORMAL = 0,
-        PROMOTION = 1 << 14,
-        EN_PASSANT = 2 << 14,
-        CASTLING = 3 << 14
-    };
-
-    constexpr static MoveType NORMAL = MoveType::NORMAL;
-    constexpr static MoveType PROMOTION = MoveType::PROMOTION;
-    constexpr static MoveType EN_PASSANT = MoveType::EN_PASSANT;
-    constexpr static MoveType CASTLING = MoveType::CASTLING;
-
     constexpr static std::uint16_t NULL_MOVE = 0;
 
     constexpr Move() noexcept : move_(NULL_MOVE), score_(0) {}
