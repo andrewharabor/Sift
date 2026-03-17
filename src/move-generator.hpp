@@ -223,63 +223,44 @@ private:
             Bitboard rightPromotions = rightAttacks & PROMOTION_RANK;
             Bitboard pushPromotion = singlePush & PROMOTION_RANK;
 
+            auto addPromotions = [&](Square from, Square to) {
+                if constexpr (MGT != MoveGenerationType::CHECKS) {
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
+                } else if (bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) {
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
+                } else {
+                    if (Bitboard(to) & checkSquares.knight) {
+                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
+                    }
+                    if ((Bitboard(to) & checkSquares.bishop) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.bishop)) {
+                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    }
+                    if ((Bitboard(to) & checkSquares.rook) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.rook)) {
+                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    }
+                    if ((Bitboard(to) & checkSquares.queen) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.queen)) {
+                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    }
+                }
+            };
+
             if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::CAPTURES || MGT == MoveGenerationType::CHECKS) {
                 while (leftPromotions) {
                     const Square to = Square(static_cast<int>(leftPromotions.pop()));
                     const Square from = to + DOWN_RIGHT;
-                    if constexpr (MGT != MoveGenerationType::CHECKS) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else if (bool(Bitboard(from) & masks.blockers) && !(Bitboard(to) & masks.blockers)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else {
-                        if (Bitboard(to) & checkSquares.knight) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                        }
-                        if ((Bitboard(to) & checkSquares.bishop) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.bishop)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        }
-                        if ((Bitboard(to) & checkSquares.rook)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        }
-                        if ((Bitboard(to) & checkSquares.queen) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.queen)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        }
-                    }
+                    addPromotions(from, to);
                 }
 
                 while (rightPromotions) {
                     const Square to = Square(static_cast<int>(rightPromotions.pop()));
                     const Square from = to + DOWN_LEFT;
-                    if constexpr (MGT != MoveGenerationType::CHECKS) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else if (bool(Bitboard(from) & masks.blockers) && !(Bitboard(to) & masks.blockers)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else {
-                        if (Bitboard(to) & checkSquares.knight) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                        }
-                        if ((Bitboard(to) & checkSquares.bishop) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.bishop)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        }
-                        if ((Bitboard(to) & checkSquares.rook)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        }
-                        if ((Bitboard(to) & checkSquares.queen) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.queen)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        }
-                    }
+                    addPromotions(from, to);
                 }
             }
 
@@ -287,30 +268,7 @@ private:
                 while (pushPromotion) {
                     const Square to = Square(static_cast<int>(pushPromotion.pop()));
                     const Square from = to + DOWN;
-                    if constexpr (MGT != MoveGenerationType::CHECKS) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else if (bool(Bitboard(from) & masks.blockers) && !(Bitboard(to) & masks.blockers)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    } else {
-                        if (Bitboard(to) & checkSquares.knight) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                        }
-                        if ((Bitboard(to) & checkSquares.bishop)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                        }
-                        if ((Bitboard(to) & checkSquares.rook) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.rook)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                        }
-                        if ((Bitboard(to) & checkSquares.queen)) {
-                            moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                        }
-                    }
+                    addPromotions(from, to);
                 }
             }
         }
@@ -322,7 +280,7 @@ private:
         auto addMove = [&](Square from, Square to) {
             if constexpr (MGT != MoveGenerationType::CHECKS) {
                 moveList.add(Move(from, to));
-            } else if ((bool(Bitboard(from) & masks.blockers) && !(Bitboard(to) & masks.blockers)) || (Bitboard(to) & checkSquares.pawn)) {
+            } else if ((bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) || (Bitboard(to) & checkSquares.pawn)) {
                 moveList.add(Move(from, to));
             }
         };
@@ -406,7 +364,7 @@ private:
                 moveList.add(Move(from, to, MoveType::EN_PASSANT));
             } else {
                 const bool possibleBlocker = enemyKingMask && friendlyRooksQueens;
-                if ((bool(Bitboard(from) & masks.blockers) && !(Bitboard(to) & masks.blockers)) || (Bitboard(to) & checkSquares.pawn) || (Bitboard(enPassantTarget) & enemyDiagonalPinned) || (possibleBlocker && (Attacks::rook(kingSquares.enemy, occupied.all ^ enPassantPawns) & friendlyRooksQueens))) {
+                if ((bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) || (Bitboard(to) & checkSquares.pawn) || (Bitboard(enPassantTarget) & enemyDiagonalPinned) || (possibleBlocker && (Attacks::rook(kingSquares.enemy, occupied.all ^ enPassantPawns) & friendlyRooksQueens))) {
                     moveList.add(Move(from, to, MoveType::EN_PASSANT));
                 }
             }
@@ -533,7 +491,7 @@ private:
 
         if (pieces & PieceFlag::KING) {
             auto genKing = [&](Square square) { return king(square, masks.attacked) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, Bitboard(kingSquares.friendly), genKing, masks.blockers, Bitboard());
+            whileBitboardAddMoves<MGT>(moveList, Bitboard(kingSquares.friendly), genKing, kingSquares.enemy, masks.blockers, Bitboard());
 
             if constexpr (MGT != MoveGenerationType::CAPTURES) {
                 if (checks == 0) {
@@ -565,30 +523,30 @@ private:
         if (pieces & PieceFlag::KNIGHT) {
             Bitboard knights = position.pieces(PieceType::KNIGHT, COLOR) & ~(masks.diagonalPins | masks.orthogonalPins);
             auto genKnight = [&](Square square) { return knight(square) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, knights, genKnight, masks.blockers, checkSquares.knight);
+            whileBitboardAddMoves<MGT>(moveList, knights, genKnight, kingSquares.enemy, masks.blockers, checkSquares.knight);
         }
 
         if (pieces & PieceFlag::BISHOP) {
             Bitboard bishops = position.pieces(PieceType::BISHOP, COLOR) & ~masks.orthogonalPins;
             auto genBishop = [&](Square square) { return bishop(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, bishops, genBishop, masks.blockers, checkSquares.bishop);
+            whileBitboardAddMoves<MGT>(moveList, bishops, genBishop, kingSquares.enemy, masks.blockers, checkSquares.bishop);
         }
 
         if (pieces & PieceFlag::ROOK) {
             Bitboard rooks = position.pieces(PieceType::ROOK, COLOR) & ~masks.diagonalPins;
             auto genRook = [&](Square square) { return rook(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, rooks, genRook, masks.blockers, checkSquares.rook);
+            whileBitboardAddMoves<MGT>(moveList, rooks, genRook, kingSquares.enemy, masks.blockers, checkSquares.rook);
         }
 
         if (pieces & PieceFlag::QUEEN) {
             Bitboard queens = position.pieces(PieceType::QUEEN, COLOR) & ~(masks.diagonalPins & masks.orthogonalPins);
             auto genQueen = [&](Square square) { return queen(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, queens, genQueen, masks.blockers, checkSquares.queen);
+            whileBitboardAddMoves<MGT>(moveList, queens, genQueen, kingSquares.enemy, masks.blockers, checkSquares.queen);
         }
     }
 
     template<MoveGenerationType MGT, typename F>
-    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc, Bitboard blockers, Bitboard checkSquares) {
+    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc, Square enemyKingSquare, Bitboard blockers, Bitboard checkSquares) {
         while (bitboard) {
             const Square from = Square(static_cast<int>(bitboard.pop()));
             Bitboard moves = movesFunc(from);
@@ -596,7 +554,7 @@ private:
                 const Square to = Square(static_cast<int>(moves.pop()));
                 if constexpr (MGT != MoveGenerationType::CHECKS) {
                     moveList.add(Move(from, to));
-                } else if ((bool(Bitboard(from) & blockers) && !(Bitboard(to) & blockers)) || (Bitboard(to) & checkSquares)) {
+                } else if ((bool(Bitboard(from) & blockers) && !(Attacks::between(enemyKingSquare, from) & Attacks::between(enemyKingSquare, to))) || (Bitboard(to) & checkSquares)) {
                     moveList.add(Move(from, to));
                 }
             }
