@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "coordinates.hpp"
+#include "types.hpp"
 
 
 namespace Clownfish {
@@ -11,7 +12,7 @@ namespace Clownfish {
 class Bitboard {
 public:
     constexpr Bitboard() noexcept : bitboard_(0) {}
-    constexpr Bitboard(std::uint64_t bits) noexcept : bitboard_(bits) {}
+    constexpr Bitboard(U64 bits) noexcept : bitboard_(bits) {}
 
     constexpr Bitboard(File file) noexcept : bitboard_(0) {
         assert(file != File::NONE);
@@ -53,30 +54,30 @@ public:
         return *this;
     }
 
-    constexpr bool operator==(std::uint64_t bits) const noexcept { return bitboard_ == bits; }
-    constexpr bool operator!=(std::uint64_t bits) const noexcept { return bitboard_ != bits; }
-    constexpr bool operator&&(std::uint64_t bits) const noexcept { return bitboard_ && bits; }
-    constexpr bool operator||(std::uint64_t bits) const noexcept { return bitboard_ || bits; }
+    constexpr bool operator==(U64 bits) const noexcept { return bitboard_ == bits; }
+    constexpr bool operator!=(U64 bits) const noexcept { return bitboard_ != bits; }
+    constexpr bool operator&&(U64 bits) const noexcept { return bitboard_ && bits; }
+    constexpr bool operator||(U64 bits) const noexcept { return bitboard_ || bits; }
 
     constexpr explicit operator bool() const noexcept { return bitboard_ != 0; }
 
-    constexpr Bitboard operator&(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ & bits); }
-    constexpr Bitboard operator|(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ | bits); }
-    constexpr Bitboard operator^(std::uint64_t bits) const noexcept { return Bitboard(bitboard_ ^ bits); }
-    constexpr Bitboard operator<<(std::uint64_t shift) const noexcept { return Bitboard(bitboard_ << shift); }
-    constexpr Bitboard operator>>(std::uint64_t shift) const noexcept { return Bitboard(bitboard_ >> shift); }
+    constexpr Bitboard operator&(U64 bits) const noexcept { return Bitboard(bitboard_ & bits); }
+    constexpr Bitboard operator|(U64 bits) const noexcept { return Bitboard(bitboard_ | bits); }
+    constexpr Bitboard operator^(U64 bits) const noexcept { return Bitboard(bitboard_ ^ bits); }
+    constexpr Bitboard operator<<(U64 shift) const noexcept { return Bitboard(bitboard_ << shift); }
+    constexpr Bitboard operator>>(U64 shift) const noexcept { return Bitboard(bitboard_ >> shift); }
 
-    constexpr Bitboard &operator&=(std::uint64_t bits) noexcept {
+    constexpr Bitboard &operator&=(U64 bits) noexcept {
         bitboard_ &= bits;
         return *this;
     }
 
-    constexpr Bitboard &operator|=(std::uint64_t bits) noexcept {
+    constexpr Bitboard &operator|=(U64 bits) noexcept {
         bitboard_ |= bits;
         return *this;
     }
 
-    constexpr Bitboard &operator^=(std::uint64_t bits) noexcept {
+    constexpr Bitboard &operator^=(U64 bits) noexcept {
         bitboard_ ^= bits;
         return *this;
     }
@@ -125,17 +126,17 @@ public:
         return std::popcount(bitboard_);
     }
 
-    constexpr std::uint64_t pop() noexcept {
+    constexpr U64 pop() noexcept {
         assert(bitboard_ != 0);
-        const std::uint64_t index = static_cast<std::uint64_t>(lsb());
+        const U64 index = static_cast<U64>(lsb());
         bitboard_ &= bitboard_ - 1;
         return index;
     }
 
-    constexpr std::uint64_t bits() const noexcept { return bitboard_; }
+    constexpr U64 bits() const noexcept { return bitboard_; }
 
 private:
-    std::uint64_t bitboard_;
+    U64 bitboard_;
 };
 
 }

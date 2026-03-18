@@ -2,8 +2,6 @@
 
 #include <array>
 #include <bit>
-#include <cstdint>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +13,7 @@
 #include "coordinates.hpp"
 #include "move.hpp"
 #include "piece.hpp"
+#include "types.hpp"
 #include "utils.hpp"
 #include "zobrist.hpp"
 
@@ -47,7 +46,7 @@ class Position {
 public:
     class CastlingRights {
     public:
-        enum class CastlingSide : std::uint8_t {
+        enum class CastlingSide : U8 {
             WHITE_KINGSIDE = 1 << 0,
             WHITE_QUEENSIDE = 1 << 1,
             BLACK_KINGSIDE = 1 << 2,
@@ -60,14 +59,14 @@ public:
         static constexpr CastlingSide BLACK_QUEENSIDE = CastlingSide::BLACK_QUEENSIDE;
 
         constexpr CastlingRights() noexcept : rights_(0) {}
-        constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<std::uint8_t>(side)) {}
-        constexpr CastlingRights(std::uint8_t rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
+        constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<U8>(side)) {}
+        constexpr CastlingRights(U8 rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
 
         constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
         constexpr operator int() const noexcept { return static_cast<int>(rights_); }
 
-        constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<std::uint8_t>(side); }
-        constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<std::uint8_t>(side)) != 0; }
+        constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<U8>(side); }
+        constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<U8>(side)) != 0; }
 
         constexpr bool get(Color color) const noexcept {
             assert(color != Color::NONE);
@@ -80,7 +79,7 @@ public:
 
         constexpr void clear() noexcept { rights_ = 0; }
 
-        constexpr void clear(CastlingSide side) noexcept { rights_ &= ~static_cast<std::uint8_t>(side); }
+        constexpr void clear(CastlingSide side) noexcept { rights_ &= ~static_cast<U8>(side); }
 
         constexpr void clear(Color color) noexcept {
             assert(color != Color::NONE);
@@ -96,7 +95,7 @@ public:
         constexpr bool empty() const noexcept { return rights_ == 0; }
 
         constexpr int hash() const noexcept { return static_cast<int>(rights_); }
-        static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<std::uint8_t>(side)); }
+        static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<U8>(side)); }
 
         static constexpr Color color(CastlingSide side) noexcept {
             if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::WHITE_QUEENSIDE) {
@@ -115,7 +114,7 @@ public:
 
         static constexpr CastlingSide closestSide(Square square, Square kingSquare, Color color) noexcept {
             assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
-            std::uint8_t shift = 0;
+            U8 shift = 0;
             if (color == Color::BLACK) {
                 shift = 2;
             }
@@ -149,10 +148,10 @@ public:
             }
         }
 
-        constexpr std::uint8_t internal() const noexcept { return rights_; }
+        constexpr U8 internal() const noexcept { return rights_; }
 
     private:
-        std::uint8_t rights_;
+        U8 rights_;
     };
 
     explicit Position(std::string_view fen = Constants::FEN_STARTPOS) {
@@ -270,8 +269,8 @@ public:
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
         }
 
-        halfmoveClock_ = static_cast<std::uint8_t>(std::stoi(std::string(halfmoves)));
-        plies_ = static_cast<std::uint16_t>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
+        halfmoveClock_ = static_cast<U8>(std::stoi(std::string(halfmoves)));
+        plies_ = static_cast<U16>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
         assert(hash_ == zobrist());
 
@@ -353,19 +352,19 @@ public:
             castlingPathBitboards_ == other.castlingPathBitboards_;
     }
 
-    constexpr std::uint64_t hash() const noexcept { return hash_; }
+    constexpr U64 hash() const noexcept { return hash_; }
     constexpr CastlingRights castlingRights() const noexcept { return castlingRights_; }
     constexpr Square enPassantSquare() const noexcept { return enPassantSquare_; }
     constexpr Color sideToMove() const noexcept { return sideToMove_; }
-    constexpr std::uint8_t halfmoveClock() const noexcept { return halfmoveClock_; }
-    constexpr std::uint32_t fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
+    constexpr U8 halfmoveClock() const noexcept { return halfmoveClock_; }
+    constexpr U32 fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
 
-    constexpr std::size_t depth() const noexcept { return depth_; }
+    constexpr USize depth() const noexcept { return depth_; }
 
     constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
 
     constexpr Bitboard castlingPath(CastlingRights::CastlingSide castlingSide) const noexcept {
-        return castlingPathBitboards_[static_cast<std::size_t>(CastlingRights::hashIndex(castlingSide))];
+        return castlingPathBitboards_[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
     }
 
     void placePiece(Piece piece, Square square) noexcept {
@@ -374,9 +373,9 @@ public:
         const PieceType pieceType = piece.type();
         const Color color = piece.color();
         const int index = square.index();
-        pieceBitboards_[static_cast<std::size_t>(pieceType)].set(index);
-        occupancyBitboards_[static_cast<std::size_t>(color)].set(index);
-        board_[static_cast<std::size_t>(index)] = piece;
+        pieceBitboards_[static_cast<USize>(pieceType)].set(index);
+        occupancyBitboards_[static_cast<USize>(color)].set(index);
+        board_[static_cast<USize>(index)] = piece;
     }
 
     void removePiece(Piece piece, Square square) noexcept {
@@ -385,9 +384,9 @@ public:
         const PieceType pieceType = piece.type();
         const Color color = piece.color();
         const int index = square.index();
-        pieceBitboards_[static_cast<std::size_t>(pieceType)].clear(index);
-        occupancyBitboards_[static_cast<std::size_t>(color)].clear(index);
-        board_[static_cast<std::size_t>(index)] = Piece::NONE;
+        pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
+        occupancyBitboards_[static_cast<USize>(color)].clear(index);
+        board_[static_cast<USize>(index)] = Piece::NONE;
     }
 
     void make(Move move) {
@@ -598,8 +597,8 @@ public:
         depth_--;
     }
 
-    constexpr std::uint64_t zobrist() const noexcept {
-        std::uint64_t key = 0ULL;
+    constexpr U64 zobrist() const noexcept {
+        U64 key = 0ULL;
 
         Bitboard pieces = occupied();
         while (pieces) {
@@ -620,8 +619,8 @@ public:
         return key;
     }
 
-    std::uint64_t zobristAfter(const Move move) const noexcept {
-        std::uint64_t key = hash_;
+    U64 zobristAfter(const Move move) const noexcept {
+        U64 key = hash_;
 
         key ^= Zobrist::sideToMove();
 
@@ -708,7 +707,7 @@ public:
 
     constexpr Bitboard friendly(Color color) const noexcept {
         assert(color != Color::NONE);
-        return occupancyBitboards_[static_cast<std::size_t>(color)];
+        return occupancyBitboards_[static_cast<USize>(color)];
     }
 
     constexpr Bitboard enemy(Color color) const noexcept {
@@ -720,17 +719,17 @@ public:
 
     constexpr Piece pieceAt(Square square) const noexcept {
         assert(square != Square::NONE);
-        return board_[static_cast<std::size_t>(square.index())];
+        return board_[static_cast<USize>(square.index())];
     }
 
     constexpr Bitboard pieces(PieceType pieceType) const noexcept {
         assert(pieceType != PieceType::NONE);
-        return pieceBitboards_[static_cast<std::size_t>(pieceType)];
+        return pieceBitboards_[static_cast<USize>(pieceType)];
     }
 
     constexpr Bitboard pieces(PieceType pieceType, Color color) const noexcept {
         assert(pieceType != PieceType::NONE && color != Color::NONE);
-        return pieceBitboards_[static_cast<std::size_t>(pieceType)] & occupancyBitboards_[static_cast<std::size_t>(color)];
+        return pieceBitboards_[static_cast<USize>(pieceType)] & occupancyBitboards_[static_cast<USize>(color)];
     }
 
     constexpr Square kingSquare(Color color) const noexcept {
@@ -872,10 +871,10 @@ public:
             return false;
         }
 
-        std::uint8_t seen = 0;
+        U8 seen = 0;
         const int size = static_cast<int>(depth_);
         for (int i = size - 2; i >= 0 && i >= size - halfmoveClock_ - 1; i -= 2) {
-            if (stateHistory_[static_cast<std::size_t>(i)].hash == hash_) {
+            if (stateHistory_[static_cast<USize>(i)].hash == hash_) {
                 seen++;
             }
             if (seen == count) {
@@ -951,22 +950,22 @@ public:
 
 private:
     struct BoardState {
-        std::uint64_t hash;
+        U64 hash;
         CastlingRights castlingRights;
         Square enPassantSquare;
-        std::uint8_t halfmoveClock;
+        U8 halfmoveClock;
         Piece capturedPiece;
     };
 
     std::array<BoardState, Constants::MAX_POSITION_DEPTH> stateHistory_;
-    std::size_t depth_;
+    USize depth_;
 
-    std::uint64_t hash_;
+    U64 hash_;
     CastlingRights castlingRights_;
     Square enPassantSquare_;
     Color sideToMove_;
-    std::uint8_t halfmoveClock_;
-    std::uint16_t plies_;
+    U8 halfmoveClock_;
+    U16 plies_;
 
     std::array<Bitboard, 6> pieceBitboards_;
     std::array<Bitboard, 2> occupancyBitboards_;

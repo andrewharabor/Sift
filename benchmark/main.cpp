@@ -9,6 +9,7 @@
 #include "../src/benchmark.hpp"
 #include "../src/move-generator.hpp"
 #include "../src/position.hpp"
+#include "../src/types.hpp"
 
 using namespace Clownfish;
 
@@ -16,7 +17,7 @@ using namespace Clownfish;
 struct TestCase {
     std::string fen;
     int depth;
-    std::uint64_t expectedNodes;
+    U64 expectedNodes;
 };
 
 template<MoveGenerationType MGT = MoveGenerationType::ALL>
@@ -24,9 +25,9 @@ void benchmark(const TestCase &testCase) {
     Position position = Position(testCase.fen);
 
     const auto start = std::chrono::high_resolution_clock::now();
-    const std::uint64_t nodes = Benchmark::perft<MGT>(position, testCase.depth);
+    const U64 nodes = Benchmark::perft<MGT>(position, testCase.depth);
     const auto end = std::chrono::high_resolution_clock::now();
-    const std::uint64_t duration = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    const U64 duration = static_cast<U64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
     std::string nodeLabel = "";
     if constexpr (MGT == MoveGenerationType::ALL) {

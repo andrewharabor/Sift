@@ -1,14 +1,15 @@
 #pragma once
 
 #include <cassert>
-#include <cstdint>
+
+#include "types.hpp"
 
 
 namespace Clownfish {
 
 class Color {
 public:
-    enum class ColorEnum : std::uint8_t {
+    enum class ColorEnum : U8 {
         WHITE,
         BLACK,
         NONE

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cstdint>
 
 #include "attacks.hpp"
 #include "bitboard.hpp"
@@ -10,11 +9,12 @@
 #include "move.hpp"
 #include "piece.hpp"
 #include "position.hpp"
+#include "types.hpp"
 
 
 namespace Clownfish {
 
-enum class PieceFlag : std::uint8_t {
+enum class PieceFlag : U8 {
     PAWN = 1 << 0,
     KNIGHT = 1 << 1,
     BISHOP = 1 << 2,
@@ -25,14 +25,14 @@ enum class PieceFlag : std::uint8_t {
 };
 
 constexpr bool operator&(PieceFlag left, PieceFlag right) noexcept {
-    return (static_cast<std::uint8_t>(left) & static_cast<std::uint8_t>(right)) != 0;
+    return (static_cast<U8>(left) & static_cast<U8>(right)) != 0;
 }
 
 constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
-    return static_cast<PieceFlag>(static_cast<std::uint8_t>(left) | static_cast<std::uint8_t>(right));
+    return static_cast<PieceFlag>(static_cast<U8>(left) | static_cast<U8>(right));
 }
 
-enum class MoveGenerationType {
+enum class MoveGenerationType : U8 {
     ALL,
     CAPTURES,
     QUIET,

@@ -1,18 +1,18 @@
 #pragma once
 
 #include <cassert>
-#include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "color.hpp"
+#include "types.hpp"
 
 
 namespace Clownfish {
 
 class PieceType {
 public:
-    enum class PieceTypeEnum : std::uint8_t {
+    enum class PieceTypeEnum : U8 {
         PAWN,
         KNIGHT,
         BISHOP,
@@ -91,7 +91,7 @@ private:
 
 class Piece {
 public:
-    enum class PieceEnum : std::uint8_t {
+    enum class PieceEnum : U8 {
         WHITE_PAWN,
         WHITE_KNIGHT,
         WHITE_BISHOP,

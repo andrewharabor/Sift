@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cstdint>
 #include <functional>
 #if defined(USE_PEXT)
 #include <immintrin.h>
@@ -11,6 +10,7 @@
 #include "color.hpp"
 #include "coordinates.hpp"
 #include "piece.hpp"
+#include "types.hpp"
 
 
 namespace Clownfish {
@@ -131,17 +131,17 @@ public:
 private:
 #ifdef USE_PEXT
     struct Magic {
-        std::uint64_t mask;
+        U64 mask;
         Bitboard *attacks;
-        std::uint64_t hashIndex(Bitboard bitboard) const noexcept { return _pext_u64(bitboard.bits(), mask); }
+        U64 hashIndex(Bitboard bitboard) const noexcept { return _pext_u64(bitboard.bits(), mask); }
     };
 #else
     struct Magic {
-        std::uint64_t mask;
-        std::uint64_t magic;
-        std::uint64_t shift;
+        U64 mask;
+        U64 magic;
+        U64 shift;
         Bitboard *attacks;
-        std::uint64_t hashIndex(Bitboard bitboard) const noexcept { return (bitboard & mask).bits() * magic >> shift; }
+        U64 hashIndex(Bitboard bitboard) const noexcept { return (bitboard & mask).bits() * magic >> shift; }
     };
 #endif
 
@@ -213,7 +213,7 @@ private:
         0x2838000000000000, 0x5070000000000000, 0xA0E0000000000000, 0x40C0000000000000
     };
 
-    static constexpr std::uint64_t ROOK_MAGICS[64] = {
+    static constexpr U64 ROOK_MAGICS[64] = {
         0x8a80104000800020ULL, 0x140002000100040ULL,  0x2801880a0017001ULL,  0x100081001000420ULL,
         0x200020010080420ULL,  0x3001c0002010008ULL,  0x8480008002000100ULL, 0x2080088004402900ULL,
         0x800098204000ULL,     0x2024401000200040ULL, 0x100802000801000ULL,  0x120800800801000ULL,
@@ -232,7 +232,7 @@ private:
         0x20030a0244872ULL,    0x12001008414402ULL,   0x2006104900a0804ULL,  0x1004081002402ULL
     };
 
-    static constexpr std::uint64_t BISHOP_MAGICS[64] = {
+    static constexpr U64 BISHOP_MAGICS[64] = {
         0x40040844404084ULL,   0x2004208a004208ULL,   0x10190041080202ULL,   0x108060845042010ULL,
         0x581104180800210ULL,  0x2112080446200010ULL, 0x1080820820060210ULL, 0x3c0808410220200ULL,
         0x4050404440404ULL,    0x21001420088ULL,      0x24d0080801082102ULL, 0x1020a0a020400ULL,
@@ -257,15 +257,15 @@ private:
     static inline Magic ROOK_TABLE[64] = {};
     static inline Magic BISHOP_TABLE[64] = {};
 
-    static void initSliders(Square square, Magic table[], [[maybe_unused]] std::uint64_t magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
+    static void initSliders(Square square, Magic table[], [[maybe_unused]] U64 magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
         assert(square != Square::NONE);
         const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) | ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
-        std::uint64_t occupied = 0ULL;
+        U64 occupied = 0ULL;
         Magic &entry = table[square.index()];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
 #if !defined(USE_PEXT)
         entry.magic = magic;
-        entry.shift = 64 - static_cast<std::uint64_t>(Bitboard(entry.mask).count());
+        entry.shift = 64 - static_cast<U64>(Bitboard(entry.mask).count());
 #endif
 
         if (square.index() < 63) {
@@ -326,8 +326,8 @@ private:
                 for (PieceType pieceType : {PieceType::BISHOP, PieceType::ROOK}) {
                     Square square1 = Square(from);
                     Square square2 = Square(to);
-                    const size_t index1 = static_cast<std::size_t>(square1.index());
-                    const size_t index2 = static_cast<std::size_t>(square2.index());
+                    const USize index1 = static_cast<USize>(square1.index());
+                    const USize index2 = static_cast<USize>(square2.index());
                     if (path(pieceType, square1, 0ULL).get(square2.index())) {
                         betweenBitboards[index1][index2] = path(pieceType, square1, Bitboard(square2)) & path(pieceType, square2, Bitboard(square1));
                     }

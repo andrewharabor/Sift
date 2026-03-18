@@ -2,11 +2,11 @@
 
 #include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <string>
 #include <string_view>
 
 #include "color.hpp"
+#include "types.hpp"
 
 
 namespace Clownfish {
@@ -24,7 +24,7 @@ namespace Clownfish {
 
 class File {
 public:
-    enum class FileEnum : std::uint8_t {
+    enum class FileEnum : U8 {
         FILE_A,
         FILE_B,
         FILE_C,
@@ -73,7 +73,7 @@ private:
 
 class Rank {
 public:
-    enum class RankEnum : std::uint8_t {
+    enum class RankEnum : U8 {
         RANK_1,
         RANK_2,
         RANK_3,
@@ -189,7 +189,7 @@ private:
 
 class Square {
 public:
-    enum class SquareEnum {
+    enum class SquareEnum : U8 {
         SQUARE_A1, SQUARE_B1, SQUARE_C1, SQUARE_D1, SQUARE_E1, SQUARE_F1, SQUARE_G1, SQUARE_H1,
         SQUARE_A2, SQUARE_B2, SQUARE_C2, SQUARE_D2, SQUARE_E2, SQUARE_F2, SQUARE_G2, SQUARE_H2,
         SQUARE_A3, SQUARE_B3, SQUARE_C3, SQUARE_D3, SQUARE_E3, SQUARE_F3, SQUARE_G3, SQUARE_H3,
