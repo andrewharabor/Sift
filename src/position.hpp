@@ -10,6 +10,7 @@
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coordinates.hpp"
+#include "cuckoo.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "types.hpp"
@@ -161,6 +162,7 @@ public:
             assert(false);
             reset();
         }
+        cuckooTable_ = CuckooTable();
     }
 
     void reset() noexcept {
@@ -872,8 +874,7 @@ public:
         }
 
         USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
-        for (USize i = 3; i <= reversible; i += 2) {
-            assert(depth_ >= i + 1);
+        for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
             const BoardState &state = stateHistory_[depth_ - i - 1];
             if (state.hash == hash_) {
                 if (state.repetition) {
@@ -893,31 +894,36 @@ public:
         }
 
         U64 originalHash = hash_;
-        U64 other = originalHash ^ stateHistory_[depth_ - 1].hash ^ Zobrist::sideToMove();
+        U64 diff = originalHash ^ stateHistory_[depth_ - 1].hash ^ Zobrist::sideToMove();
 
         USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
-        for (USize i = 2; i <= reversible; i += 2) {
-            assert(depth_ >= i + 1);
+        for (USize i = 2; i <= reversible && depth_ >= i + 1; i += 2) {
             const BoardState &state = stateHistory_[depth_ - i - 1];
-            other ^= stateHistory_[depth_ - i].hash ^ state.hash ^ Zobrist::sideToMove();
-            if (other != 0) {
+            diff ^= stateHistory_[depth_ - i].hash ^ state.hash ^ Zobrist::sideToMove();
+            if (diff != 0) {
                 continue;
             }
 
             U64 moveHash = originalHash ^ state.hash;
-            if (/* TODO */) { // cuckoo hash lookup
-                Move move; // from cuckoo
-                Square from = move.from();
-                Square to = move.to();
-                if (!((Attacks::between(from, to) ^ Bitboard(to)) & occupied())) {
-                    if (searchPly > static_cast<I32>(i)) {
-                        return true;
-                    }
+            U64 index = cuckooTable_.hash1(moveHash);
+            if (moveHash != cuckooTable_.key(index)) {
+                index = cuckooTable_.hash2(moveHash);
+            }
 
-                    if (state.repetition) {
-                        return true;
-                    }
+            if (moveHash != cuckooTable_.key(index)) {
+                continue;
+            }
+
+            const Move move = cuckooTable_.move(index);
+            if (!((Attacks::between(move.from(), move.to()) ^ Bitboard(move.to())) & occupied())) {
+                if (searchPly > static_cast<I32>(i)) {
+                    return true;
                 }
+
+                if (state.repetition) {
+                    return true;
+                }
+
             }
 
         }
@@ -1012,6 +1018,8 @@ private:
     std::array<Bitboard, 2> occupancyBitboards_;
     std::array<Piece, 64> board_;
     std::array<Bitboard, 4> castlingPathBitboards_;
+
+    CuckooTable cuckooTable_;
 };
 
 }
