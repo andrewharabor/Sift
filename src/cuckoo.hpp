@@ -70,16 +70,27 @@ public:
         assert(count == 3668);
     }
 
-    constexpr U64 hash1(U64 value) const noexcept { return value % TABLE_SIZE; }
-    constexpr U64 hash2(U64 value) const noexcept { return (value >> 16) % TABLE_SIZE; }
+    constexpr Move get(U64 key) const noexcept {
+        U64 index = hash1(key);
+        if (keys_[index] == key) {
+            return moves_[index];
+        }
 
-    constexpr U64 key(U64 index) const noexcept { return keys_[index]; }
-    constexpr Move move(U64 index) const noexcept { return moves_[index]; }
+        index = hash2(key);
+        if (keys_[index] == key) {
+            return moves_[index];
+        }
+
+        return Move::NULL_MOVE;
+    }
 
 private:
     static constexpr USize TABLE_SIZE = 8192;
     std::array<U64, TABLE_SIZE> keys_;
     std::array<Move, TABLE_SIZE> moves_;
+
+    constexpr U64 hash1(U64 value) const noexcept { return value % TABLE_SIZE; }
+    constexpr U64 hash2(U64 value) const noexcept { return (value >> 16) % TABLE_SIZE; }
 };
 
 }

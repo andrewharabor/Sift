@@ -905,16 +905,11 @@ public:
             }
 
             U64 moveHash = originalHash ^ state.hash;
-            U64 index = cuckooTable_.hash1(moveHash);
-            if (moveHash != cuckooTable_.key(index)) {
-                index = cuckooTable_.hash2(moveHash);
-            }
-
-            if (moveHash != cuckooTable_.key(index)) {
+            const Move move = cuckooTable_.get(moveHash);
+            if (move == Move::NULL_MOVE) {
                 continue;
             }
 
-            const Move move = cuckooTable_.move(index);
             if (!((Attacks::between(move.from(), move.to()) ^ Bitboard(move.to())) & occupied())) {
                 if (searchPly > static_cast<I32>(i)) {
                     return true;
