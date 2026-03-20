@@ -1,10 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cassert>
-#include <iterator>
 
-#include "constants.hpp"
 #include "coordinates.hpp"
 #include "piece.hpp"
 #include "types.hpp"
@@ -23,11 +22,10 @@ class Move {
 public:
     constexpr static U16 NULL_MOVE = 0;
 
-    constexpr Move() noexcept : move_(NULL_MOVE), score_(0) {}
-    constexpr Move(U16 move) noexcept : move_(move), score_(0) {}
+    constexpr Move() noexcept : move_(NULL_MOVE) {}
+    constexpr Move(U16 move) noexcept : move_(move) {}
 
-    constexpr Move(Square from, Square to, MoveType type = MoveType::NORMAL, PieceType promotion = PieceType::NONE) noexcept
-        : move_(NULL_MOVE), score_(0) {
+    constexpr Move(Square from, Square to, MoveType type = MoveType::NORMAL, PieceType promotion = PieceType::NONE) noexcept : move_(NULL_MOVE) {
         assert(from != Square::NONE && to != Square::NONE);
 
         const U16 typeBits = static_cast<U16>(type);
@@ -59,18 +57,16 @@ public:
         return PieceType(((move_ >> 12) & 3) + PieceType(PieceType::KNIGHT));
     }
 
-    constexpr void setScore(I16 score) noexcept { score_ = score; }
-    constexpr I16 score() const noexcept { return score_; }
-
     constexpr U16 internal() const noexcept { return move_; }
 
 private:
     U16 move_;
-    I16 score_;
 };
 
 class MoveList {
 public:
+    constexpr static USize MAX_MOVES = 256;
+
     constexpr Move &at(USize index) noexcept {
         assert(index < size_);
         return moveList_[index];
@@ -110,12 +106,12 @@ public:
     constexpr const Move *end() const noexcept { return &moveList_[size_]; }
 
     constexpr void add(const Move &move) noexcept {
-        assert(size_ < Constants::MAX_MOVES);
+        assert(size_ < MAX_MOVES);
         moveList_[size_++] = move;
     }
 
     constexpr void add(Move &&move) noexcept {
-        assert(size_ < Constants::MAX_MOVES);
+        assert(size_ < MAX_MOVES);
         moveList_[size_++] = std::move(move);
     }
 
@@ -124,17 +120,18 @@ public:
     constexpr USize size() const noexcept { return size_; }
     constexpr bool empty() const noexcept { return size_ == 0; }
 
-    constexpr USize find(const Move &move) const noexcept {
-        for (USize i = 0; i < size_; i++) {
-            if (moveList_[i] == move) {
-                return i;
-            }
-        }
-        return size_;
+    template<typename F>
+    void sort(F func) noexcept {
+        std::stable_sort(moveList_.begin(), moveList_.begin() + size_, func);
+    }
+
+    constexpr USize find(const Move move) const noexcept {
+        auto it = std::find(moveList_.begin(), moveList_.begin() + size_, move);
+        return static_cast<USize>(it - moveList_.begin());
     }
 
 private:
-    std::array<Move, Constants::MAX_MOVES> moveList_;
+    std::array<Move, MAX_MOVES> moveList_;
     USize size_ = 0;
 
 };

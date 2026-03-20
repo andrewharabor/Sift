@@ -301,6 +301,34 @@ public:
         return std::abs(square1.index() - square2.index());
     }
 
+    static constexpr I32 rankDistance(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        I32 distance = static_cast<I32>(square1.rank()) - static_cast<I32>(square2.rank());
+        if (distance < 0) {
+            distance = -distance;
+        }
+        return distance;
+    }
+
+    static constexpr I32 fileDistance(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        I32 distance = static_cast<I32>(square1.file()) - static_cast<I32>(square2.file());
+        if (distance < 0) {
+            distance = -distance;
+        }
+        return distance;
+    }
+
+    static constexpr I32 chebyshevDistance(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        return std::max(rankDistance(square1, square2), fileDistance(square1, square2));
+    }
+
+    static constexpr I32 manhattanDistance(Square square1, Square square2) noexcept {
+        assert(square1 != Square::NONE && square2 != Square::NONE);
+        return rankDistance(square1, square2) + fileDistance(square1, square2);
+    }
+
     constexpr Square enPassantSquare() const noexcept {
         assert(rank() == Rank::RANK_3 || rank() == Rank::RANK_4 || rank() == Rank::RANK_5 || rank() == Rank::RANK_6);
         return Square(index() ^ 8);
