@@ -82,5 +82,4 @@ private:
     std::array<Move, TABLE_SIZE> moves_;
 };
 
-
 }
