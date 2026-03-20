@@ -16,7 +16,7 @@ namespace Clownfish {
 
 class CuckooTable {
 public:
-    constexpr CuckooTable() noexcept {
+    static void init() noexcept {
         keys_.fill(0);
         moves_.fill(Move::NULL_MOVE);
 
@@ -70,7 +70,7 @@ public:
         assert(count == 3668);
     }
 
-    constexpr Move get(U64 key) const noexcept {
+    static constexpr Move get(U64 key) noexcept {
         U64 index = hash1(key);
         if (keys_[index] == key) {
             return moves_[index];
@@ -86,11 +86,11 @@ public:
 
 private:
     static constexpr USize TABLE_SIZE = 8192;
-    std::array<U64, TABLE_SIZE> keys_;
-    std::array<Move, TABLE_SIZE> moves_;
+    static inline std::array<U64, TABLE_SIZE> keys_;
+    static inline std::array<Move, TABLE_SIZE> moves_;
 
-    constexpr U64 hash1(U64 value) const noexcept { return value % TABLE_SIZE; }
-    constexpr U64 hash2(U64 value) const noexcept { return (value >> 16) % TABLE_SIZE; }
+    static constexpr U64 hash1(U64 value) noexcept { return value % TABLE_SIZE; }
+    static constexpr U64 hash2(U64 value) noexcept { return (value >> 16) % TABLE_SIZE; }
 };
 
 }

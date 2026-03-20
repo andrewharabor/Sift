@@ -162,7 +162,6 @@ public:
             assert(false);
             reset();
         }
-        cuckooTable_ = CuckooTable();
     }
 
     void reset() noexcept {
@@ -905,7 +904,7 @@ public:
             }
 
             U64 moveHash = originalHash ^ state.hash;
-            const Move move = cuckooTable_.get(moveHash);
+            const Move move = CuckooTable::get(moveHash);
             if (move == Move::NULL_MOVE) {
                 continue;
             }
@@ -1013,8 +1012,6 @@ private:
     std::array<Bitboard, 2> occupancyBitboards_;
     std::array<Piece, 64> board_;
     std::array<Bitboard, 4> castlingPathBitboards_;
-
-    CuckooTable cuckooTable_;
 };
 
 }
