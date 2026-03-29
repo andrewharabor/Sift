@@ -1,6 +1,6 @@
 #pragma once
 
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "piece.hpp"
 #include "types.hpp"
 

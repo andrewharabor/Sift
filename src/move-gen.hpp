@@ -5,7 +5,7 @@
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "position.hpp"
@@ -32,14 +32,14 @@ constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
     return static_cast<PieceFlag>(static_cast<U8>(left) | static_cast<U8>(right));
 }
 
-enum class MoveGenerationType : U8 {
+enum class MoveGenType : U8 {
     ALL,
     CAPTURES,
     QUIET,
     CHECKS
 };
 
-class MoveGenerator {
+class MoveGen {
 public:
     template<Color::ColorEnum C>
     static std::pair<Bitboard, int> checkMask(const Position &position, Square kingSquare, Bitboard occupied) {
@@ -144,7 +144,7 @@ public:
         return attackedSquares;
     }
 
-    template<MoveGenerationType MGT = MoveGenerationType::ALL>
+    template<MoveGenType MGT = MoveGenType::ALL>
     static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
         moveList.clear();
         if (position.sideToMove() == Color::WHITE) {
@@ -182,7 +182,7 @@ private:
         Bitboard queen;
     };
 
-    template<Color::ColorEnum C, MoveGenerationType MGT>
+    template<Color::ColorEnum C, MoveGenType MGT>
     static void pawn(const Position &position, MoveList &moveList, const KingSquares &kingSquares, const Occupied &occupied, const Masks &masks, const CheckSquares &checkSquares) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
@@ -224,7 +224,7 @@ private:
             Bitboard pushPromotion = singlePush & PROMOTION_RANK;
 
             auto addPromotions = [&](Square from, Square to) {
-                if constexpr (MGT != MoveGenerationType::CHECKS) {
+                if constexpr (MGT != MoveGenType::CHECKS) {
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
@@ -250,7 +250,7 @@ private:
                 }
             };
 
-            if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::CAPTURES || MGT == MoveGenerationType::CHECKS) {
+            if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CAPTURES || MGT == MoveGenType::CHECKS) {
                 while (leftPromotions) {
                     const Square to = Square(static_cast<int>(leftPromotions.pop()));
                     const Square from = to + DOWN_RIGHT;
@@ -264,7 +264,7 @@ private:
                 }
             }
 
-            if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::QUIET || MGT == MoveGenerationType::CHECKS) {
+            if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::QUIET || MGT == MoveGenType::CHECKS) {
                 while (pushPromotion) {
                     const Square to = Square(static_cast<int>(pushPromotion.pop()));
                     const Square from = to + DOWN;
@@ -278,14 +278,14 @@ private:
         rightAttacks &= ~PROMOTION_RANK;
 
         auto addMove = [&](Square from, Square to) {
-            if constexpr (MGT != MoveGenerationType::CHECKS) {
+            if constexpr (MGT != MoveGenType::CHECKS) {
                 moveList.add(Move(from, to));
             } else if ((bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) || (Bitboard(to) & checkSquares.pawn)) {
                 moveList.add(Move(from, to));
             }
         };
 
-        if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::CAPTURES || MGT == MoveGenerationType::CHECKS) {
+        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CAPTURES || MGT == MoveGenType::CHECKS) {
             while (leftAttacks) {
                 const Square to = Square(static_cast<int>(leftAttacks.pop()));
                 const Square from = to + DOWN_RIGHT;
@@ -299,7 +299,7 @@ private:
             }
         }
 
-        if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::QUIET || MGT == MoveGenerationType::CHECKS) {
+        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::QUIET || MGT == MoveGenType::CHECKS) {
             while (singlePush) {
                 const Square to = Square(static_cast<int>(singlePush.pop()));
                 const Square from = to + DOWN;
@@ -319,7 +319,7 @@ private:
         }
     }
 
-    template<Color::ColorEnum C, MoveGenerationType MGT>
+    template<Color::ColorEnum C, MoveGenType MGT>
     static void enPassant(const Position &position, MoveList &moveList, const KingSquares &kingSquares, const Occupied &occupied, const Masks &masks, const CheckSquares &checkSquares, Bitboard attackingPawns, Square enPassantSquare) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
@@ -327,7 +327,7 @@ private:
         assert(enPassantSquare != Square::NONE);
         assert((enPassantSquare.rank() == Rank::RANK_3 && COLOR == Color::BLACK) || (enPassantSquare.rank() == Rank::RANK_6 && COLOR == Color::WHITE));
 
-        if constexpr (MGT == MoveGenerationType::QUIET) {
+        if constexpr (MGT == MoveGenType::QUIET) {
             return;
         }
 
@@ -360,7 +360,7 @@ private:
                 break;
             }
 
-            if constexpr (MGT != MoveGenerationType::CHECKS) {
+            if constexpr (MGT != MoveGenType::CHECKS) {
                 moveList.add(Move(from, to, MoveType::EN_PASSANT));
             } else {
                 const bool possibleBlocker = enemyKingMask && friendlyRooksQueens;
@@ -444,7 +444,7 @@ private:
         return moves;
     }
 
-    template<Color::ColorEnum C, MoveGenerationType MGT>
+    template<Color::ColorEnum C, MoveGenType MGT>
     static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
@@ -479,11 +479,11 @@ private:
         };
 
         Bitboard movable = Bitboard();
-        if constexpr (MGT == MoveGenerationType::ALL || MGT == MoveGenerationType::CHECKS) {
+        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CHECKS) {
             movable = ~occupied.friendly;
-        } else if constexpr (MGT == MoveGenerationType::CAPTURES) {
+        } else if constexpr (MGT == MoveGenType::CAPTURES) {
             movable = occupied.enemy;
-        } else if constexpr (MGT == MoveGenerationType::QUIET) {
+        } else if constexpr (MGT == MoveGenType::QUIET) {
             movable = ~occupied.all;
         } else {
             static_assert(false);
@@ -493,14 +493,14 @@ private:
             auto genKing = [&](Square square) { return king(square, masks.attacked) & movable; };
             whileBitboardAddMoves<MGT>(moveList, Bitboard(kingSquares.friendly), genKing, kingSquares.enemy, masks.blockers, Bitboard());
 
-            if constexpr (MGT != MoveGenerationType::CAPTURES) {
+            if constexpr (MGT != MoveGenType::CAPTURES) {
                 if (checks == 0) {
                     Bitboard castlingMoves = castling<C>(position, kingSquares, occupied, masks);
                     while (castlingMoves) {
                         const Square kingTo = Square(static_cast<int>(castlingMoves.pop()));
                         const Position::CastlingRights::CastlingSide castlingSide = Position::CastlingRights::closestSide(kingTo, kingSquares.friendly, COLOR);
                         const Square rookTo = Position::CastlingRights::rookTo(castlingSide);
-                        if constexpr (MGT != MoveGenerationType::CHECKS) {
+                        if constexpr (MGT != MoveGenType::CHECKS) {
                             moveList.add(Move(kingSquares.friendly, kingTo, MoveType::CASTLING));
                         } else if (Bitboard(rookTo) & checkSquares.rook) {
                             moveList.add(Move(kingSquares.friendly, kingTo, MoveType::CASTLING));
@@ -545,14 +545,14 @@ private:
         }
     }
 
-    template<MoveGenerationType MGT, typename F>
+    template<MoveGenType MGT, typename F>
     static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc, Square enemyKingSquare, Bitboard blockers, Bitboard checkSquares) {
         while (bitboard) {
             const Square from = Square(static_cast<int>(bitboard.pop()));
             Bitboard moves = movesFunc(from);
             while (moves) {
                 const Square to = Square(static_cast<int>(moves.pop()));
-                if constexpr (MGT != MoveGenerationType::CHECKS) {
+                if constexpr (MGT != MoveGenType::CHECKS) {
                     moveList.add(Move(from, to));
                 } else if ((bool(Bitboard(from) & blockers) && !(Attacks::between(enemyKingSquare, from) & Attacks::between(enemyKingSquare, to))) || (Bitboard(to) & checkSquares)) {
                     moveList.add(Move(from, to));

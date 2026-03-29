@@ -7,7 +7,7 @@
 
 #include "../src/attacks.hpp"
 #include "../src/benchmark.hpp"
-#include "../src/move-generator.hpp"
+#include "../src/move-gen.hpp"
 #include "../src/position.hpp"
 #include "../src/types.hpp"
 
@@ -20,7 +20,7 @@ struct TestCase {
     U64 expectedNodes;
 };
 
-template<MoveGenerationType MGT = MoveGenerationType::ALL>
+template<MoveGenType MGT = MoveGenType::ALL>
 void benchmark(const TestCase &testCase) {
     Position position = Position(testCase.fen);
 
@@ -30,13 +30,13 @@ void benchmark(const TestCase &testCase) {
     const U64 duration = static_cast<U64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
     std::string nodeLabel = "";
-    if constexpr (MGT == MoveGenerationType::ALL) {
+    if constexpr (MGT == MoveGenType::ALL) {
         nodeLabel = "nodes";
-    } else if constexpr (MGT == MoveGenerationType::CAPTURES) {
+    } else if constexpr (MGT == MoveGenType::CAPTURES) {
         nodeLabel = "captures";
-    } else if constexpr (MGT == MoveGenerationType::QUIET) {
+    } else if constexpr (MGT == MoveGenType::QUIET) {
         nodeLabel = "quiets";
-    } else if constexpr (MGT == MoveGenerationType::CHECKS) {
+    } else if constexpr (MGT == MoveGenType::CHECKS) {
         nodeLabel = "checks";
     } else {
         static_assert(false);
@@ -80,7 +80,7 @@ int main() {
     };
 
     for (const TestCase &testCase : testCasesAll) {
-        benchmark<MoveGenerationType::ALL>(testCase);
+        benchmark<MoveGenType::ALL>(testCase);
     }
 
     const TestCase testCasesCaptures[] = {
@@ -91,7 +91,7 @@ int main() {
     };
 
     for (const TestCase &testCase : testCasesCaptures) {
-        benchmark<MoveGenerationType::CAPTURES>(testCase);
+        benchmark<MoveGenType::CAPTURES>(testCase);
     }
 
     const TestCase testCasesChecks[] = {
@@ -102,6 +102,6 @@ int main() {
     };
 
     for (const TestCase &testCase : testCasesChecks) {
-        benchmark<MoveGenerationType::CHECKS>(testCase);
+        benchmark<MoveGenType::CHECKS>(testCase);
     }
 }

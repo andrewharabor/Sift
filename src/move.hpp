@@ -4,7 +4,7 @@
 #include <array>
 #include <cassert>
 
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "piece.hpp"
 #include "types.hpp"
 

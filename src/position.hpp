@@ -9,7 +9,7 @@
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "cuckoo.hpp"
 #include "move.hpp"
 #include "piece.hpp"
@@ -176,7 +176,8 @@ public:
         halfmoveClock_ = 0;
         pliesFromNull_ = 0;
         plies_ = 0;
-        repetition_ = 0;
+        repetitionPly_ = 0;
+        repetitions_ = 0;
 
         depth_ = 0;
 
@@ -390,12 +391,26 @@ public:
         const Piece capturedPiece = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
-        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, pliesFromNull_, repetition_, capturedPiece};
+        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, pliesFromNull_, repetitionPly_, repetitions_, capturedPiece};
 
         halfmoveClock_++;
         pliesFromNull_++;
-        repetition_ = repetitionDistance();
         plies_++;
+
+        repetitionPly_ = 0;
+        repetitions_ = 0;
+
+        if (depth_ > 4) {
+            USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
+            for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
+                const BoardState &state = stateHistory_[depth_ - i - 1];
+                if (state.hash == hash_) {
+                    repetitionPly_ = static_cast<U16>(i);
+                    repetitions_ = state.repetitions + 1;
+                    break;
+                }
+            }
+        }
 
         if (enPassantSquare_ != Square::NONE) {
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
@@ -509,7 +524,8 @@ public:
         enPassantSquare_ = previousState.enPassantSquare;
         halfmoveClock_ = previousState.halfmoveClock;
         pliesFromNull_ = previousState.pliesFromNull;
-        repetition_ = previousState.repetition;
+        repetitionPly_ = previousState.repetitionPly;
+        repetitions_ = previousState.repetitions;
         plies_--;
         sideToMove_ = ~sideToMove_;
 
@@ -568,7 +584,7 @@ public:
     }
 
     void makeNull() {
-        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, pliesFromNull_, repetition_, Piece::NONE};
+        stateHistory_[depth_++] = BoardState{hash_, castlingRights_, enPassantSquare_, halfmoveClock_, pliesFromNull_, repetitionPly_, repetitions_, Piece::NONE};
 
         if (enPassantSquare_ != Square::NONE) {
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
@@ -579,7 +595,8 @@ public:
         hash_ ^= Zobrist::sideToMove();
 
         pliesFromNull_ = 0;
-        repetition_ = 0;
+        repetitionPly_ = 0;
+        repetitions_ = 0;
         plies_++;
     }
 
@@ -591,7 +608,8 @@ public:
         enPassantSquare_ = previousState.enPassantSquare;
         halfmoveClock_ = previousState.halfmoveClock;
         pliesFromNull_ = previousState.pliesFromNull;
-        repetition_ = previousState.repetition;
+        repetitionPly_ = previousState.repetitionPly;
+        repetitions_ = previousState.repetitions;
         plies_--;
         sideToMove_ = ~sideToMove_;
 
@@ -867,25 +885,7 @@ public:
         return static_cast<bool>(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
     }
 
-    I16 repetitionDistance() const noexcept {
-        if (depth_ < 4) {
-            return 0;
-        }
-
-        USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
-        for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
-            const BoardState &state = stateHistory_[depth_ - i - 1];
-            if (state.hash == hash_) {
-                if (state.repetition) {
-                    return -static_cast<I16>(i);
-                }
-                return static_cast<I16>(i);
-            }
-        }
-        return 0;
-    }
-
-    bool repetition3Fold(I32 searchPly) const noexcept { return repetition_ && repetition_ < searchPly; }
+    bool repetition3Fold(I32 searchPly) const noexcept { return repetitions_ > 1 || (repetitions_ == 1 && repetitionPly_ < searchPly); }
 
     bool upcomingRepetition(I32 searchPly) const noexcept {
         if (depth_ < 3) {
@@ -904,7 +904,7 @@ public:
             }
 
             U64 moveHash = originalHash ^ state.hash;
-            const Move move = CuckooTable::get(moveHash);
+            const Move move = CuckooTable::probe(moveHash);
             if (move == Move::NULL_MOVE) {
                 continue;
             }
@@ -914,7 +914,7 @@ public:
                     return true;
                 }
 
-                if (state.repetition) {
+                if (state.repetitions > 0) {
                     return true;
                 }
 
@@ -967,22 +967,22 @@ public:
     constexpr std::pair<GameResultReason, GameResult> gameOver(const MoveList &moveList, I32 searchPly) const noexcept {
         if (moveList.empty()) {
             if (check()) {
-                return {GameResultReason::CHECKMATE, GameResult::LOSS};
+                return std::make_pair(GameResultReason::CHECKMATE, GameResult::LOSS);
             }
-            return {GameResultReason::STALEMATE, GameResult::DRAW};
+            return std::make_pair(GameResultReason::STALEMATE, GameResult::DRAW);
         }
 
         if (halfMoveDraw(moveList)) {
-            return {GameResultReason::FIFTY_MOVE_RULE, GameResult::DRAW};
+            return std::make_pair(GameResultReason::FIFTY_MOVE_RULE, GameResult::DRAW);
         }
         if (insufficientMaterial()) {
-            return {GameResultReason::INSUFFICIENT_MATERIAL, GameResult::DRAW};
+            return std::make_pair(GameResultReason::INSUFFICIENT_MATERIAL, GameResult::DRAW);
         }
         if (repetition3Fold(searchPly)) {
-            return {GameResultReason::THREEFOLD_REPETITION, GameResult::DRAW};
+            return std::make_pair(GameResultReason::THREEFOLD_REPETITION, GameResult::DRAW);
         }
 
-        return {GameResultReason::NONE, GameResult::NONE};
+        return std::make_pair(GameResultReason::NONE, GameResult::NONE);
     }
 
 private:
@@ -992,7 +992,8 @@ private:
         Square enPassantSquare;
         U16 halfmoveClock;
         U16 pliesFromNull;
-        I16 repetition;
+        U16 repetitionPly;
+        U8 repetitions;
         Piece capturedPiece;
     };
 
@@ -1005,7 +1006,8 @@ private:
     Color sideToMove_;
     U16 halfmoveClock_;
     U16 pliesFromNull_;
-    I16 repetition_;
+    U16 repetitionPly_;
+    U8 repetitions_;
     U16 plies_;
 
     std::array<Bitboard, 6> pieceBitboards_;

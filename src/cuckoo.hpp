@@ -5,7 +5,7 @@
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "piece.hpp"
 #include "move.hpp"
 #include "types.hpp"
@@ -70,7 +70,7 @@ public:
         assert(count == 3668);
     }
 
-    static constexpr Move get(U64 key) noexcept {
+    static constexpr Move probe(U64 key) noexcept {
         U64 index = hash1(key);
         if (keys_[index] == key) {
             return moves_[index];

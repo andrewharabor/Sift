@@ -8,7 +8,7 @@
 
 #include "bitboard.hpp"
 #include "color.hpp"
-#include "coordinates.hpp"
+#include "coords.hpp"
 #include "piece.hpp"
 #include "types.hpp"
 

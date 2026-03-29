@@ -5,32 +5,33 @@
 
 namespace Clownfish {
 
-using Score = I32;
-
-class ScoreLimits {
+class Score {
 public:
     static constexpr I32 MAX_PLY = 128;
 
-    static constexpr Score ZERO = 0;
-    static constexpr Score MAX = 32001;
-    static constexpr Score MIN = -MAX;
-    static constexpr Score NONE = 32002;
+    static constexpr I32 ZERO = 0;
+    static constexpr I32 MAX = 32001;
+    static constexpr I32 MIN = -MAX;
+    static constexpr I32 NONE = 32002;
 
-    static constexpr Score MATE = 32000;
-    static constexpr Score MATED = -MATE;
-    static constexpr Score MATE_IN_MAX = MATE - MAX_PLY;
-    static constexpr Score MATED_IN_MAX = -MATE_IN_MAX;
+    static constexpr I32 MATE = 32000;
+    static constexpr I32 MATED = -MATE;
+    static constexpr I32 MATE_IN_MAX = MATE - MAX_PLY;
+    static constexpr I32 MATED_IN_MAX = -MATE_IN_MAX;
 
-    static constexpr Score DRAW = 0;
-    static constexpr Score WIN = 31000;
-    static constexpr Score LOSS = -WIN;
+    static constexpr I32 DRAW = 0;
+    static constexpr I32 WIN = 31000;
+    static constexpr I32 LOSS = -WIN;
 
-    constexpr bool valid(Score score) const noexcept { return score >= MIN && score <= MAX; }
+    static constexpr bool valid(I32 score) noexcept { return score >= MIN && score <= MAX; }
 
-    constexpr bool win(Score score) const noexcept { return score >= WIN; }
-    constexpr bool loss(Score score) const noexcept { return score <= LOSS; }
-    constexpr bool draw(Score score) const noexcept { return score == DRAW; }
-    constexpr bool mate(Score score) const noexcept { return score >= MATE_IN_MAX || score <= MATED_IN_MAX; }
+    static constexpr bool win(I32 score) noexcept { return score >= WIN; }
+    static constexpr bool loss(I32 score) noexcept { return score <= LOSS; }
+    static constexpr bool draw(I32 score) noexcept { return score == DRAW; }
+    static constexpr bool mate(I32 score) noexcept { return score >= MATE_IN_MAX || score <= MATED_IN_MAX; }
+
+    static constexpr I32 mateIn(I32 ply) noexcept { return MATE - ply; }
+    static constexpr I32 matedIn(I32 ply) noexcept { return MATED + ply; }
 };
 
 }
