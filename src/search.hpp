@@ -2,9 +2,13 @@
 
 #include <array>
 #include <cassert>
+#include <tuple>
 #include <utility>
+#include <vector>
 
+#include "evaluate.hpp"
 #include "move-gen.hpp"
+#include "move-order.hpp"
 #include "move.hpp"
 #include "position.hpp"
 #include "score.hpp"
@@ -14,8 +18,27 @@
 
 namespace Clownfish {
 
+struct SearchNode {
+    MoveList pv;
+
+    Move playedMove;
+    Piece movedPiece;
+    Move excludedMove;
+
+    std::array<Move, 2> killerMoves;
+
+    Int32 staticEval;
+    Int32 eval;
+
+    UInt32 failHighCount;
+};
+
+using SearchStack = std::array<SearchNode, Search::MAX_PLY + 1>;
+
 class Search {
 public:
+    static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
+
     Search(USize tableSizeMB) noexcept : tTable_(tableSizeMB) {
         reset();
     }
@@ -25,7 +48,7 @@ public:
         tTable_.incrementAge();
 
         position_ = position;
-        MoveGen::legal(position_, rootMoves_);
+        initRootMoves();
         iterativeDeepening();
     }
 
@@ -42,11 +65,14 @@ public:
         nodes_ = 0;
         rootMoves_.clear();
         for (USize i = 0; i <= MAX_PLY; i++) {
-            stack_[i].pv.clear();
-            stack_[i].currentMove = Move::NULL_MOVE;
-            // stack_[i].excludedMove = Move::NULL_MOVE;
-            stack_[i].staticEval = Score::NONE;
-            stack_[i].eval = Score::NONE;
+            searchStack_[i].pv.clear();
+            searchStack_[i].playedMove = Move::NULL_MOVE;
+            searchStack_[i].movedPiece = Piece::NONE;
+            searchStack_[i].excludedMove = Move::NULL_MOVE;
+            searchStack_[i].killerMoves[0] = searchStack_[i].killerMoves[1] = Move::NULL_MOVE;
+            searchStack_[i].staticEval = Score::NONE;
+            searchStack_[i].eval = Score::NONE;
+            searchStack_[i].failHighCount = 0;
         }
     }
 
@@ -55,28 +81,18 @@ public:
     }
 
 private:
-    static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
-
-    struct Node {
-        MoveList pv;
-
-        Move currentMove;
-        // Move excludedMove;
-
-        I32 staticEval;
-        I32 eval;
-    };
-
     struct RootMove {
         Move move = Move::NULL_MOVE;
         MoveList pv;
 
-        I32 score = Score::NONE;
-        I32 prevScore = Score::NONE;
+        Int32 score = Score::NONE;
+        Int32 displayScore = Score::NONE;
+        Int32 prevScore = Score::NONE;
         bool lowerBound = false;
         bool upperBound = false;
 
-        U64 nodes = 0;
+        Int32 selDepth = 0;
+        UInt64 nodes = 0;
 
         constexpr RootMove(Move move) noexcept : move(move) {}
     };
@@ -86,60 +102,62 @@ private:
     };
 
     struct Limits {
-        I32 depth;
-        I32 nodes;
+        Int32 depth;
+        Int32 nodes;
         // TODO: time
     };
 
     Position position_;
 
-    I32 rootDepth_;
-    I32 rootPly_;
-    I32 selDepth_;
-    U64 nodes_;
+    Int32 rootDepth_;
+    Int32 rootPly_;
+    Int32 selDepth_;
+    UInt64 nodes_;
 
-    MoveList rootMoves_;
-    std::array<Node, MAX_PLY + 1> stack_;
+    std::vector<RootMove> rootMoves_;
+    SearchStack searchStack_;
 
     TTable tTable_;
 
     Limits limits_;
 
-    std::pair<Move, I32> iterativeDeepening() noexcept {
+    std::pair<Move, Int32> iterativeDeepening() noexcept {
         // TODO
         return {Move::NULL_MOVE, Score::NONE};
     }
 
-    I32 search(USize ply, I32 depth, I32 alpha, I32 beta, bool pvNode, bool cutNode) noexcept {
+    Int32 search(USize ply, Int32 depth, Int32 alpha, Int32 beta, bool pvNode, bool cutNode) noexcept {
         assert(!(pvNode && cutNode));
 
         if (rootPly_ + 1 > selDepth_) {
             selDepth_ = rootPly_ + 1;
         }
 
-        depth = std::min(depth, static_cast<I32>(MAX_PLY - 1));
+        depth = std::min(depth, static_cast<Int32>(MAX_PLY - 1));
 
-        alpha = std::max(alpha, Score::MATED + rootPly_);
-        beta = std::min(beta, Score::MATE - rootPly_);
+        alpha = std::max(alpha, Score::matedIn(rootPly_));
+        beta = std::min(beta, Score::mateIn(rootPly_));
         if (alpha >= beta) {
             return alpha;
         }
 
         bool rootNode = (rootPly_ == 0);
-        bool check = position_.check();
+        bool inCheck = position_.check();
+        bool excludedMove = searchStack_[ply].excludedMove != Move::NULL_MOVE;
 
-        if (!rootNode && alpha < Score::DRAW && position_.upcomingRepetition(rootPly_)) {
+        if (!rootNode && position_.halfmoveClock() >= 3 && alpha < 0 && position_.upcomingRepetition(rootPly_)) {
             alpha = Score::DRAW;
             if (alpha >= beta) {
                 return alpha;
             }
         }
 
-        MoveList moves;
-        MoveGen::legal(position_, moves);
-
-        if (position_.draw(moves, rootPly_)) {
+        if (draw(rootPly_)) {
             return Score::DRAW;
+        }
+
+        if (rootPly_ >= MAX_PLY) {
+            return SimPLYChessEval::evaluate(position_); // FIXME use Eval
         }
 
         if (depth <= 0) {
@@ -147,10 +165,179 @@ private:
             return Score::NONE;
         }
 
+        TTableEntry tableEntry = TTableEntry();
+        bool tableHit = false;
 
-        // TODO
+        Int32 rawStaticEval = Score::NONE;
 
-        return Score::NONE;
+        // FIXME: correplexity?
+
+        if (!excludedMove) {
+            std::tie(tableEntry, tableHit) = tTable_.probe(position_.hash(), rootPly_);
+
+            if (tableHit && !pvNode && tableEntry.depth >= depth && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
+                return tableEntry.score;
+            }
+
+            if (inCheck) {
+                searchStack_[ply].staticEval = Score::NONE;
+                searchStack_[ply].eval = Score::NONE;
+            } else {
+                if (tableHit) {
+                    rawStaticEval = tableEntry.staticEval;
+                } else {
+                    rawStaticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
+                }
+
+                // FIXME: history
+                searchStack_[ply].staticEval = rawStaticEval;
+                searchStack_[ply].eval = searchStack_[ply].staticEval;
+                if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= searchStack_[ply].eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= searchStack_[ply].eval))) {
+                    searchStack_[ply].eval = tableEntry.score;
+                }
+            }
+        }
+
+        searchStack_[ply + 1].killerMoves[0] = searchStack_[ply + 1].killerMoves[1] = Move::NULL_MOVE;
+
+        // TODO: more pruning
+
+        MoveOrder moveOrder = MoveOrder(position_, tableEntry.move, searchStack_[ply].killerMoves);
+
+        searchStack_[ply + 1].failHighCount = 0;
+
+        TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
+
+        MoveList quietsTried;
+        MoveList capturesTried;
+        Int32 movesTried = 0;
+
+        Move bestMove = Move::NULL_MOVE;
+        Int32 bestScore = Score::MIN;
+
+        ScoredMove scoredMove;
+        while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
+            auto [move, moveScore] = scoredMove;
+            if (move == searchStack_[ply].excludedMove) {
+                continue;
+            }
+
+            bool quiet = !position_.isCapture(move);
+
+            tTable_.prefetch(position_.zobristAfter(move));
+
+            UInt64 nodesBefore = nodes_;
+
+            makeMove(ply, move);
+            movesTried++;
+
+            if (quiet) {
+                quietsTried.add(move);
+            } else {
+                capturesTried.add(move);
+            }
+
+            Int32 newDepth = depth - 1;
+            Int32 score = 0;
+
+            if (!pvNode || movesTried > 1) {
+                score = -search(ply + 1, newDepth, -alpha - 1, -alpha, false, !cutNode);
+            }
+
+            if (pvNode && (movesTried == 1 || score > alpha)) {
+                score = -search(ply + 1, newDepth, -beta, -alpha, true, false);
+            }
+
+            unmakeMove(ply);
+
+            if (rootNode) {
+                RootMove &rootMove = findRootMove(move);
+                rootMove.prevScore = rootMove.score;
+                rootMove.nodes += nodes_ - nodesBefore;
+                if (movesTried == 1 || score > alpha) {
+                    rootMove.displayScore = rootMove.score = score;
+                    rootMove.selDepth = selDepth_;
+                    rootMove.lowerBound = false;
+                    rootMove.upperBound = false;
+
+                    if (score >= beta) {
+                        rootMove.displayScore = beta;
+                        rootMove.lowerBound = true;
+                    } else if (score <= alpha) {
+                        rootMove.displayScore = alpha;
+                        rootMove.upperBound = true;
+                    }
+
+                    rootMove.pv.clear();
+                    rootMove.pv.add(move);
+                    for (Move pvMove : searchStack_[ply + 1].pv) {
+                        rootMove.pv.add(pvMove);
+                    }
+                } else {
+                    rootMove.score = Score::NONE;
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+
+                if (bestScore > alpha) {
+                    bound = TTableEntry::Bound::EXACT;
+                    alpha = bestScore;
+                    bestMove = move;
+                    if (pvNode) {
+                        searchStack_[ply].pv.clear();
+                        searchStack_[ply].pv.add(move);
+                        for (Move pvMove : searchStack_[ply + 1].pv) {
+                            searchStack_[ply].pv.add(pvMove);
+                        }
+                    }
+                }
+
+                if (bestScore >= beta) {
+                    bound = TTableEntry::Bound::LOWER;
+                    searchStack_[ply].failHighCount++;
+
+                    if (quiet && searchStack_[ply].killerMoves[0] != move) {
+                        searchStack_[ply].killerMoves[1] = searchStack_[ply].killerMoves[0];
+                        searchStack_[ply].killerMoves[0] = move;
+                    }
+
+                    // TODO: history updates
+
+                    break;
+                }
+            }
+        }
+
+        if (movesTried == 0) {
+            if (excludedMove) {
+                return alpha;
+            }
+            if (inCheck) {
+                return Score::matedIn(rootPly_);
+            } else {
+                return Score::DRAW;
+            }
+        }
+
+        if (!excludedMove) {
+            // TODO: history update
+
+            tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, depth, pvNode, bound);
+        }
+
+        return bestScore;
+    }
+
+    bool draw(USize ply) noexcept {
+        bool noMoves = false;
+        if (position_.halfmoveClock() >= 100) {
+            MoveList moves;
+            MoveGen::legal(position_, moves);
+            noMoves = moves.empty();
+        }
+        return position_.draw(rootPly_, noMoves);
     }
 
     void makeMove(USize ply, Move move) noexcept {
@@ -158,13 +345,15 @@ private:
         position_.make(move);
         rootPly_++;
         nodes_++;
-        stack_[ply].currentMove = move;
+        searchStack_[ply].playedMove = move;
+        searchStack_[ply].movedPiece = position_.pieceAt(move.to());
     }
 
     void unmakeMove(USize ply) noexcept {
-        position_.unmake(stack_[ply].currentMove);
+        position_.unmake(searchStack_[ply].playedMove);
         rootPly_--;
-        stack_[ply].currentMove = Move::NULL_MOVE;
+        searchStack_[ply].playedMove = Move::NULL_MOVE;
+        searchStack_[ply].movedPiece = Piece::NONE;
     }
 
     void makeNullMove(USize ply) noexcept {
@@ -175,6 +364,32 @@ private:
     void unmakeNullMove(USize ply) noexcept {
         position_.unmakeNull();
         rootPly_--;
+    }
+
+    void initRootMoves() {
+        rootMoves_.clear();
+        MoveList moves;
+        MoveGen::legal(position_, moves);
+        for (Move move : moves) {
+            rootMoves_.push_back(RootMove(move));
+        }
+    }
+
+    void sortRootMoves() {
+        auto compare = [](const RootMove &move1, const RootMove &move2) {
+            if (move1.score == move2.score) {
+                return move1.prevScore > move2.prevScore;
+            }
+            return move1.score > move2.score;
+        };
+        std::stable_sort(rootMoves_.begin(), rootMoves_.end(), compare);
+    }
+
+    constexpr RootMove &findRootMove(Move move) {
+        auto compare = [move](const RootMove &rootMove) {
+            return rootMove.move == move;
+        };
+        return *std::find_if(rootMoves_.begin(), rootMoves_.end(), compare);
     }
 };
 

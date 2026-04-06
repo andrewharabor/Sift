@@ -12,7 +12,7 @@ namespace Clownfish {
 
 class PieceType {
 public:
-    enum class PieceTypeEnum : U8 {
+    enum class PieceTypeEnum : UInt8 {
         PAWN,
         KNIGHT,
         BISHOP,
@@ -91,7 +91,7 @@ private:
 
 class Piece {
 public:
-    enum class PieceEnum : U8 {
+    enum class PieceEnum : UInt8 {
         WHITE_PAWN,
         WHITE_KNIGHT,
         WHITE_BISHOP,

@@ -9,7 +9,7 @@ namespace Clownfish {
 
 class Color {
 public:
-    enum class ColorEnum : U8 {
+    enum class ColorEnum : UInt8 {
         WHITE,
         BLACK,
         NONE

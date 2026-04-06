@@ -5,33 +5,43 @@
 
 namespace Clownfish {
 
-class Score {
-public:
-    static constexpr I32 MAX_PLY = 128;
+namespace Score {
 
-    static constexpr I32 ZERO = 0;
-    static constexpr I32 MAX = 32001;
-    static constexpr I32 MIN = -MAX;
-    static constexpr I32 NONE = 32002;
+constexpr Int32 MAX_PLY = 250;
 
-    static constexpr I32 MATE = 32000;
-    static constexpr I32 MATED = -MATE;
-    static constexpr I32 MATE_IN_MAX = MATE - MAX_PLY;
-    static constexpr I32 MATED_IN_MAX = -MATE_IN_MAX;
+constexpr Int32 ZERO = 0;
+constexpr Int32 MAX = 32001;
+constexpr Int32 MIN = -MAX;
+constexpr Int32 NONE = 32002;
 
-    static constexpr I32 DRAW = 0;
-    static constexpr I32 WIN = 31000;
-    static constexpr I32 LOSS = -WIN;
+constexpr Int32 MATE = 32000;
+constexpr Int32 MATED = -MATE;
+constexpr Int32 MATE_IN_MAX = MATE - MAX_PLY;
+constexpr Int32 MATED_IN_MAX = -MATE_IN_MAX;
 
-    static constexpr bool valid(I32 score) noexcept { return score >= MIN && score <= MAX; }
+constexpr Int32 DRAW = 0;
+constexpr Int32 WIN = 31000;
+constexpr Int32 LOSS = -WIN;
+constexpr Int32 KNOWN_WIN = 10000;
+constexpr Int32 KNOWN_LOSS = -KNOWN_WIN;
 
-    static constexpr bool win(I32 score) noexcept { return score >= WIN; }
-    static constexpr bool loss(I32 score) noexcept { return score <= LOSS; }
-    static constexpr bool draw(I32 score) noexcept { return score == DRAW; }
-    static constexpr bool mate(I32 score) noexcept { return score >= MATE_IN_MAX || score <= MATED_IN_MAX; }
+constexpr bool valid(Int32 score) noexcept { return score >= MIN && score <= MAX; }
 
-    static constexpr I32 mateIn(I32 ply) noexcept { return MATE - ply; }
-    static constexpr I32 matedIn(I32 ply) noexcept { return MATED + ply; }
-};
+constexpr bool mate(Int32 score) noexcept { return score >= MATE_IN_MAX || score <= MATED_IN_MAX; }
+constexpr Int32 mateIn(Int32 ply) noexcept { return MATE - ply; }
+constexpr Int32 matedIn(Int32 ply) noexcept { return MATED + ply; }
+
+}
+
+namespace MoveScore {
+
+constexpr Int32 HASH = 10000000;
+constexpr Int32 GOOD_CAPTURE = 400000;
+constexpr Int32 BAD_CAPTURE = GOOD_CAPTURE - 50001;
+constexpr Int32 KILLER1 = 300001;
+constexpr Int32 KILLER2 = 300000;
+constexpr Int32 NONE = -8000000;
+
+}
 
 }

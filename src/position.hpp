@@ -20,33 +20,11 @@
 
 namespace Clownfish {
 
-enum class GameResult {
-    WIN,
-    LOSS,
-    DRAW,
-    NONE
-};
-
-enum class GameResultReason {
-    CHECKMATE,
-    STALEMATE,
-    INSUFFICIENT_MATERIAL,
-    THREEFOLD_REPETITION,
-    FIFTY_MOVE_RULE,
-    NONE
-};
-
-enum class CheckType {
-    DIRECT,
-    DISCOVERED,
-    NONE
-};
-
 class Position {
 public:
     class CastlingRights {
     public:
-        enum class CastlingSide : U8 {
+        enum class CastlingSide : UInt8 {
             WHITE_KINGSIDE = 1 << 0,
             WHITE_QUEENSIDE = 1 << 1,
             BLACK_KINGSIDE = 1 << 2,
@@ -59,14 +37,14 @@ public:
         static constexpr CastlingSide BLACK_QUEENSIDE = CastlingSide::BLACK_QUEENSIDE;
 
         constexpr CastlingRights() noexcept : rights_(0) {}
-        constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<U8>(side)) {}
-        constexpr CastlingRights(U8 rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
+        constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<UInt8>(side)) {}
+        constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
 
         constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
         constexpr operator int() const noexcept { return static_cast<int>(rights_); }
 
-        constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<U8>(side); }
-        constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<U8>(side)) != 0; }
+        constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<UInt8>(side); }
+        constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
 
         constexpr bool get(Color color) const noexcept {
             assert(color != Color::NONE);
@@ -79,7 +57,7 @@ public:
 
         constexpr void clear() noexcept { rights_ = 0; }
 
-        constexpr void clear(CastlingSide side) noexcept { rights_ &= ~static_cast<U8>(side); }
+        constexpr void clear(CastlingSide side) noexcept { rights_ &= ~static_cast<UInt8>(side); }
 
         constexpr void clear(Color color) noexcept {
             assert(color != Color::NONE);
@@ -95,7 +73,7 @@ public:
         constexpr bool empty() const noexcept { return rights_ == 0; }
 
         constexpr int hash() const noexcept { return static_cast<int>(rights_); }
-        static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<U8>(side)); }
+        static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<UInt8>(side)); }
 
         static constexpr Color color(CastlingSide side) noexcept {
             if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::WHITE_QUEENSIDE) {
@@ -114,7 +92,7 @@ public:
 
         static constexpr CastlingSide closestSide(Square square, Square kingSquare, Color color) noexcept {
             assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
-            U8 shift = 0;
+            UInt8 shift = 0;
             if (color == Color::BLACK) {
                 shift = 2;
             }
@@ -148,10 +126,10 @@ public:
             }
         }
 
-        constexpr U8 internal() const noexcept { return rights_; }
+        constexpr UInt8 internal() const noexcept { return rights_; }
 
     private:
-        U8 rights_;
+        UInt8 rights_;
     };
 
     static constexpr const std::string_view FEN_STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -275,8 +253,8 @@ public:
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
         }
 
-        halfmoveClock_ = static_cast<U16>(std::stoi(std::string(halfmoves)));
-        plies_ = static_cast<U16>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
+        halfmoveClock_ = static_cast<UInt16>(std::stoi(std::string(halfmoves)));
+        plies_ = static_cast<UInt16>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
         assert(hash_ == zobrist());
 
@@ -345,13 +323,13 @@ public:
         return str;
     }
 
-    constexpr U64 hash() const noexcept { return hash_; }
+    constexpr UInt64 hash() const noexcept { return hash_; }
     constexpr CastlingRights castlingRights() const noexcept { return castlingRights_; }
     constexpr Square enPassantSquare() const noexcept { return enPassantSquare_; }
     constexpr Color sideToMove() const noexcept { return sideToMove_; }
-    constexpr U16 halfmoveClock() const noexcept { return halfmoveClock_; }
-    constexpr U16 pliesFromNull() const noexcept { return pliesFromNull_; }
-    constexpr U32 fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
+    constexpr UInt16 halfmoveClock() const noexcept { return halfmoveClock_; }
+    constexpr UInt16 pliesFromNull() const noexcept { return pliesFromNull_; }
+    constexpr UInt32 fullMoveNumber() const noexcept { return plies_ / 2 + 1; }
 
     constexpr USize depth() const noexcept { return depth_; }
 
@@ -405,7 +383,7 @@ public:
             for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
                 const BoardState &state = stateHistory_[depth_ - i - 1];
                 if (state.hash == hash_) {
-                    repetitionPly_ = static_cast<U16>(i);
+                    repetitionPly_ = static_cast<UInt16>(i);
                     repetitions_ = state.repetitions + 1;
                     break;
                 }
@@ -616,8 +594,8 @@ public:
         depth_--;
     }
 
-    constexpr U64 zobrist() const noexcept {
-        U64 key = 0ULL;
+    constexpr UInt64 zobrist() const noexcept {
+        UInt64 key = 0ULL;
 
         Bitboard pieces = occupied();
         while (pieces) {
@@ -638,8 +616,8 @@ public:
         return key;
     }
 
-    U64 zobristAfter(const Move move) const noexcept {
-        U64 key = hash_;
+    UInt64 zobristAfter(const Move move) const noexcept {
+        UInt64 key = hash_;
 
         key ^= Zobrist::sideToMove();
 
@@ -794,7 +772,7 @@ public:
         return (pieceAt(move.to()) != Piece::NONE && move.type() != MoveType::CASTLING) || move.type() == MoveType::EN_PASSANT;
     }
 
-    constexpr CheckType isCheck(const Move move) const noexcept {
+    constexpr bool isCheck(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         const auto findSniper = [this](Square kingSq, Bitboard occ) {
             const Bitboard bishops = Attacks::bishop(kingSq, occ) & (pieces(PieceType::BISHOP, sideToMove_) | pieces(PieceType::QUEEN, sideToMove_));
@@ -824,7 +802,7 @@ public:
         }
 
         if (checks & toBitboard) {
-            return CheckType::DIRECT;
+            return true;
         }
 
         const Bitboard fromBitboard = Bitboard(from);
@@ -833,14 +811,14 @@ public:
         Bitboard sniper = findSniper(kingSq, occ);
         if (sniper) {
             if (!(Attacks::between(kingSq, sniper.lsb()) & toBitboard) || move.type() == MoveType::CASTLING) {
-                return CheckType::DISCOVERED;
+                return true;
             } else {
-                return CheckType::NONE;
+                return false;
             }
         }
 
         if (move.type() == MoveType::NORMAL) {
-            return CheckType::NONE;
+            return false;
         } else if (move.type() == MoveType::PROMOTION) {
             Bitboard attacks = 0ULL;
             if (move.promotion() == PieceType::KNIGHT) {
@@ -855,28 +833,28 @@ public:
                 assert(false);
             }
             if (attacks & Bitboard(kingSq)) {
-                return CheckType::DIRECT;
+                return true;
             } else {
-                return CheckType::NONE;
+                return false;
             }
         } else if (move.type() == MoveType::EN_PASSANT) {
             Square captureSq = Square(to.file(), from.rank());
             if (findSniper(kingSq, (occ ^ Bitboard(captureSq)) | toBitboard)) {
-                return CheckType::DISCOVERED;
+                return true;
             } else {
-                return CheckType::NONE;
+                return false;
             }
         } else if (move.type() == MoveType::CASTLING) {
             const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             if (Attacks::rook(kingSq, occ) & Bitboard(rookTo)) {
-                return CheckType::DISCOVERED;
+                return true;
             } else {
-                return CheckType::NONE;
+                return false;
             }
         } else {
             assert(false);
-            return CheckType::NONE;
+            return false;
         }
     }
 
@@ -885,15 +863,15 @@ public:
         return static_cast<bool>(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
     }
 
-    bool repetition3Fold(I32 searchPly) const noexcept { return repetitions_ > 1 || (repetitions_ == 1 && repetitionPly_ < searchPly); }
+    bool repetition3Fold(Int32 searchPly) const noexcept { return repetitions_ > 1 || (repetitions_ == 1 && repetitionPly_ < searchPly); }
 
-    bool upcomingRepetition(I32 searchPly) const noexcept {
+    bool upcomingRepetition(Int32 searchPly) const noexcept {
         if (depth_ < 3) {
             return false;
         }
 
-        U64 originalHash = hash_;
-        U64 diff = originalHash ^ stateHistory_[depth_ - 1].hash ^ Zobrist::sideToMove();
+        UInt64 originalHash = hash_;
+        UInt64 diff = originalHash ^ stateHistory_[depth_ - 1].hash ^ Zobrist::sideToMove();
 
         USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
         for (USize i = 2; i <= reversible && depth_ >= i + 1; i += 2) {
@@ -903,14 +881,14 @@ public:
                 continue;
             }
 
-            U64 moveHash = originalHash ^ state.hash;
+            UInt64 moveHash = originalHash ^ state.hash;
             const Move move = CuckooTable::probe(moveHash);
             if (move == Move::NULL_MOVE) {
                 continue;
             }
 
             if (!((Attacks::between(move.from(), move.to()) ^ Bitboard(move.to())) & occupied())) {
-                if (searchPly > static_cast<I32>(i)) {
+                if (searchPly > static_cast<Int32>(i)) {
                     return true;
                 }
 
@@ -924,7 +902,7 @@ public:
         return false;
     }
 
-    constexpr bool halfMoveDraw(const MoveList &moveList) const noexcept { return halfmoveClock_ >= 100 && !(check() && moveList.empty()); }
+    constexpr bool halfMoveDraw(bool noMoves) const noexcept { return halfmoveClock_ >= 100 && !(check() && noMoves); }
 
     constexpr bool insufficientMaterial() const noexcept {
         const int count = occupied().count();
@@ -960,55 +938,34 @@ public:
         return false;
     }
 
-    constexpr bool draw(const MoveList &moveList, I32 searchPly) const noexcept {
-        return halfMoveDraw(moveList) || insufficientMaterial() || repetition3Fold(searchPly);
-    }
-
-    constexpr std::pair<GameResultReason, GameResult> gameOver(const MoveList &moveList, I32 searchPly) const noexcept {
-        if (moveList.empty()) {
-            if (check()) {
-                return std::make_pair(GameResultReason::CHECKMATE, GameResult::LOSS);
-            }
-            return std::make_pair(GameResultReason::STALEMATE, GameResult::DRAW);
-        }
-
-        if (halfMoveDraw(moveList)) {
-            return std::make_pair(GameResultReason::FIFTY_MOVE_RULE, GameResult::DRAW);
-        }
-        if (insufficientMaterial()) {
-            return std::make_pair(GameResultReason::INSUFFICIENT_MATERIAL, GameResult::DRAW);
-        }
-        if (repetition3Fold(searchPly)) {
-            return std::make_pair(GameResultReason::THREEFOLD_REPETITION, GameResult::DRAW);
-        }
-
-        return std::make_pair(GameResultReason::NONE, GameResult::NONE);
+    constexpr bool draw(Int32 searchPly, bool noMoves) const noexcept {
+        return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(searchPly);
     }
 
 private:
     struct BoardState {
-        U64 hash;
+        UInt64 hash;
         CastlingRights castlingRights;
         Square enPassantSquare;
-        U16 halfmoveClock;
-        U16 pliesFromNull;
-        U16 repetitionPly;
-        U8 repetitions;
+        UInt16 halfmoveClock;
+        UInt16 pliesFromNull;
+        UInt16 repetitionPly;
+        UInt8 repetitions;
         Piece capturedPiece;
     };
 
     std::array<BoardState, MAX_POSITION_DEPTH> stateHistory_;
     USize depth_;
 
-    U64 hash_;
+    UInt64 hash_;
     CastlingRights castlingRights_;
     Square enPassantSquare_;
     Color sideToMove_;
-    U16 halfmoveClock_;
-    U16 pliesFromNull_;
-    U16 repetitionPly_;
-    U8 repetitions_;
-    U16 plies_;
+    UInt16 halfmoveClock_;
+    UInt16 pliesFromNull_;
+    UInt16 repetitionPly_;
+    UInt8 repetitions_;
+    UInt16 plies_;
 
     std::array<Bitboard, 6> pieceBitboards_;
     std::array<Bitboard, 2> occupancyBitboards_;

@@ -11,15 +11,15 @@
 
 namespace Clownfish {
 
-// FIXME: replace with Evaluate
+// FIXME: replace with Eval
 // https://github.com/andrewharabor/simPLY_chess/blob/main/src/simPLY_chess.py
 class SimPLYChessEval {
 
 public:
-    static I32 evaluate(const Position &position) noexcept {
-        static constexpr I32 colorMultipliers[2] = {1, -1};
+    static Int32 evaluate(const Position &position) noexcept {
+        static constexpr Int32 colorMultipliers[2] = {1, -1};
 
-        I32 scores[2] = {0, 0};
+        Int32 scores[2] = {0, 0};
         Square kingSquares[2] = {position.kingSquare(Color::WHITE), position.kingSquare(Color::BLACK)};
         for (int i = 0; i < 64; i++) {
             const Square square = Square(i);
@@ -38,7 +38,7 @@ public:
                 }
             }
         }
-        const I32 mopUp = floorDiv(MOP_UP_VALUE * (14 - Square::manhattanDistance(kingSquares[0], kingSquares[1])), 14);
+        const Int32 mopUp = floorDiv(MOP_UP_VALUE * (14 - Square::manhattanDistance(kingSquares[0], kingSquares[1])), 14);
         if (scores[1] > 0) {
             scores[1] += mopUp;
         } else if (scores[1] < 0) {
@@ -48,12 +48,12 @@ public:
     }
 
 private:
-    static constexpr I32 PIECE_VALUES[2][6] = {
+    static constexpr Int32 PIECE_VALUES[2][6] = {
             {100, 411, 445, 582, 1250, 0},
             {115, 343, 362, 624, 1141, 0}
     };
 
-    static constexpr I32 PIECE_TABLES[2][6][64] = {
+    static constexpr Int32 PIECE_TABLES[2][6][64] = {
         {
             { 0, 0, 0, 0, 0, 0, 0, 0, 120, 163, 74, 116, 83, 154, 41, -13, -7, 9, 32, 38, 79, 68, 30, -24, -17, 16, 7, 26, 28, 15, 21, -28, -33, -2, -6, 20, 26, 7, 12, -30, -32, -5, -5, -12, 4, 4, 40, -15, -43, -1, -24, -33, -23, 29, 46, -27, 0, 0, 0, 0, 0, 0, 0, 0 },
             { -204, -109, -41, -60, 74, -118, -18, -130, -89, -50, 88, 44, 28, 76, 9, -21, -57, 73, 45, 79, 102, 157, 89, 54, -11, 21, 23, 65, 45, 84, 22, 27, -16, 5, 20, 16, 34, 23, 26, -10, -28, -11, 15, 12, 23, 21, 30, -20, -35, -65, -15, -4, -1, 22, -17, -23, -128, -26, -71, -40, -21, -34, -23, -28 },
@@ -72,29 +72,29 @@ private:
         }
     };
 
-    static constexpr I32 PIECE_TROPISM_VALUES[2][6] = {
+    static constexpr Int32 PIECE_TROPISM_VALUES[2][6] = {
         {20, 82, 89, 116, 250, 0},
         {38, 114, 120, 208, 380, 0}
     };
 
-    static constexpr I32 MOP_UP_VALUE = 230;
+    static constexpr Int32 MOP_UP_VALUE = 230;
 
-    static constexpr I32 PIECE_PHASES[6] = {0, 1, 1, 2, 4, 0};
-    static constexpr I32 TOTAL_PHASE = 24;
+    static constexpr Int32 PIECE_PHASES[6] = {0, 1, 1, 2, 4, 0};
+    static constexpr Int32 TOTAL_PHASE = 24;
 
-    static I32 phase(const Position &position) noexcept {
-        I32 phase = TOTAL_PHASE;
+    static Int32 phase(const Position &position) noexcept {
+        Int32 phase = TOTAL_PHASE;
         for (const PieceType pieceType : {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
             phase -= position.pieces(pieceType).count() * PIECE_PHASES[static_cast<int>(pieceType)];
         }
         return floorDiv(phase * 256 + TOTAL_PHASE / 2, TOTAL_PHASE);
     }
 
-    static I32 interpolate(I32 midgameScore, I32 endgameScore, I32 phase) noexcept {
+    static Int32 interpolate(Int32 midgameScore, Int32 endgameScore, Int32 phase) noexcept {
         return floorDiv((midgameScore * (256 - phase)) + (endgameScore * phase), 256);
     }
 
-    static constexpr I32 floorDiv(I32 a, I32 b) noexcept {
+    static constexpr Int32 floorDiv(Int32 a, Int32 b) noexcept {
         if ((a < 0) != (b < 0) && a % b != 0) {
             return a / b - 1;
         } else {

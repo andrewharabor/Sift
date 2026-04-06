@@ -17,7 +17,7 @@ using namespace Clownfish;
 struct TestCase {
     std::string fen;
     int depth;
-    U64 expectedNodes;
+    UInt64 expectedNodes;
 };
 
 template<MoveGenType MGT = MoveGenType::ALL>
@@ -25,9 +25,9 @@ void benchmark(const TestCase &testCase) {
     Position position = Position(testCase.fen);
 
     const auto start = std::chrono::high_resolution_clock::now();
-    const U64 nodes = Benchmark::perft<MGT>(position, testCase.depth);
+    const UInt64 nodes = Benchmark::perft<MGT>(position, testCase.depth);
     const auto end = std::chrono::high_resolution_clock::now();
-    const U64 duration = static_cast<U64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
+    const UInt64 duration = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
     std::string nodeLabel = "";
     if constexpr (MGT == MoveGenType::ALL) {

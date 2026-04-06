@@ -9,30 +9,30 @@ namespace Clownfish {
 
 class Zobrist {
 public:
-    static constexpr U64 piece(Piece piece, Square square) noexcept {
+    static constexpr UInt64 piece(Piece piece, Square square) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
         return RANDOM_HASH_VALUES[PIECE_HASHES[piece] * 64 + square.index()];
     }
 
-    static constexpr U64 enPassant(File file) noexcept {
+    static constexpr UInt64 enPassant(File file) noexcept {
         assert(file != File::NONE);
         return RANDOM_HASH_VALUES[772 + file];
     }
 
-    static constexpr U64 castling(int castlingRights) noexcept {
+    static constexpr UInt64 castling(int castlingRights) noexcept {
         assert(castlingRights >= 0 && castlingRights < 16);
         return CASTLING_HASHES[castlingRights];
     }
 
-    static constexpr U64 castlingIndex(int castlingIndex) noexcept {
+    static constexpr UInt64 castlingIndex(int castlingIndex) noexcept {
         assert(castlingIndex >= 0 && castlingIndex < 4);
         return RANDOM_HASH_VALUES[768 + castlingIndex];
     }
 
-    static constexpr U64 sideToMove() noexcept { return RANDOM_HASH_VALUES[780]; }
+    static constexpr UInt64 sideToMove() noexcept { return RANDOM_HASH_VALUES[780]; }
 
 private:
-    static constexpr U64 RANDOM_HASH_VALUES[781] = {
+    static constexpr UInt64 RANDOM_HASH_VALUES[781] = {
         0x9D39247E33776D41, 0x2AF7398005AAA5C7, 0x44DB015024623547, 0x9C15F73E62A76AE2, 0x75834465489C0C89,
         0x3290AC3A203001BF, 0x0FBBAD1F61042279, 0xE83A908FF2FB60CA, 0x0D7E765D58755C10, 0x1A083822CEAFE02D,
         0x9605D5F0E25EC3B0, 0xD021FF5CD13A2ED5, 0x40BDF15D4A672E32, 0x011355146FD56395, 0x5DB4832046F3D9E5,
@@ -194,7 +194,7 @@ private:
 
     static constexpr int PIECE_HASHES[12] = {1, 3, 5, 7, 9, 11, 0 , 2, 4, 6, 8, 10};
 
-    static constexpr U64 CASTLING_HASHES[16] = {
+    static constexpr UInt64 CASTLING_HASHES[16] = {
         0x0000000000000000ULL, 0x31D71DCE64B2C310ULL,  0xF165B587DF898190ULL, 0xC0B2A849BB3B4280ULL,
         0xA57E6339DD2CF3A0ULL, 0x94A97EF7B99E30B0ULL, 0x541BD6BE02A57230ULL, 0x65CCCB706617B120ULL,
         0x1EF6E6DBB1961EC9ULL, 0x2F21FB15D524DDD9ULL, 0xEF93535C6E1F9F59ULL, 0xDE444E920AAD5C49ULL,

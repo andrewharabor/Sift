@@ -14,7 +14,7 @@
 
 namespace Clownfish {
 
-enum class PieceFlag : U8 {
+enum class PieceFlag : UInt8 {
     PAWN = 1 << 0,
     KNIGHT = 1 << 1,
     BISHOP = 1 << 2,
@@ -25,14 +25,14 @@ enum class PieceFlag : U8 {
 };
 
 constexpr bool operator&(PieceFlag left, PieceFlag right) noexcept {
-    return (static_cast<U8>(left) & static_cast<U8>(right)) != 0;
+    return (static_cast<UInt8>(left) & static_cast<UInt8>(right)) != 0;
 }
 
 constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
-    return static_cast<PieceFlag>(static_cast<U8>(left) | static_cast<U8>(right));
+    return static_cast<PieceFlag>(static_cast<UInt8>(left) | static_cast<UInt8>(right));
 }
 
-enum class MoveGenType : U8 {
+enum class MoveGenType : UInt8 {
     ALL,
     CAPTURES,
     QUIET,

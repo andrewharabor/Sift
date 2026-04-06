@@ -20,7 +20,7 @@ public:
         keys_.fill(0);
         moves_.fill(Move::NULL_MOVE);
 
-        [[maybe_unused]] U32 count = 0;
+        [[maybe_unused]] UInt32 count = 0;
         for (PieceType pieceType : {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN, PieceType::KING}) {
             for (Color color : {Color::WHITE, Color::BLACK}) {
                 for (int i = 0; i < 63; i++) {
@@ -45,9 +45,9 @@ public:
                         }
 
                         Move move = Move(from, to, MoveType::NORMAL);
-                        U64 hash = Zobrist::piece(Piece(pieceType, color), from) ^ Zobrist::piece(Piece(pieceType, color), to) ^ Zobrist::sideToMove();
+                        UInt64 hash = Zobrist::piece(Piece(pieceType, color), from) ^ Zobrist::piece(Piece(pieceType, color), to) ^ Zobrist::sideToMove();
 
-                        U64 index = hash1(hash);
+                        UInt64 index = hash1(hash);
                         while (true) {
                             std::swap(keys_[index], hash);
                             std::swap(moves_[index], move);
@@ -70,8 +70,8 @@ public:
         assert(count == 3668);
     }
 
-    static constexpr Move probe(U64 key) noexcept {
-        U64 index = hash1(key);
+    static constexpr Move probe(UInt64 key) noexcept {
+        UInt64 index = hash1(key);
         if (keys_[index] == key) {
             return moves_[index];
         }
@@ -86,11 +86,11 @@ public:
 
 private:
     static constexpr USize TABLE_SIZE = 8192;
-    static inline std::array<U64, TABLE_SIZE> keys_;
+    static inline std::array<UInt64, TABLE_SIZE> keys_;
     static inline std::array<Move, TABLE_SIZE> moves_;
 
-    static constexpr U64 hash1(U64 value) noexcept { return value % TABLE_SIZE; }
-    static constexpr U64 hash2(U64 value) noexcept { return (value >> 16) % TABLE_SIZE; }
+    static constexpr UInt64 hash1(UInt64 value) noexcept { return value % TABLE_SIZE; }
+    static constexpr UInt64 hash2(UInt64 value) noexcept { return (value >> 16) % TABLE_SIZE; }
 };
 
 }

@@ -11,7 +11,7 @@
 
 namespace Clownfish {
 
-enum class MoveType : U16 {
+enum class MoveType : UInt16 {
     NORMAL = 0,
     PROMOTION = 1 << 14,
     EN_PASSANT = 2 << 14,
@@ -20,26 +20,26 @@ enum class MoveType : U16 {
 
 class Move {
 public:
-    constexpr static U16 NULL_MOVE = 0;
+    constexpr static UInt16 NULL_MOVE = 0;
 
     constexpr Move() noexcept : move_(NULL_MOVE) {}
-    constexpr Move(U16 move) noexcept : move_(move) {}
+    constexpr Move(UInt16 move) noexcept : move_(move) {}
 
     constexpr Move(Square from, Square to, MoveType type = MoveType::NORMAL, PieceType promotion = PieceType::NONE) noexcept : move_(NULL_MOVE) {
         assert(from != Square::NONE && to != Square::NONE);
 
-        const U16 typeBits = static_cast<U16>(type);
-        U16 promotionBits = 0;
+        const UInt16 typeBits = static_cast<UInt16>(type);
+        UInt16 promotionBits = 0;
         if (type == MoveType::PROMOTION) {
             assert(promotion >= PieceType(PieceType::KNIGHT) && promotion <= PieceType(PieceType::QUEEN));
-            promotionBits = static_cast<U16>((promotion - PieceType(PieceType::KNIGHT)) << 12);
+            promotionBits = static_cast<UInt16>((promotion - PieceType(PieceType::KNIGHT)) << 12);
         } else {
             assert(promotion == PieceType::NONE);
         }
 
-        const U16 fromBits = static_cast<U16>(from.index() << 6);
-        const U16 toBits = static_cast<U16>(to.index());
-        move_ = static_cast<U16>(typeBits | promotionBits | fromBits | toBits);
+        const UInt16 fromBits = static_cast<UInt16>(from.index() << 6);
+        const UInt16 toBits = static_cast<UInt16>(to.index());
+        move_ = static_cast<UInt16>(typeBits | promotionBits | fromBits | toBits);
     }
 
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
@@ -57,10 +57,10 @@ public:
         return PieceType(((move_ >> 12) & 3) + PieceType(PieceType::KNIGHT));
     }
 
-    constexpr U16 internal() const noexcept { return move_; }
+    constexpr UInt16 internal() const noexcept { return move_; }
 
 private:
-    U16 move_;
+    UInt16 move_;
 };
 
 class MoveList {

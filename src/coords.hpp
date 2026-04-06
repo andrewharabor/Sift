@@ -24,7 +24,7 @@ namespace Clownfish {
 
 class File {
 public:
-    enum class FileEnum : U8 {
+    enum class FileEnum : UInt8 {
         FILE_A,
         FILE_B,
         FILE_C,
@@ -73,7 +73,7 @@ private:
 
 class Rank {
 public:
-    enum class RankEnum : U8 {
+    enum class RankEnum : UInt8 {
         RANK_1,
         RANK_2,
         RANK_3,
@@ -189,7 +189,7 @@ private:
 
 class Square {
 public:
-    enum class SquareEnum : U8 {
+    enum class SquareEnum : UInt8 {
         SQUARE_A1, SQUARE_B1, SQUARE_C1, SQUARE_D1, SQUARE_E1, SQUARE_F1, SQUARE_G1, SQUARE_H1,
         SQUARE_A2, SQUARE_B2, SQUARE_C2, SQUARE_D2, SQUARE_E2, SQUARE_F2, SQUARE_G2, SQUARE_H2,
         SQUARE_A3, SQUARE_B3, SQUARE_C3, SQUARE_D3, SQUARE_E3, SQUARE_F3, SQUARE_G3, SQUARE_H3,
@@ -301,30 +301,30 @@ public:
         return std::abs(square1.index() - square2.index());
     }
 
-    static constexpr I32 rankDistance(Square square1, Square square2) noexcept {
+    static constexpr Int32 rankDistance(Square square1, Square square2) noexcept {
         assert(square1 != Square::NONE && square2 != Square::NONE);
-        I32 distance = static_cast<I32>(square1.rank()) - static_cast<I32>(square2.rank());
+        Int32 distance = static_cast<Int32>(square1.rank()) - static_cast<Int32>(square2.rank());
         if (distance < 0) {
             distance = -distance;
         }
         return distance;
     }
 
-    static constexpr I32 fileDistance(Square square1, Square square2) noexcept {
+    static constexpr Int32 fileDistance(Square square1, Square square2) noexcept {
         assert(square1 != Square::NONE && square2 != Square::NONE);
-        I32 distance = static_cast<I32>(square1.file()) - static_cast<I32>(square2.file());
+        Int32 distance = static_cast<Int32>(square1.file()) - static_cast<Int32>(square2.file());
         if (distance < 0) {
             distance = -distance;
         }
         return distance;
     }
 
-    static constexpr I32 chebyshevDistance(Square square1, Square square2) noexcept {
+    static constexpr Int32 chebyshevDistance(Square square1, Square square2) noexcept {
         assert(square1 != Square::NONE && square2 != Square::NONE);
         return std::max(rankDistance(square1, square2), fileDistance(square1, square2));
     }
 
-    static constexpr I32 manhattanDistance(Square square1, Square square2) noexcept {
+    static constexpr Int32 manhattanDistance(Square square1, Square square2) noexcept {
         assert(square1 != Square::NONE && square2 != Square::NONE);
         return rankDistance(square1, square2) + fileDistance(square1, square2);
     }
