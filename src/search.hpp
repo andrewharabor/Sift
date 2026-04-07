@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "evaluate.hpp"
+#include "eval.hpp"
 #include "move-gen.hpp"
 #include "move-order.hpp"
 #include "move.hpp"
