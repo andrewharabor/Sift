@@ -563,3 +563,7 @@ private:
 };
 
 }
+
+
+
+// TODO: switch capture gen to noisy gen (generate promotions too)

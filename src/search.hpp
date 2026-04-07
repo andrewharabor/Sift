@@ -127,6 +127,8 @@ private:
     }
 
     Int32 search(USize ply, Int32 depth, Int32 alpha, Int32 beta, bool pvNode, bool cutNode) noexcept {
+        assert(Score::MIN <= alpha && alpha <= Score::MAX);
+        assert(Score::MIN <= beta && beta <= Score::MAX);
         assert(!(pvNode && cutNode));
 
         if (rootPly_ + 1 > selDepth_) {
@@ -145,6 +147,8 @@ private:
         bool inCheck = position_.check();
         bool excludedMove = searchStack_[ply].excludedMove != Move::NULL_MOVE;
 
+        searchStack_[ply].pv.clear();
+
         if (!rootNode && position_.halfmoveClock() >= 3 && alpha < 0 && position_.upcomingRepetition(rootPly_)) {
             alpha = Score::DRAW;
             if (alpha >= beta) {
@@ -161,8 +165,7 @@ private:
         }
 
         if (depth <= 0) {
-            // TODO: quiescence search
-            return Score::NONE;
+            return quiescenceSearch(ply, alpha, beta, pvNode);
         }
 
         TTableEntry tableEntry = TTableEntry();
@@ -198,11 +201,11 @@ private:
             }
         }
 
+        bool tablePV = pvNode || (tableHit && tableEntry.pv);
+
         searchStack_[ply + 1].killerMoves[0] = searchStack_[ply + 1].killerMoves[1] = Move::NULL_MOVE;
 
         // TODO: more pruning
-
-        MoveOrder moveOrder = MoveOrder(position_, tableEntry.move, searchStack_[ply].killerMoves);
 
         searchStack_[ply + 1].failHighCount = 0;
 
@@ -214,6 +217,8 @@ private:
 
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
+
+        MoveOrder moveOrder = MoveOrder(position_, tableEntry.move, searchStack_[ply].killerMoves);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -324,8 +329,142 @@ private:
         if (!excludedMove) {
             // TODO: history update
 
-            tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, depth, pvNode, bound);
+            tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, depth, tablePV, bound);
         }
+
+        return bestScore;
+    }
+
+    Int32 quiescenceSearch(USize ply, Int32 alpha, Int32 beta, bool pvNode) noexcept {
+        assert(Score::MIN <= alpha && alpha <= Score::MAX);
+        assert(Score::MIN <= beta && beta <= Score::MAX);
+
+        if (rootPly_ + 1 > selDepth_) {
+            selDepth_ = rootPly_ + 1;
+        }
+
+        if (position_.insufficientMaterial()) {
+            return Score::DRAW;
+        }
+
+        searchStack_[ply].pv.clear();
+
+        auto [tableEntry, tableHit] = tTable_.probe(position_.hash(), rootPly_);
+        bool tablePV = pvNode || (tableHit && tableEntry.pv);
+
+        if (tableHit && !pvNode && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
+            return tableEntry.score;
+        }
+
+        bool inCheck = position_.check();
+        Int32 rawStaticEval = Score::NONE;
+
+        if (inCheck) {
+            searchStack_[ply].staticEval = Score::NONE;
+            searchStack_[ply].eval = Score::NONE;
+        } else {
+            if (tableHit) {
+                rawStaticEval = tableEntry.staticEval;
+            } else {
+                rawStaticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
+            }
+
+            // TODO: history stuff
+
+            searchStack_[ply].staticEval = rawStaticEval;
+            searchStack_[ply].eval = searchStack_[ply].staticEval;
+            if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= searchStack_[ply].eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= searchStack_[ply].eval))) {
+                searchStack_[ply].eval = tableEntry.score;
+            }
+        }
+
+        if (searchStack_[ply].eval >= beta) {
+            if (!tableHit) {
+                tTable_.write(position_.hash(), rootPly_, searchStack_[ply].eval, rawStaticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
+            }
+            return searchStack_[ply].eval;
+        }
+
+        if (searchStack_[ply].eval > alpha) {
+            alpha = searchStack_[ply].eval;
+        }
+
+        if (rootPly_ >= MAX_PLY) {
+            return alpha;
+        }
+
+        // TODO: futility =
+
+        TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
+
+        Int32 movesTried = 0;
+
+        Move bestMove = Move::NULL_MOVE;
+        Int32 bestScore = Score::NONE;
+
+        if (inCheck) {
+            bestScore = Score::MIN;
+        } else {
+            bestScore = searchStack_[ply].eval;
+        }
+
+        MoveOrder moveOrder = [&]() {
+            if (inCheck) {
+                return MoveOrder(position_, tableEntry.move, searchStack_[ply].killerMoves);
+            } else {
+                return MoveOrder(position_, tableEntry.move);
+            }
+        }();
+
+        ScoredMove scoredMove;
+        while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
+            // TODO: try this:
+            // if (!inCheck && movesTried >= 2) {
+            //     break;
+            // }
+
+            auto [move, moveScore] = scoredMove;
+
+            // TODO: SEE and futility pruning
+
+            makeMove(ply, move);
+            movesTried++;
+
+            Int32 score = -quiescenceSearch(ply + 1, -beta, -alpha, pvNode);
+
+            unmakeMove(ply);
+
+            if (score > bestScore) {
+                bestScore = score;
+
+                if (bestScore > alpha) {
+                    alpha = bestScore;
+                    bestMove = move;
+
+                    searchStack_[ply].pv.clear();
+                    searchStack_[ply].pv.add(move);
+                    for (Move pvMove : searchStack_[ply + 1].pv) {
+                        searchStack_[ply].pv.add(pvMove);
+                    }
+                }
+
+                if (bestScore >= beta) {
+                    bound = TTableEntry::Bound::LOWER;
+                    break;
+                }
+            }
+
+            // TODO: try this
+            // if (!position_.isCapture(move) && inCheck && bestScore > Score::LOSS) {
+            //     break;
+            // }
+        }
+
+        if (inCheck && movesTried == 0) {
+            return Score::matedIn(rootPly_);
+        }
+
+        tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, 0, tablePV, bound);
 
         return bestScore;
     }

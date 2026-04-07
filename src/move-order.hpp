@@ -21,6 +21,8 @@ class MoveOrder {
 public:
 
     constexpr MoveOrder(const Position &position, Move hashMove, const std::array<Move, 2> &killerMoves) noexcept : position_(position), hashMove_(hashMove), killerMoves_(killerMoves), moveIndex_(0), firstQuietIndex_(0) {
+        // FIXME
+
         MoveGen::legal(position_, moves_);
         auto compare = [this](const Move &move1, const Move &move2) {
             return static_cast<int>(position_.isCapture(move1)) > static_cast<int>(position_.isCapture(move2));
@@ -29,11 +31,13 @@ public:
     }
 
     constexpr MoveOrder(const Position &position, Move hashMove) noexcept : position_(position), hashMove_(hashMove), moveIndex_(0) {
-        // TODO
+        // FIXME
+
+        MoveGen::legal<MoveGenType::CAPTURES>(position_, moves_);
     }
 
     ScoredMove next() noexcept {
-        // TODO
+        // FIXME
 
         if (moveIndex_ == 0 && hashMove_ != Move::NULL_MOVE) {
             return ScoredMove(hashMove_, MoveScore::HASH);
