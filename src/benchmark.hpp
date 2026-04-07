@@ -7,6 +7,7 @@
 
 
 namespace Clownfish {
+
 class Benchmark {
 public:
     template<MoveGenType MGT = MoveGenType::ALL>

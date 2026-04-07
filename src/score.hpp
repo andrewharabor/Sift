@@ -36,8 +36,8 @@ constexpr Int32 matedIn(Int32 ply) noexcept { return MATED + ply; }
 namespace MoveScore {
 
 constexpr Int32 HASH = 10000000;
-constexpr Int32 GOOD_CAPTURE = 400000;
-constexpr Int32 BAD_CAPTURE = GOOD_CAPTURE - 50001;
+constexpr Int32 GOOD_NOISY = 400000;
+constexpr Int32 BAD_NOISY = GOOD_NOISY - 50001;
 constexpr Int32 KILLER1 = 300001;
 constexpr Int32 KILLER2 = 300000;
 constexpr Int32 NONE = -8000000;

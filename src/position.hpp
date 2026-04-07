@@ -365,7 +365,7 @@ public:
         assert(move != Move::NULL_MOVE);
         assert(pieceAt(move.from()).color() == sideToMove_);
 
-        const bool capture = isCapture(move);
+        const bool captureMove = capture(move);
         const Piece capturedPiece = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
@@ -395,7 +395,7 @@ public:
             enPassantSquare_ = Square::NONE;
         }
 
-        if (capture) {
+        if (captureMove) {
             halfmoveClock_ = 0;
 
             if (move.type() != MoveType::EN_PASSANT) {
@@ -629,11 +629,11 @@ public:
             return key;
         }
 
-        const bool capture = (pieceAt(move.to()) != Piece::NONE) && (move.type() != MoveType::CASTLING);
+        const bool captureMove = (pieceAt(move.to()) != Piece::NONE) && (move.type() != MoveType::CASTLING);
         const Piece captured = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
-        if (capture) {
+        if (captureMove) {
             key ^= Zobrist::piece(captured, move.to());
 
             if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
@@ -765,14 +765,24 @@ public:
         return attacks & occupied();
     }
 
-    constexpr bool check() const noexcept { return attacked(kingSquare(sideToMove_), ~sideToMove_); }
+    constexpr bool inCheck() const noexcept { return attacked(kingSquare(sideToMove_), ~sideToMove_); }
 
-    constexpr bool isCapture(const Move move) const noexcept {
+    constexpr bool capture(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         return (pieceAt(move.to()) != Piece::NONE && move.type() != MoveType::CASTLING) || move.type() == MoveType::EN_PASSANT;
     }
 
-    constexpr bool isCheck(const Move move) const noexcept {
+    constexpr bool noisy(const Move move) const noexcept {
+        assert(move != Move::NULL_MOVE);
+        return capture(move) || move.type() == MoveType::PROMOTION;
+    }
+
+    constexpr bool quiet(const Move move) const noexcept {
+        assert(move != Move::NULL_MOVE);
+        return !noisy(move);
+    }
+
+    constexpr bool check(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         const auto findSniper = [this](Square kingSq, Bitboard occ) {
             const Bitboard bishops = Attacks::bishop(kingSq, occ) & (pieces(PieceType::BISHOP, sideToMove_) | pieces(PieceType::QUEEN, sideToMove_));
@@ -902,7 +912,7 @@ public:
         return false;
     }
 
-    constexpr bool halfMoveDraw(bool noMoves) const noexcept { return halfmoveClock_ >= 100 && !(check() && noMoves); }
+    constexpr bool halfMoveDraw(bool noMoves) const noexcept { return halfmoveClock_ >= 100 && !(inCheck() && noMoves); }
 
     constexpr bool insufficientMaterial() const noexcept {
         const int count = occupied().count();

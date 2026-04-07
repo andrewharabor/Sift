@@ -25,7 +25,7 @@ public:
 
         MoveGen::legal(position_, moves_);
         auto compare = [this](const Move &move1, const Move &move2) {
-            return static_cast<int>(position_.isCapture(move1)) > static_cast<int>(position_.isCapture(move2));
+            return static_cast<int>(position_.noisy(move1)) > static_cast<int>(position_.noisy(move2));
         };
         moves_.sort(compare);
     }
@@ -33,7 +33,7 @@ public:
     constexpr MoveOrder(const Position &position, Move hashMove) noexcept : position_(position), hashMove_(hashMove), moveIndex_(0) {
         // FIXME
 
-        MoveGen::legal<MoveGenType::CAPTURES>(position_, moves_);
+        MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
     }
 
     ScoredMove next() noexcept {
@@ -60,8 +60,8 @@ public:
         } while (move == hashMove_ || move == killerMoves_[0] || move == killerMoves_[1]);
 
         Int32 score = 0;
-        if (position_.isCapture(move)) {
-            score = MoveScore::BAD_CAPTURE;
+        if (position_.noisy(move)) {
+            score = MoveScore::BAD_NOISY;
         }
 
         return ScoredMove(move, score);

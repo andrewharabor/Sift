@@ -34,9 +34,8 @@ constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
 
 enum class MoveGenType : UInt8 {
     ALL,
-    CAPTURES,
+    NOISY,
     QUIET,
-    CHECKS
 };
 
 class MoveGen {
@@ -98,24 +97,6 @@ public:
     }
 
     template<Color::ColorEnum C>
-    static Bitboard blockMask(const Position &position, Square enemyKingSquare, Bitboard friendlyOccupied, Bitboard enemyOccupied) {
-        static_assert(C != Color::NONE);
-
-        const Bitboard bishops = Attacks::bishop(enemyKingSquare, enemyOccupied) & (position.pieces(PieceType::BISHOP) | position.pieces(PieceType::QUEEN)) & friendlyOccupied;
-        const Bitboard rooks = Attacks::rook(enemyKingSquare, enemyOccupied) & (position.pieces(PieceType::ROOK) | position.pieces(PieceType::QUEEN)) & friendlyOccupied;
-        Bitboard snipers = bishops | rooks;
-        Bitboard mask = Bitboard();
-        while (snipers) {
-            const Square sniperSquare = Square(static_cast<int>(snipers.pop()));
-            const Bitboard possibleBlock = Attacks::between(enemyKingSquare, sniperSquare) ^ Bitboard(sniperSquare);
-            if ((possibleBlock & friendlyOccupied).count() == 1) {
-                mask |= possibleBlock;
-            }
-        }
-        return mask;
-    }
-
-    template<Color::ColorEnum C>
     static Bitboard attacked(const Position &position, Square kingSquare, Square enemyKingSquare, Bitboard occupied) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
@@ -155,35 +136,8 @@ public:
     }
 
 private:
-    struct KingSquares {
-        Square friendly;
-        Square enemy;
-    };
-
-    struct Occupied {
-        Bitboard all;
-        Bitboard friendly;
-        Bitboard enemy;
-    };
-
-    struct Masks {
-        Bitboard check;
-        Bitboard diagonalPins;
-        Bitboard orthogonalPins;
-        Bitboard blockers;
-        Bitboard attacked;
-    };
-
-    struct CheckSquares {
-        Bitboard pawn;
-        Bitboard knight;
-        Bitboard bishop;
-        Bitboard rook;
-        Bitboard queen;
-    };
-
     template<Color::ColorEnum C, MoveGenType MGT>
-    static void pawn(const Position &position, MoveList &moveList, const KingSquares &kingSquares, const Occupied &occupied, const Masks &masks, const CheckSquares &checkSquares) {
+    static void pawn(const Position &position, MoveList &moveList, Square kingSquare, Bitboard occupied, Bitboard enemyOccupied, Bitboard diagonalPins, Bitboard orthogonalPins, Bitboard checkMask) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
 
@@ -199,76 +153,56 @@ private:
         constexpr Bitboard FIRST_PUSH_RANK = Rank(Rank::RANK_3, COLOR);
 
         const Bitboard pawns = position.pieces(PieceType::PAWN, COLOR);
-        const Bitboard diagonalPawns = pawns & ~masks.orthogonalPins;
-        const Bitboard unpinnedDiagonal = diagonalPawns & ~masks.diagonalPins;
-        const Bitboard pinnedDiagonal = diagonalPawns & masks.diagonalPins;
+        const Bitboard diagonalPawns = pawns & ~orthogonalPins;
+        const Bitboard unpinnedDiagonal = diagonalPawns & ~diagonalPins;
+        const Bitboard pinnedDiagonal = diagonalPawns & diagonalPins;
 
-        Bitboard leftAttacks = Attacks::shift<UP_LEFT.internal()>(unpinnedDiagonal) | (Attacks::shift<UP_LEFT.internal()>(pinnedDiagonal) & masks.diagonalPins);
-        Bitboard rightAttacks = Attacks::shift<UP_RIGHT.internal()>(unpinnedDiagonal) | (Attacks::shift<UP_RIGHT.internal()>(pinnedDiagonal) & masks.diagonalPins);
-        leftAttacks &= occupied.enemy & masks.check;
-        rightAttacks &= occupied.enemy & masks.check;
+        Bitboard leftAttacks = Attacks::shift<UP_LEFT.internal()>(unpinnedDiagonal) | (Attacks::shift<UP_LEFT.internal()>(pinnedDiagonal) & diagonalPins);
+        Bitboard rightAttacks = Attacks::shift<UP_RIGHT.internal()>(unpinnedDiagonal) | (Attacks::shift<UP_RIGHT.internal()>(pinnedDiagonal) & diagonalPins);
+        leftAttacks &= enemyOccupied & checkMask;
+        rightAttacks &= enemyOccupied & checkMask;
 
-        const Bitboard orthogonalPawns = pawns & ~masks.diagonalPins;
-        const Bitboard unpinnedOrthogonal = orthogonalPawns & ~masks.orthogonalPins;
-        const Bitboard pinnedOrthogonal = orthogonalPawns & masks.orthogonalPins;
+        const Bitboard orthogonalPawns = pawns & ~diagonalPins;
+        const Bitboard unpinnedOrthogonal = orthogonalPawns & ~orthogonalPins;
+        const Bitboard pinnedOrthogonal = orthogonalPawns & orthogonalPins;
 
-        const Bitboard unpinnedSinglePush = Attacks::shift<UP.internal()>(unpinnedOrthogonal) & ~occupied.all;
-        const Bitboard pinnedSinglePush = Attacks::shift<UP.internal()>(pinnedOrthogonal) & ~occupied.all & masks.orthogonalPins;
+        const Bitboard unpinnedSinglePush = Attacks::shift<UP.internal()>(unpinnedOrthogonal) & ~occupied;
+        const Bitboard pinnedSinglePush = Attacks::shift<UP.internal()>(pinnedOrthogonal) & ~occupied & orthogonalPins;
 
-        Bitboard singlePush = (unpinnedSinglePush | pinnedSinglePush) & masks.check;
-        Bitboard doublePush = ((Attacks::shift<UP.internal()>(unpinnedSinglePush & FIRST_PUSH_RANK) & ~occupied.all) | (Attacks::shift<UP.internal()>(pinnedSinglePush & FIRST_PUSH_RANK) & ~occupied.all & masks.orthogonalPins)) & masks.check;
+        Bitboard singlePush = (unpinnedSinglePush | pinnedSinglePush) & checkMask;
+        Bitboard doublePush = ((Attacks::shift<UP.internal()>(unpinnedSinglePush & FIRST_PUSH_RANK) & ~occupied) | (Attacks::shift<UP.internal()>(pinnedSinglePush & FIRST_PUSH_RANK) & ~occupied & orthogonalPins)) & checkMask;
 
         if (pawns & BEFORE_PROMOTION_RANK) {
             Bitboard leftPromotions = leftAttacks & PROMOTION_RANK;
             Bitboard rightPromotions = rightAttacks & PROMOTION_RANK;
             Bitboard pushPromotion = singlePush & PROMOTION_RANK;
 
-            auto addPromotions = [&](Square from, Square to) {
-                if constexpr (MGT != MoveGenType::CHECKS) {
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                } else if (bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) {
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                } else {
-                    if (Bitboard(to) & checkSquares.knight) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
-                    }
-                    if ((Bitboard(to) & checkSquares.bishop) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.bishop)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
-                    }
-                    if ((Bitboard(to) & checkSquares.rook) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.rook)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
-                    }
-                    if ((Bitboard(to) & checkSquares.queen) || (Attacks::between(kingSquares.enemy, to) & Bitboard(from) & checkSquares.queen)) {
-                        moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
-                    }
-                }
-            };
-
-            if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CAPTURES || MGT == MoveGenType::CHECKS) {
+            if constexpr (MGT != MoveGenType::QUIET) {
                 while (leftPromotions) {
                     const Square to = Square(static_cast<int>(leftPromotions.pop()));
                     const Square from = to + DOWN_RIGHT;
-                    addPromotions(from, to);
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
                 }
 
                 while (rightPromotions) {
                     const Square to = Square(static_cast<int>(rightPromotions.pop()));
                     const Square from = to + DOWN_LEFT;
-                    addPromotions(from, to);
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
                 }
-            }
 
-            if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::QUIET || MGT == MoveGenType::CHECKS) {
                 while (pushPromotion) {
                     const Square to = Square(static_cast<int>(pushPromotion.pop()));
                     const Square from = to + DOWN;
-                    addPromotions(from, to);
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::BISHOP));
+                    moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::KNIGHT));
                 }
             }
         }
@@ -277,124 +211,103 @@ private:
         leftAttacks &= ~PROMOTION_RANK;
         rightAttacks &= ~PROMOTION_RANK;
 
-        auto addMove = [&](Square from, Square to) {
-            if constexpr (MGT != MoveGenType::CHECKS) {
-                moveList.add(Move(from, to));
-            } else if ((bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) || (Bitboard(to) & checkSquares.pawn)) {
-                moveList.add(Move(from, to));
-            }
-        };
-
-        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CAPTURES || MGT == MoveGenType::CHECKS) {
+        if constexpr (MGT != MoveGenType::QUIET) {
             while (leftAttacks) {
                 const Square to = Square(static_cast<int>(leftAttacks.pop()));
                 const Square from = to + DOWN_RIGHT;
-                addMove(from, to);
+                moveList.add(Move(from, to));
             }
 
             while (rightAttacks) {
                 const Square to = Square(static_cast<int>(rightAttacks.pop()));
                 const Square from = to + DOWN_LEFT;
-                addMove(from, to);
+                moveList.add(Move(from, to));
             }
         }
 
-        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::QUIET || MGT == MoveGenType::CHECKS) {
+        if constexpr (MGT != MoveGenType::NOISY) {
             while (singlePush) {
                 const Square to = Square(static_cast<int>(singlePush.pop()));
                 const Square from = to + DOWN;
-                addMove(from, to);
+                moveList.add(Move(from, to));
             }
 
             while (doublePush) {
                 const Square to = Square(static_cast<int>(doublePush.pop()));
                 const Square from = to + DOWN + DOWN;
-                addMove(from, to);
+                moveList.add(Move(from, to));
             }
         }
 
-        const Square enPassantSquare = position.enPassantSquare();
-        if (enPassantSquare != Square::NONE) {
-            enPassant<C, MGT>(position, moveList, kingSquares, occupied, masks, checkSquares, diagonalPawns, enPassantSquare);
+        if constexpr (MGT != MoveGenType::QUIET) {
+            const Square enPassantSquare = position.enPassantSquare();
+            if (enPassantSquare != Square::NONE) {
+                enPassant<C>(position, moveList, kingSquare, occupied, diagonalPins, checkMask, diagonalPawns, enPassantSquare);
+            }
         }
     }
 
-    template<Color::ColorEnum C, MoveGenType MGT>
-    static void enPassant(const Position &position, MoveList &moveList, const KingSquares &kingSquares, const Occupied &occupied, const Masks &masks, const CheckSquares &checkSquares, Bitboard attackingPawns, Square enPassantSquare) {
+    template<Color::ColorEnum C>
+    static void enPassant(const Position &position, MoveList &moveList, Square kingSquare, Bitboard occupied, Bitboard diagonalPins, Bitboard checkMask, Bitboard attackingPawns, Square enPassantSquare) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
 
         assert(enPassantSquare != Square::NONE);
         assert((enPassantSquare.rank() == Rank::RANK_3 && COLOR == Color::BLACK) || (enPassantSquare.rank() == Rank::RANK_6 && COLOR == Color::WHITE));
 
-        if constexpr (MGT == MoveGenType::QUIET) {
-            return;
-        }
-
         constexpr Direction DOWN = Direction(Direction::SOUTH, COLOR);
         const Square enPassantTarget = enPassantSquare + DOWN;
 
-        if (((Bitboard(enPassantTarget) | Bitboard(enPassantSquare)) & masks.check).empty()) {
+        if (((Bitboard(enPassantTarget) | Bitboard(enPassantSquare)) & checkMask).empty()) {
             return;
         }
 
-        const Bitboard kingMask = Bitboard(kingSquares.friendly) & Bitboard(enPassantTarget.rank());
+        const Bitboard kingMask = Bitboard(kingSquare) & Bitboard(enPassantTarget.rank());
         const Bitboard enemyRooksQueens = position.pieces(PieceType::ROOK, ~COLOR) | position.pieces(PieceType::QUEEN, ~COLOR);
-
-        const Bitboard enemyKingMask = Bitboard(kingSquares.enemy) & Bitboard(enPassantTarget.rank());
-        const Bitboard friendlyRooksQueens = position.pieces(PieceType::ROOK, COLOR) | position.pieces(PieceType::QUEEN, COLOR);
-        const Bitboard enemyDiagonalPinned = pinMask<(~COLOR).internal(), PieceType::BISHOP>(position, kingSquares.enemy, occupied.enemy, occupied.friendly);
-
         Bitboard enPassantAttackers = Attacks::pawn(enPassantSquare, ~COLOR) & attackingPawns;
+
         while (enPassantAttackers) {
             const Square from = Square(static_cast<int>(enPassantAttackers.pop()));
             const Square to = enPassantSquare;
 
-            if (bool(Bitboard(from) & masks.diagonalPins) && !(Bitboard(to) & masks.diagonalPins)) {
+            if (bool(Bitboard(from) & diagonalPins) && !(Bitboard(to) & diagonalPins)) {
                 continue;
             }
 
             const Bitboard enPassantPawns = Bitboard(enPassantTarget) | Bitboard(from);
             const bool possiblePin = kingMask && enemyRooksQueens;
-            if (possiblePin && (Attacks::rook(kingSquares.friendly, occupied.all ^ enPassantPawns) & enemyRooksQueens)) {
+            if (possiblePin && (Attacks::rook(kingSquare, occupied ^ enPassantPawns) & enemyRooksQueens)) {
                 break;
             }
 
-            if constexpr (MGT != MoveGenType::CHECKS) {
-                moveList.add(Move(from, to, MoveType::EN_PASSANT));
-            } else {
-                const bool possibleBlocker = enemyKingMask && friendlyRooksQueens;
-                if ((bool(Bitboard(from) & masks.blockers) && !(Attacks::between(kingSquares.enemy, from) & Attacks::between(kingSquares.enemy, to))) || (Bitboard(to) & checkSquares.pawn) || (Bitboard(enPassantTarget) & enemyDiagonalPinned) || (possibleBlocker && (Attacks::rook(kingSquares.enemy, occupied.all ^ enPassantPawns) & friendlyRooksQueens))) {
-                    moveList.add(Move(from, to, MoveType::EN_PASSANT));
-                }
-            }
+            moveList.add(Move(from, to, MoveType::EN_PASSANT));
         }
     }
 
     static Bitboard knight(Square square) { return Attacks::knight(square); }
 
-    static Bitboard bishop(Square square, const Occupied &occupied, const Masks &masks) {
-        if (masks.diagonalPins & Bitboard(square)) {
-            return Attacks::bishop(square, occupied.all) & masks.diagonalPins;
+    static Bitboard bishop(Square square, Bitboard occupied, Bitboard diagonalPins) {
+        if (diagonalPins & Bitboard(square)) {
+            return Attacks::bishop(square, occupied) & diagonalPins;
         }
-        return Attacks::bishop(square, occupied.all);
+        return Attacks::bishop(square, occupied);
     }
 
-    static Bitboard rook(Square square, const Occupied &occupied, const Masks &masks) {
-        if (masks.orthogonalPins & Bitboard(square)) {
-            return Attacks::rook(square, occupied.all) & masks.orthogonalPins;
+    static Bitboard rook(Square square, Bitboard occupied, Bitboard orthogonalPins) {
+        if (orthogonalPins & Bitboard(square)) {
+            return Attacks::rook(square, occupied) & orthogonalPins;
         }
-        return Attacks::rook(square, occupied.all);
+        return Attacks::rook(square, occupied);
     }
 
-    static Bitboard queen(Square square, const Occupied &occupied, const Masks &masks) {
-        if (masks.diagonalPins & Bitboard(square)) {
-            return Attacks::bishop(square, occupied.all) & masks.diagonalPins;
+    static Bitboard queen(Square square, Bitboard occupied, Bitboard diagonalPins, Bitboard orthogonalPins) {
+        if (diagonalPins & Bitboard(square)) {
+            return Attacks::bishop(square, occupied) & diagonalPins;
         }
-        if (masks.orthogonalPins & Bitboard(square)) {
-            return Attacks::rook(square, occupied.all) & masks.orthogonalPins;
+        if (orthogonalPins & Bitboard(square)) {
+            return Attacks::rook(square, occupied) & orthogonalPins;
         }
-        return Attacks::queen(square, occupied.all);
+        return Attacks::queen(square, occupied);
     }
 
     static Bitboard king(Square square, Bitboard attacked) {
@@ -402,11 +315,11 @@ private:
     }
 
     template<Color::ColorEnum C>
-    static Bitboard castling(const Position &position, const KingSquares &kingSquares, const Occupied &occupied, const Masks &masks) {
+    static Bitboard castling(const Position &position, Square kingSquare, Bitboard occupied, Bitboard attacked) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
 
-        if (!kingSquares.friendly.backRank(COLOR) || !position.castlingRights().get(COLOR)) {
+        if (!kingSquare.backRank(COLOR) || !position.castlingRights().get(COLOR)) {
             return Bitboard();
         }
 
@@ -428,12 +341,12 @@ private:
                 continue;
             }
 
-            if (occupied.all & position.castlingPath(castlingSide)) {
+            if (occupied & position.castlingPath(castlingSide)) {
                 continue;
             }
 
             const Square kingTo = Position::CastlingRights::kingTo(castlingSide);
-            if (Attacks::between(kingSquares.friendly, kingTo) & masks.attacked) {
+            if (Attacks::between(kingSquare, kingTo) & attacked) {
                 continue;
             }
 
@@ -449,62 +362,40 @@ private:
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
 
-        const KingSquares kingSquares = {
-            position.kingSquare(COLOR),
-            position.kingSquare(~COLOR)
-        };
+        const Square kingSquare = position.kingSquare(COLOR);
+        const Square enemyKingSquare = position.kingSquare(~COLOR);
 
-        const Occupied occupied = {
-            position.occupied(),
-            position.friendly(COLOR),
-            position.enemy(COLOR)
-        };
+        const Bitboard occupied = position.occupied();
+        const Bitboard friendlyOccupied = position.friendly(COLOR);
+        const Bitboard enemyOccupied = position.enemy(COLOR);
 
-        const auto [checkMaskSquares, checks] = checkMask<C>(position, kingSquares.friendly, occupied.all);
+        const auto [checkMaskSquares, checks] = checkMask<C>(position, kingSquare, occupied);
+        Bitboard attackedSquares = attacked<(~COLOR).internal()>(position, enemyKingSquare, kingSquare, occupied);
 
-        const Masks masks = {
-            checkMaskSquares,
-            pinMask<C, PieceType::BISHOP>(position, kingSquares.friendly, occupied.friendly, occupied.enemy),
-            pinMask<C, PieceType::ROOK>(position, kingSquares.friendly, occupied.friendly, occupied.enemy),
-            blockMask<C>(position, kingSquares.enemy, occupied.friendly, occupied.enemy),
-            attacked<(~COLOR).internal()>(position, kingSquares.enemy, kingSquares.friendly, occupied.all)
-        };
-
-        const CheckSquares checkSquares = {
-            Attacks::pawn(kingSquares.enemy, ~COLOR),
-            Attacks::knight(kingSquares.enemy),
-            Attacks::bishop(kingSquares.enemy, occupied.all),
-            Attacks::rook(kingSquares.enemy, occupied.all),
-            Attacks::queen(kingSquares.enemy, occupied.all),
-        };
+        const Bitboard diagonalPins = pinMask<C, PieceType::BISHOP>(position, kingSquare, friendlyOccupied, enemyOccupied);
+        const Bitboard orthogonalPins = pinMask<C, PieceType::ROOK>(position, kingSquare, friendlyOccupied, enemyOccupied);
 
         Bitboard movable = Bitboard();
-        if constexpr (MGT == MoveGenType::ALL || MGT == MoveGenType::CHECKS) {
-            movable = ~occupied.friendly;
-        } else if constexpr (MGT == MoveGenType::CAPTURES) {
-            movable = occupied.enemy;
+        if constexpr (MGT == MoveGenType::ALL) {
+            movable = ~friendlyOccupied;
+        } else if constexpr (MGT == MoveGenType::NOISY) {
+            movable = enemyOccupied;
         } else if constexpr (MGT == MoveGenType::QUIET) {
-            movable = ~occupied.all;
+            movable = ~occupied;
         } else {
             static_assert(false);
         }
 
         if (pieces & PieceFlag::KING) {
-            auto genKing = [&](Square square) { return king(square, masks.attacked) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, Bitboard(kingSquares.friendly), genKing, kingSquares.enemy, masks.blockers, Bitboard());
+            auto genKing = [&](Square square) { return king(square, attackedSquares) & movable; };
+            whileBitboardAddMoves(moveList, Bitboard(kingSquare), genKing);
 
-            if constexpr (MGT != MoveGenType::CAPTURES) {
+            if constexpr (MGT != MoveGenType::NOISY) {
                 if (checks == 0) {
-                    Bitboard castlingMoves = castling<C>(position, kingSquares, occupied, masks);
+                    Bitboard castlingMoves = castling<C>(position, kingSquare, occupied, attackedSquares);
                     while (castlingMoves) {
-                        const Square kingTo = Square(static_cast<int>(castlingMoves.pop()));
-                        const Position::CastlingRights::CastlingSide castlingSide = Position::CastlingRights::closestSide(kingTo, kingSquares.friendly, COLOR);
-                        const Square rookTo = Position::CastlingRights::rookTo(castlingSide);
-                        if constexpr (MGT != MoveGenType::CHECKS) {
-                            moveList.add(Move(kingSquares.friendly, kingTo, MoveType::CASTLING));
-                        } else if (Bitboard(rookTo) & checkSquares.rook) {
-                            moveList.add(Move(kingSquares.friendly, kingTo, MoveType::CASTLING));
-                        }
+                        const Square to = Square(static_cast<int>(castlingMoves.pop()));
+                        moveList.add(Move(kingSquare, to, MoveType::CASTLING));
                     }
                 }
             }
@@ -514,49 +405,45 @@ private:
             return;
         }
 
-        movable &= masks.check;
+        movable &= checkMaskSquares;
 
         if (pieces & PieceFlag::PAWN) {
-            pawn<C, MGT>(position, moveList, kingSquares, occupied, masks, checkSquares);
+            pawn<C, MGT>(position, moveList, kingSquare, occupied, enemyOccupied, diagonalPins, orthogonalPins, checkMaskSquares);
         }
 
         if (pieces & PieceFlag::KNIGHT) {
-            Bitboard knights = position.pieces(PieceType::KNIGHT, COLOR) & ~(masks.diagonalPins | masks.orthogonalPins);
+            Bitboard knights = position.pieces(PieceType::KNIGHT, COLOR) & ~(diagonalPins | orthogonalPins);
             auto genKnight = [&](Square square) { return knight(square) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, knights, genKnight, kingSquares.enemy, masks.blockers, checkSquares.knight);
+            whileBitboardAddMoves(moveList, knights, genKnight);
         }
 
         if (pieces & PieceFlag::BISHOP) {
-            Bitboard bishops = position.pieces(PieceType::BISHOP, COLOR) & ~masks.orthogonalPins;
-            auto genBishop = [&](Square square) { return bishop(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, bishops, genBishop, kingSquares.enemy, masks.blockers, checkSquares.bishop);
+            Bitboard bishops = position.pieces(PieceType::BISHOP, COLOR) & ~orthogonalPins;
+            auto genBishop = [&](Square square) { return bishop(square, occupied, diagonalPins) & movable; };
+            whileBitboardAddMoves(moveList, bishops, genBishop);
         }
 
         if (pieces & PieceFlag::ROOK) {
-            Bitboard rooks = position.pieces(PieceType::ROOK, COLOR) & ~masks.diagonalPins;
-            auto genRook = [&](Square square) { return rook(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, rooks, genRook, kingSquares.enemy, masks.blockers, checkSquares.rook);
+            Bitboard rooks = position.pieces(PieceType::ROOK, COLOR) & ~diagonalPins;
+            auto genRook = [&](Square square) { return rook(square, occupied, orthogonalPins) & movable; };
+            whileBitboardAddMoves(moveList, rooks, genRook);
         }
 
         if (pieces & PieceFlag::QUEEN) {
-            Bitboard queens = position.pieces(PieceType::QUEEN, COLOR) & ~(masks.diagonalPins & masks.orthogonalPins);
-            auto genQueen = [&](Square square) { return queen(square, occupied, masks) & movable; };
-            whileBitboardAddMoves<MGT>(moveList, queens, genQueen, kingSquares.enemy, masks.blockers, checkSquares.queen);
+            Bitboard queens = position.pieces(PieceType::QUEEN, COLOR) & ~(diagonalPins & orthogonalPins);
+            auto genQueen = [&](Square square) { return queen(square, occupied, diagonalPins, orthogonalPins) & movable; };
+            whileBitboardAddMoves(moveList, queens, genQueen);
         }
     }
 
-    template<MoveGenType MGT, typename F>
-    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc, Square enemyKingSquare, Bitboard blockers, Bitboard checkSquares) {
+    template<typename F>
+    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc) {
         while (bitboard) {
             const Square from = Square(static_cast<int>(bitboard.pop()));
             Bitboard moves = movesFunc(from);
             while (moves) {
                 const Square to = Square(static_cast<int>(moves.pop()));
-                if constexpr (MGT != MoveGenType::CHECKS) {
-                    moveList.add(Move(from, to));
-                } else if ((bool(Bitboard(from) & blockers) && !(Attacks::between(enemyKingSquare, from) & Attacks::between(enemyKingSquare, to))) || (Bitboard(to) & checkSquares)) {
-                    moveList.add(Move(from, to));
-                }
+                moveList.add(Move(from, to));
             }
         }
     }

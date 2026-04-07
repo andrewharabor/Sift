@@ -20,43 +20,29 @@ struct TestCase {
     UInt64 expectedNodes;
 };
 
-template<MoveGenType MGT = MoveGenType::ALL>
 void benchmark(const TestCase &testCase) {
     Position position = Position(testCase.fen);
 
     const auto start = std::chrono::high_resolution_clock::now();
-    const UInt64 nodes = Benchmark::perft<MGT>(position, testCase.depth);
+    const UInt64 nodes = Benchmark::perft(position, testCase.depth);
     const auto end = std::chrono::high_resolution_clock::now();
     const UInt64 duration = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 
-    std::string nodeLabel = "";
-    if constexpr (MGT == MoveGenType::ALL) {
-        nodeLabel = "nodes";
-    } else if constexpr (MGT == MoveGenType::CAPTURES) {
-        nodeLabel = "captures";
-    } else if constexpr (MGT == MoveGenType::QUIET) {
-        nodeLabel = "quiets";
-    } else if constexpr (MGT == MoveGenType::CHECKS) {
-        nodeLabel = "checks";
-    } else {
-        static_assert(false);
-    }
-
     std::cout << "fen " << testCase.fen;
     std::cout << " depth " << testCase.depth << std::endl;
-    std::cout << "\t" << nodeLabel << " " << nodes << std::endl;
+    std::cout << "\t" << "nodes" << " " << nodes << std::endl;
     std::cout << "\ttime " << duration << " ms" << std::endl;
     std::cout << "\tnps " << (nodes * 1000) / (duration + 1) << std::endl;
 
     if (nodes != testCase.expectedNodes) {
-        std::cerr << "\t\texpected " << testCase.expectedNodes << " " << nodeLabel << ", got " << nodes << std::endl;
+        std::cerr << "\t\texpected " << testCase.expectedNodes << " " << "nodes" << ", got " << nodes << std::endl;
     }
 }
 
 int main() {
     Attacks::init();
 
-    const TestCase testCasesAll[] = {
+    const TestCase testCases[] = {
         {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 7, 3195901860},
         {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 5, 193690690},
         {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 8, 3009794393},
@@ -79,29 +65,7 @@ int main() {
         {"8/8/2k5/5q2/5n2/8/5K2/8 b - - 0 1", 4, 23527}
     };
 
-    for (const TestCase &testCase : testCasesAll) {
-        benchmark<MoveGenType::ALL>(testCase);
-    }
-
-    const TestCase testCasesCaptures[] = {
-        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 7, 108329926 },
-        {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 5, 35043416},
-        {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 8, 267586558},
-        {"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 6, 210369132}
-    };
-
-    for (const TestCase &testCase : testCasesCaptures) {
-        benchmark<MoveGenType::CAPTURES>(testCase);
-    }
-
-    const TestCase testCasesChecks[] = {
-        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 7, 33103848 },
-        {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 5, 3309887},
-        {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1 ", 7, 12797406},
-        {"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 6, 26973664},
-    };
-
-    for (const TestCase &testCase : testCasesChecks) {
-        benchmark<MoveGenType::CHECKS>(testCase);
+    for (const TestCase &testCase : testCases) {
+        benchmark(testCase);
     }
 }

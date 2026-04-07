@@ -144,7 +144,7 @@ private:
         }
 
         bool rootNode = (rootPly_ == 0);
-        bool inCheck = position_.check();
+        bool inCheck = position_.inCheck();
         bool excludedMove = searchStack_[ply].excludedMove != Move::NULL_MOVE;
 
         searchStack_[ply].pv.clear();
@@ -212,7 +212,7 @@ private:
         TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
 
         MoveList quietsTried;
-        MoveList capturesTried;
+        MoveList noisiesTried;
         Int32 movesTried = 0;
 
         Move bestMove = Move::NULL_MOVE;
@@ -227,7 +227,7 @@ private:
                 continue;
             }
 
-            bool quiet = !position_.isCapture(move);
+            bool quiet = position_.quiet(move);
 
             tTable_.prefetch(position_.zobristAfter(move));
 
@@ -239,7 +239,7 @@ private:
             if (quiet) {
                 quietsTried.add(move);
             } else {
-                capturesTried.add(move);
+                noisiesTried.add(move);
             }
 
             Int32 newDepth = depth - 1;
@@ -356,7 +356,7 @@ private:
             return tableEntry.score;
         }
 
-        bool inCheck = position_.check();
+        bool inCheck = position_.inCheck();
         Int32 rawStaticEval = Score::NONE;
 
         if (inCheck) {
@@ -455,7 +455,7 @@ private:
             }
 
             // TODO: try this
-            // if (!position_.isCapture(move) && inCheck && bestScore > Score::LOSS) {
+            // if (position_.quiet(move) && inCheck && bestScore > Score::LOSS) {
             //     break;
             // }
         }
