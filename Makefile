@@ -49,7 +49,7 @@ endif
 
 
 CPPFLAGS := -MMD -MP
-CXXFLAGS := -std=c++23 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
+CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
 
 ifeq ($(BUILD),engine)
     SRCS := src/main.cpp
