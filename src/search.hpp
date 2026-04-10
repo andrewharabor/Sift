@@ -12,6 +12,7 @@
 #include "move.hpp"
 #include "position.hpp"
 #include "score.hpp"
+#include "time.hpp"
 #include "ttable.hpp"
 #include "types.hpp"
 
@@ -33,8 +34,6 @@ struct SearchNode {
     UInt32 failHighCount;
 };
 
-using SearchStack = std::array<SearchNode, Search::MAX_PLY + 1>;
-
 class Search {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
@@ -43,12 +42,18 @@ public:
         reset();
     }
 
-    void run(const Position &position) noexcept {
+    void run(const Position &position, const SearchLimits &limits) noexcept {
         reset();
         tTable_.incrementAge();
 
         position_ = position;
         initRootMoves();
+
+        timeUp_ = false;
+        limits_ = limits;
+        timeManager_.searchLimits(limits, position_.sideToMove());
+        timeManager_.start();
+
         iterativeDeepening();
     }
 
@@ -74,6 +79,8 @@ public:
             searchStack_[i].eval = Score::NONE;
             searchStack_[i].failHighCount = 0;
         }
+        timeUp_ = false;
+        limits_ = SearchLimits();
     }
 
     constexpr void resizeTTable(USize sizeMB) noexcept {
@@ -101,12 +108,6 @@ private:
         // TODO
     };
 
-    struct Limits {
-        Int32 depth;
-        Int32 nodes;
-        // TODO: time
-    };
-
     Position position_;
 
     Int32 rootDepth_;
@@ -115,11 +116,13 @@ private:
     UInt64 nodes_;
 
     std::vector<RootMove> rootMoves_;
-    SearchStack searchStack_;
+    std::array<SearchNode, Search::MAX_PLY + 1> searchStack_;
 
     TTable tTable_;
 
-    Limits limits_;
+    TimeManager timeManager_;
+    SearchLimits limits_;
+    bool timeUp_;
 
     std::pair<Move, Int32> iterativeDeepening() noexcept {
         // TODO
@@ -130,6 +133,11 @@ private:
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
         assert(!(pvNode && cutNode));
+
+        if (timeUp_ || timeManager_.stopHard(limits_, nodes_)) {
+            timeUp_ = true;
+            return alpha;
+        }
 
         if (rootPly_ + 1 > selDepth_) {
             selDepth_ = rootPly_ + 1;
@@ -255,6 +263,10 @@ private:
 
             unmakeMove(ply);
 
+            if (timeUp_) {
+                return alpha;
+            }
+
             if (rootNode) {
                 RootMove &rootMove = findRootMove(move);
                 rootMove.prevScore = rootMove.score;
@@ -338,6 +350,11 @@ private:
     Int32 quiescenceSearch(USize ply, Int32 alpha, Int32 beta, bool pvNode) noexcept {
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
+
+        if (timeUp_ || timeManager_.stopHard(limits_, nodes_)) {
+            timeUp_ = true;
+            return alpha;
+        }
 
         if (rootPly_ + 1 > selDepth_) {
             selDepth_ = rootPly_ + 1;
@@ -435,6 +452,10 @@ private:
             Int32 score = -quiescenceSearch(ply + 1, -beta, -alpha, pvNode);
 
             unmakeMove(ply);
+
+            if (timeUp_) {
+                return alpha;
+            }
 
             if (score > bestScore) {
                 bestScore = score;
