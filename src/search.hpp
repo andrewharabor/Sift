@@ -156,7 +156,7 @@ private:
             }
         }
 
-        if (draw(rootPly_)) {
+        if (positionDraw(rootPly_)) {
             return Score::DRAW;
         }
 
@@ -171,7 +171,7 @@ private:
         TTableEntry tableEntry = TTableEntry();
         bool tableHit = false;
 
-        Int32 rawStaticEval = Score::NONE;
+        Int32 staticEval = Score::NONE;
 
         // FIXME: correplexity?
 
@@ -187,13 +187,13 @@ private:
                 searchStack_[ply].eval = Score::NONE;
             } else {
                 if (tableHit) {
-                    rawStaticEval = tableEntry.staticEval;
+                    staticEval = tableEntry.staticEval;
                 } else {
-                    rawStaticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
+                    staticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
                 }
 
                 // FIXME: history
-                searchStack_[ply].staticEval = rawStaticEval;
+                searchStack_[ply].staticEval = staticEval;
                 searchStack_[ply].eval = searchStack_[ply].staticEval;
                 if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= searchStack_[ply].eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= searchStack_[ply].eval))) {
                     searchStack_[ply].eval = tableEntry.score;
@@ -329,7 +329,7 @@ private:
         if (!excludedMove) {
             // TODO: history update
 
-            tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, depth, tablePV, bound);
+            tTable_.write(position_.hash(), rootPly_, bestScore, staticEval, bestMove, depth, tablePV, bound);
         }
 
         return bestScore;
@@ -357,21 +357,21 @@ private:
         }
 
         bool inCheck = position_.inCheck();
-        Int32 rawStaticEval = Score::NONE;
+        Int32 staticEval = Score::NONE;
 
         if (inCheck) {
             searchStack_[ply].staticEval = Score::NONE;
             searchStack_[ply].eval = Score::NONE;
         } else {
             if (tableHit) {
-                rawStaticEval = tableEntry.staticEval;
+                staticEval = tableEntry.staticEval;
             } else {
-                rawStaticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
+                staticEval = SimPLYChessEval::evaluate(position_); // FIXME: use Eval
             }
 
             // TODO: history stuff
 
-            searchStack_[ply].staticEval = rawStaticEval;
+            searchStack_[ply].staticEval = staticEval;
             searchStack_[ply].eval = searchStack_[ply].staticEval;
             if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= searchStack_[ply].eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= searchStack_[ply].eval))) {
                 searchStack_[ply].eval = tableEntry.score;
@@ -380,7 +380,7 @@ private:
 
         if (searchStack_[ply].eval >= beta) {
             if (!tableHit) {
-                tTable_.write(position_.hash(), rootPly_, searchStack_[ply].eval, rawStaticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
+                tTable_.write(position_.hash(), rootPly_, searchStack_[ply].eval, staticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
             }
             return searchStack_[ply].eval;
         }
@@ -427,6 +427,8 @@ private:
 
             // TODO: SEE and futility pruning
 
+            tTable_.prefetch(position_.zobristAfter(move));
+
             makeMove(ply, move);
             movesTried++;
 
@@ -464,12 +466,12 @@ private:
             return Score::matedIn(rootPly_);
         }
 
-        tTable_.write(position_.hash(), rootPly_, bestScore, rawStaticEval, bestMove, 0, tablePV, bound);
+        tTable_.write(position_.hash(), rootPly_, bestScore, staticEval, bestMove, 0, tablePV, bound);
 
         return bestScore;
     }
 
-    bool draw(USize ply) noexcept {
+    bool positionDraw(USize ply) noexcept {
         bool noMoves = false;
         if (position_.halfmoveClock() >= 100) {
             MoveList moves;

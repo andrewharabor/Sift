@@ -19,13 +19,13 @@ public:
         return RANDOM_HASH_VALUES[772 + file];
     }
 
-    static constexpr UInt64 castling(int castlingRights) noexcept {
-        assert(castlingRights >= 0 && castlingRights < 16);
+    static constexpr UInt64 castling(UInt8 castlingRights) noexcept {
+        assert(castlingRights < 16);
         return CASTLING_HASHES[castlingRights];
     }
 
-    static constexpr UInt64 castlingIndex(int castlingIndex) noexcept {
-        assert(castlingIndex >= 0 && castlingIndex < 4);
+    static constexpr UInt64 castlingIndex(UInt8 castlingIndex) noexcept {
+        assert(castlingIndex < 4);
         return RANDOM_HASH_VALUES[768 + castlingIndex];
     }
 
@@ -192,7 +192,7 @@ private:
         0xF8D626AAAF278509
     };
 
-    static constexpr int PIECE_HASHES[12] = {1, 3, 5, 7, 9, 11, 0 , 2, 4, 6, 8, 10};
+    static constexpr UInt8 PIECE_HASHES[12] = {1, 3, 5, 7, 9, 11, 0 , 2, 4, 6, 8, 10};
 
     static constexpr UInt64 CASTLING_HASHES[16] = {
         0x0000000000000000ULL, 0x31D71DCE64B2C310ULL,  0xF165B587DF898190ULL, 0xC0B2A849BB3B4280ULL,

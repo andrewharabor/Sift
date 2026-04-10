@@ -38,10 +38,10 @@ public:
 
         constexpr CastlingRights() noexcept : rights_(0) {}
         constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<UInt8>(side)) {}
-        constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights >= 0 && rights < 16); }
+        constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights < 16); }
 
         constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
-        constexpr operator int() const noexcept { return static_cast<int>(rights_); }
+        constexpr operator UInt8() const noexcept { return rights_; }
 
         constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<UInt8>(side); }
         constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
@@ -72,8 +72,8 @@ public:
 
         constexpr bool empty() const noexcept { return rights_ == 0; }
 
-        constexpr int hash() const noexcept { return static_cast<int>(rights_); }
-        static constexpr int hashIndex(CastlingSide side) noexcept { return std::countr_zero(static_cast<UInt8>(side)); }
+        constexpr UInt8 hash() const noexcept { return rights_; }
+        static constexpr UInt8 hashIndex(CastlingSide side) noexcept { return static_cast<UInt8>(std::countr_zero(static_cast<UInt8>(side))); }
 
         static constexpr Color color(CastlingSide side) noexcept {
             if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::WHITE_QUEENSIDE) {
@@ -190,7 +190,7 @@ public:
             return false;
         }
 
-        int index = 56;
+        Int32 index = 56;
         for (char c : board) {
             if (c == '/') {
                 index -= 16;
@@ -202,8 +202,8 @@ public:
                 }
 
                 const Piece piece = Piece(std::string_view(&c, 1));
-                placePiece(piece, Square(index));
-                hash_ ^= Zobrist::piece(piece, Square(index));
+                placePiece(piece, Square(static_cast<UInt8>(index)));
+                hash_ ^= Zobrist::piece(piece, Square(static_cast<UInt8>(index)));
                 index++;
             }
         }
@@ -265,10 +265,10 @@ public:
         std::string str;
         str.reserve(100);
 
-        for (int rank = 7; rank >= 0; rank--) {
-            int emptyCount = 0;
-            for (int file = 0; file < 8; file++) {
-                const Piece piece = pieceAt(Square(file, rank));
+        for (Int32 rank = 7; rank >= 0; rank--) {
+            UInt8 emptyCount = 0;
+            for (UInt8 file = 0; file < 8; file++) {
+                const Piece piece = pieceAt(Square(file, static_cast<UInt8>(rank)));
                 if (piece == Piece::NONE) {
                     emptyCount++;
                 } else {
@@ -344,7 +344,7 @@ public:
         assert(pieceAt(square) == Piece::NONE);
         const PieceType pieceType = piece.type();
         const Color color = piece.color();
-        const int index = square.index();
+        const UInt8 index = square.index();
         pieceBitboards_[static_cast<USize>(pieceType)].set(index);
         occupancyBitboards_[static_cast<USize>(color)].set(index);
         board_[static_cast<USize>(index)] = piece;
@@ -355,7 +355,7 @@ public:
         assert(pieceAt(square) == piece);
         const PieceType pieceType = piece.type();
         const Color color = piece.color();
-        const int index = square.index();
+        const UInt8 index = square.index();
         pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
         occupancyBitboards_[static_cast<USize>(color)].clear(index);
         board_[static_cast<USize>(index)] = Piece::NONE;
@@ -599,7 +599,7 @@ public:
 
         Bitboard pieces = occupied();
         while (pieces) {
-            const Square square = static_cast<int>(pieces.pop());
+            const Square square = pieces.pop();
             key ^= Zobrist::piece(pieceAt(square), square);
         }
 
@@ -915,7 +915,7 @@ public:
     constexpr bool halfMoveDraw(bool noMoves) const noexcept { return halfmoveClock_ >= 100 && !(inCheck() && noMoves); }
 
     constexpr bool insufficientMaterial() const noexcept {
-        const int count = occupied().count();
+        const UInt8 count = occupied().count();
 
         if (count == 2) {
             return true;

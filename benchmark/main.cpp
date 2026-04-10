@@ -16,7 +16,7 @@ using namespace Clownfish;
 
 struct TestCase {
     std::string fen;
-    int depth;
+    UInt16 depth;
     UInt64 expectedNodes;
 };
 

@@ -21,17 +21,17 @@ public:
 
         Int32 scores[2] = {0, 0};
         Square kingSquares[2] = {position.kingSquare(Color::WHITE), position.kingSquare(Color::BLACK)};
-        for (int i = 0; i < 64; i++) {
+        for (UInt8 i = 0; i < 64; i++) {
             const Square square = Square(i);
             const Piece piece = position.pieceAt(square);
             if (piece != Piece::NONE) {
-                const int color = static_cast<int>(piece.color());
-                const int pieceType = static_cast<int>(piece.type());
-                int squareIndex = static_cast<int>(square);
+                const UInt8 color = piece.color();
+                const UInt8 pieceType = piece.type();
+                UInt8 squareIndex = square;
                 if (piece.color() == Color::WHITE) {
                     squareIndex ^= 56;
                 }
-                for (int phase = 0; phase < 2; phase++) {
+                for (UInt8 phase = 0; phase < 2; phase++) {
                     scores[phase] += PIECE_VALUES[phase][pieceType] * colorMultipliers[color];
                     scores[phase] += PIECE_TABLES[phase][pieceType][squareIndex] * colorMultipliers[color];
                     scores[phase] += floorDiv(PIECE_TROPISM_VALUES[phase][pieceType], std::max(1, Square::manhattanDistance(square, kingSquares[1 - color]))) * colorMultipliers[color];
@@ -85,7 +85,7 @@ private:
     static Int32 phase(const Position &position) noexcept {
         Int32 phase = TOTAL_PHASE;
         for (const PieceType pieceType : {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
-            phase -= position.pieces(pieceType).count() * PIECE_PHASES[static_cast<int>(pieceType)];
+            phase -= position.pieces(pieceType).count() * PIECE_PHASES[static_cast<UInt8>(pieceType)];
         }
         return floorDiv(phase * 256 + TOTAL_PHASE / 2, TOTAL_PHASE);
     }

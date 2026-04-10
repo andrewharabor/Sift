@@ -82,25 +82,25 @@ public:
         return *this;
     }
 
-    constexpr Bitboard &set(int index) noexcept {
-        assert(index >= 0 && index < 64);
+    constexpr Bitboard &set(UInt8 index) noexcept {
+        assert(index < 64);
         bitboard_ |= (1ULL << index);
         return *this;
     }
 
-    constexpr bool get(int index) const noexcept {
-        assert(index >= 0 && index < 64);
+    constexpr bool get(UInt8 index) const noexcept {
+        assert(index < 64);
         return bitboard_ & (1ULL << index);
     }
 
-    constexpr Bitboard &toggle(int index) noexcept {
-        assert(index >= 0 && index < 64);
+    constexpr Bitboard &toggle(UInt8 index) noexcept {
+        assert(index < 64);
         bitboard_ ^= (1ULL << index);
         return *this;
     }
 
-    constexpr Bitboard &clear(int index) noexcept {
-        assert(index >= 0 && index < 64);
+    constexpr Bitboard &clear(UInt8 index) noexcept {
+        assert(index < 64);
         bitboard_ &= ~(1ULL << index);
         return *this;
     }
@@ -112,23 +112,23 @@ public:
 
     constexpr bool empty() const noexcept { return bitboard_ == 0; }
 
-    constexpr int lsb() const noexcept {
+    constexpr UInt8 lsb() const noexcept {
         assert(bitboard_ != 0);
-        return std::countr_zero(bitboard_);
+        return static_cast<UInt8>(std::countr_zero(bitboard_));
     }
 
-    constexpr int msb() const noexcept {
+    constexpr UInt8 msb() const noexcept {
         assert(bitboard_ != 0);
-        return 63 - std::countl_zero(bitboard_);
+        return static_cast<UInt8>(63 - std::countl_zero(bitboard_));
     }
 
-    constexpr int count() const noexcept {
-        return std::popcount(bitboard_);
+    constexpr UInt8 count() const noexcept {
+        return static_cast<UInt8>(std::popcount(bitboard_));
     }
 
-    constexpr UInt64 pop() noexcept {
+    constexpr UInt8 pop() noexcept {
         assert(bitboard_ != 0);
-        const UInt64 index = static_cast<UInt64>(lsb());
+        const UInt8 index = lsb();
         bitboard_ &= bitboard_ - 1;
         return index;
     }

@@ -55,7 +55,7 @@ public:
     static void init() {
         BISHOP_TABLE[0].attacks = BISHOP_ATTACKS;
         ROOK_TABLE[0].attacks = ROOK_ATTACKS;
-        for (int i = 0; i < 64; i++) {
+        for (UInt8 i = 0; i < 64; i++) {
             initSliders(Square(i), BISHOP_TABLE, BISHOP_MAGICS[i], sliderSlow<PieceType::BISHOP>);
             initSliders(Square(i), ROOK_TABLE, ROOK_MAGICS[i], sliderSlow<PieceType::ROOK>);
         }
@@ -261,7 +261,7 @@ private:
         assert(square != Square::NONE);
         const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) | ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
         UInt64 occupied = 0ULL;
-        Magic &entry = table[square.index()];
+        Magic &entry = table[static_cast<USize>(square.index())];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
 #if !defined(USE_PEXT)
         entry.magic = magic;
@@ -269,7 +269,7 @@ private:
 #endif
 
         if (square.index() < 63) {
-            table[square.index() + 1].attacks = entry.attacks + (1ULL << Bitboard(entry.mask).count());
+            table[static_cast<USize>(square.index() + 1)].attacks = entry.attacks + (1ULL << Bitboard(entry.mask).count());
         }
 
         do {
@@ -282,22 +282,22 @@ private:
     static Bitboard sliderSlow(Square square, Bitboard occupied) noexcept {
         static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK);
         assert(square != Square::NONE);
-        static constexpr int directions[2][4][2] = {
+        static constexpr Int8 directions[2][4][2] = {
             {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}},
             {{0, 1}, {1, 0}, {0, -1}, {-1, 0}}
         };
         const bool isRook = (PT == PieceType::ROOK);
         Bitboard attacks = 0ULL;
 
-        int file = square.file();
-        int rank = square.rank();
-        for (int i = 0; i < 4; i++) {
-            int fileOffset = directions[isRook][i][0];
-            int rankOffset = directions[isRook][i][1];
-            int currentFile;
-            int currentRank;
+        Int32 file = square.file();
+        Int32 rank = square.rank();
+        for (UInt8 i = 0; i < 4; i++) {
+            Int32 fileOffset = directions[isRook][i][0];
+            Int32 rankOffset = directions[isRook][i][1];
+            Int32 currentFile;
+            Int32 currentRank;
             for (currentFile = file + fileOffset, currentRank = rank + rankOffset; currentFile >= 0 && currentFile < 8 && currentRank >= 0 && currentRank < 8; currentFile += fileOffset, currentRank += rankOffset) {
-                const int index = Square(File(currentFile), Rank(currentRank)).index();
+                const UInt8 index = Square(File(static_cast<UInt8>(currentFile)), Rank(static_cast<UInt8>(currentRank))).index();
                 attacks.set(index);
                 if (occupied.get(index)) {
                     break;
@@ -321,8 +321,8 @@ private:
             }
         };
 
-        for (int from = 0; from < 64; from++) {
-            for (int to = 0; to < 64; to++) {
+        for (UInt8 from = 0; from < 64; from++) {
+            for (UInt8 to = 0; to < 64; to++) {
                 for (PieceType pieceType : {PieceType::BISHOP, PieceType::ROOK}) {
                     Square square1 = Square(from);
                     Square square2 = Square(to);

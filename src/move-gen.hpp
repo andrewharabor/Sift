@@ -41,7 +41,7 @@ enum class MoveGenType : UInt8 {
 class MoveGen {
 public:
     template<Color::ColorEnum C>
-    static std::pair<Bitboard, int> checkMask(const Position &position, Square kingSquare, Bitboard occupied) {
+    static std::pair<Bitboard, UInt8> checkMask(const Position &position, Square kingSquare, Bitboard occupied) {
         static_assert(C != Color::NONE);
         constexpr Color COLOR = Color(C);
         const Bitboard pawns = position.pieces(PieceType::PAWN, ~COLOR);
@@ -51,7 +51,7 @@ public:
         const Bitboard queens = position.pieces(PieceType::QUEEN, ~COLOR);
 
         Bitboard mask = Bitboard();
-        int checks = 0;
+        UInt8 checks = 0;
 
         Bitboard pawnMask = Attacks::pawn(kingSquare, COLOR) & pawns;
         mask |= pawnMask;
@@ -63,13 +63,13 @@ public:
 
         Bitboard bishopMask = Attacks::bishop(kingSquare, occupied) & (bishops | queens);
         while (bishopMask) {
-            mask |= Attacks::between(kingSquare, static_cast<int>(bishopMask.pop()));
+            mask |= Attacks::between(kingSquare, bishopMask.pop());
             checks++;
         }
 
         Bitboard rookMask = Attacks::rook(kingSquare, occupied) & (rooks | queens);
         while (rookMask) {
-            mask |= Attacks::between(kingSquare, static_cast<int>(rookMask.pop()));
+            mask |= Attacks::between(kingSquare, rookMask.pop());
             checks++;
         }
 
@@ -88,7 +88,7 @@ public:
         Bitboard sliders = Attacks::slider<PT>(kingSquare, enemyOccupied) & (position.pieces(PT) | position.pieces(PieceType::QUEEN)) & enemyOccupied;
         Bitboard mask = Bitboard();
         while (sliders) {
-            const Bitboard possiblePin = Attacks::between(kingSquare, static_cast<int>(sliders.pop()));
+            const Bitboard possiblePin = Attacks::between(kingSquare, sliders.pop());
             if ((possiblePin & friendlyOccupied).count() == 1) {
                 mask |= possiblePin;
             }
@@ -112,13 +112,13 @@ public:
 
         attackedSquares |= Attacks::allPawns<C>(pawns);
         while (knights) {
-            attackedSquares |= Attacks::knight(static_cast<int>(knights.pop()));
+            attackedSquares |= Attacks::knight(knights.pop());
         }
         while (bishops) {
-            attackedSquares |= Attacks::bishop(static_cast<int>(bishops.pop()), occupied);
+            attackedSquares |= Attacks::bishop(bishops.pop(), occupied);
         }
         while (rooks) {
-            attackedSquares |= Attacks::rook(static_cast<int>(rooks.pop()), occupied);
+            attackedSquares |= Attacks::rook(rooks.pop(), occupied);
         }
         attackedSquares |= Attacks::king(kingSquare);
 
@@ -179,7 +179,7 @@ private:
 
             if constexpr (MGT != MoveGenType::QUIET) {
                 while (leftPromotions) {
-                    const Square to = Square(static_cast<int>(leftPromotions.pop()));
+                    const Square to = Square(leftPromotions.pop());
                     const Square from = to + DOWN_RIGHT;
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
@@ -188,7 +188,7 @@ private:
                 }
 
                 while (rightPromotions) {
-                    const Square to = Square(static_cast<int>(rightPromotions.pop()));
+                    const Square to = Square(rightPromotions.pop());
                     const Square from = to + DOWN_LEFT;
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
@@ -197,7 +197,7 @@ private:
                 }
 
                 while (pushPromotion) {
-                    const Square to = Square(static_cast<int>(pushPromotion.pop()));
+                    const Square to = Square(pushPromotion.pop());
                     const Square from = to + DOWN;
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::QUEEN));
                     moveList.add(Move(from, to, MoveType::PROMOTION, PieceType::ROOK));
@@ -213,13 +213,13 @@ private:
 
         if constexpr (MGT != MoveGenType::QUIET) {
             while (leftAttacks) {
-                const Square to = Square(static_cast<int>(leftAttacks.pop()));
+                const Square to = Square(leftAttacks.pop());
                 const Square from = to + DOWN_RIGHT;
                 moveList.add(Move(from, to));
             }
 
             while (rightAttacks) {
-                const Square to = Square(static_cast<int>(rightAttacks.pop()));
+                const Square to = Square(rightAttacks.pop());
                 const Square from = to + DOWN_LEFT;
                 moveList.add(Move(from, to));
             }
@@ -227,13 +227,13 @@ private:
 
         if constexpr (MGT != MoveGenType::NOISY) {
             while (singlePush) {
-                const Square to = Square(static_cast<int>(singlePush.pop()));
+                const Square to = Square(singlePush.pop());
                 const Square from = to + DOWN;
                 moveList.add(Move(from, to));
             }
 
             while (doublePush) {
-                const Square to = Square(static_cast<int>(doublePush.pop()));
+                const Square to = Square(doublePush.pop());
                 const Square from = to + DOWN + DOWN;
                 moveList.add(Move(from, to));
             }
@@ -267,7 +267,7 @@ private:
         Bitboard enPassantAttackers = Attacks::pawn(enPassantSquare, ~COLOR) & attackingPawns;
 
         while (enPassantAttackers) {
-            const Square from = Square(static_cast<int>(enPassantAttackers.pop()));
+            const Square from = Square(enPassantAttackers.pop());
             const Square to = enPassantSquare;
 
             if (bool(Bitboard(from) & diagonalPins) && !(Bitboard(to) & diagonalPins)) {
@@ -394,7 +394,7 @@ private:
                 if (checks == 0) {
                     Bitboard castlingMoves = castling<C>(position, kingSquare, occupied, attackedSquares);
                     while (castlingMoves) {
-                        const Square to = Square(static_cast<int>(castlingMoves.pop()));
+                        const Square to = Square(castlingMoves.pop());
                         moveList.add(Move(kingSquare, to, MoveType::CASTLING));
                     }
                 }
@@ -439,10 +439,10 @@ private:
     template<typename F>
     static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc) {
         while (bitboard) {
-            const Square from = Square(static_cast<int>(bitboard.pop()));
+            const Square from = Square(bitboard.pop());
             Bitboard moves = movesFunc(from);
             while (moves) {
-                const Square to = Square(static_cast<int>(moves.pop()));
+                const Square to = Square(moves.pop());
                 moveList.add(Move(from, to));
             }
         }

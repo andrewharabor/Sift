@@ -32,7 +32,7 @@ public:
 
     constexpr PieceType() noexcept : pieceType_(PieceTypeEnum::NONE) {}
     constexpr PieceType(PieceTypeEnum pieceType) noexcept : pieceType_(pieceType) {}
-    constexpr PieceType(int pieceType) noexcept : pieceType_(static_cast<PieceTypeEnum>(pieceType)) { assert(pieceType >= 0 && pieceType < 7); }
+    constexpr PieceType(UInt8 pieceType) noexcept : pieceType_(static_cast<PieceTypeEnum>(pieceType)) { assert(pieceType < 7); }
 
     constexpr PieceType(std::string_view piece) noexcept : pieceType_(PieceTypeEnum::NONE) {
         assert(piece.size() == 1);
@@ -60,7 +60,7 @@ public:
     constexpr bool operator>(const PieceType &other) const noexcept { return pieceType_ > other.pieceType_; }
     constexpr bool operator<=(const PieceType &other) const noexcept { return pieceType_ <= other.pieceType_; }
     constexpr bool operator>=(const PieceType &other) const noexcept { return pieceType_ >= other.pieceType_; }
-    constexpr operator int() const noexcept { return static_cast<int>(pieceType_); }
+    constexpr operator UInt8() const noexcept { return static_cast<UInt8>(pieceType_); }
 
     constexpr explicit operator std::string() const noexcept {
         if (pieceType_ == PieceTypeEnum::NONE) {
@@ -123,7 +123,7 @@ public:
 
     constexpr Piece() noexcept : piece_(PieceEnum::NONE) {}
     constexpr Piece(PieceEnum piece) noexcept : piece_(piece) {}
-    constexpr Piece(int piece) noexcept : piece_(static_cast<PieceEnum>(piece)) { assert(piece >= 0 && piece < 13); }
+    constexpr Piece(UInt8 piece) noexcept : piece_(static_cast<PieceEnum>(piece)) { assert(piece < 13); }
 
     constexpr Piece(std::string_view piece) noexcept : piece_(PieceEnum::NONE) {
         assert(piece.size() == 1);
@@ -171,7 +171,7 @@ public:
     constexpr bool operator>(const Piece &other) const noexcept { return piece_ > other.piece_; }
     constexpr bool operator<=(const Piece &other) const noexcept { return piece_ <= other.piece_; }
     constexpr bool operator>=(const Piece &other) const noexcept { return piece_ >= other.piece_; }
-    constexpr operator int() const noexcept { return static_cast<int>(piece_); }
+    constexpr operator UInt8() const noexcept { return static_cast<UInt8>(piece_); }
 
     constexpr explicit operator std::string() const noexcept {
         if (piece_ == PieceEnum::NONE) {
@@ -220,14 +220,14 @@ public:
         if (piece_ == PieceEnum::NONE) {
             return PieceType::NONE;
         }
-        return PieceType(static_cast<int>(piece_) % 6);
+        return PieceType(static_cast<UInt8>(piece_) % 6);
     }
 
     constexpr Color color() const noexcept {
         if (piece_ == PieceEnum::NONE) {
             return Color::NONE;
         }
-        return Color(static_cast<int>(piece_) / 6);
+        return Color(static_cast<UInt8>(piece_) / 6);
     }
 
     constexpr PieceEnum internal() const noexcept { return piece_; }

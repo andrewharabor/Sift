@@ -23,8 +23,8 @@ public:
         [[maybe_unused]] UInt32 count = 0;
         for (PieceType pieceType : {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN, PieceType::KING}) {
             for (Color color : {Color::WHITE, Color::BLACK}) {
-                for (int i = 0; i < 63; i++) {
-                    for (int j = i + 1; j < 64; j++) {
+                for (UInt8 i = 0; i < 63; i++) {
+                    for (UInt8 j = i + 1; j < 64; j++) {
                         Square from = Square(i);
                         Square to = Square(j);
                         Bitboard attacks = Bitboard();

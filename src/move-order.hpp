@@ -25,7 +25,7 @@ public:
 
         MoveGen::legal(position_, moves_);
         auto compare = [this](const Move &move1, const Move &move2) {
-            return static_cast<int>(position_.noisy(move1)) > static_cast<int>(position_.noisy(move2));
+            return position_.noisy(move1) > position_.noisy(move2);
         };
         moves_.sort(compare);
     }

@@ -11,7 +11,7 @@ namespace Clownfish {
 class Benchmark {
 public:
     template<MoveGenType MGT = MoveGenType::ALL>
-    static UInt64 perft(Position &position, int depth) {
+    static UInt64 perft(Position &position, UInt16 depth) {
         MoveList moveList;
 
         if (depth == 1) {
