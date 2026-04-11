@@ -604,7 +604,7 @@ private:
         rootMoves_.clear();
         MoveList moves;
         MoveGen::legal(position_, moves);
-        for (Move move : moves) {
+        for (const Move move : moves) {
             rootMoves_.push_back(RootMove(move));
         }
     }

@@ -734,6 +734,126 @@ public:
         return pieces(PieceType::KING, color).lsb();
     }
 
+    template<Color::ColorEnum C>
+    std::pair<Bitboard, UInt8> checkMask() const noexcept {
+        static_assert(C != Color::NONE);
+        constexpr Color COLOR = Color(C);
+
+        const Square kingSq = kingSquare(COLOR);
+        const Bitboard occ = occupied();
+
+        const Bitboard pawns = pieces(PieceType::PAWN, ~COLOR);
+        const Bitboard knights = pieces(PieceType::KNIGHT, ~COLOR);
+        const Bitboard bishops = pieces(PieceType::BISHOP, ~COLOR);
+        const Bitboard rooks = pieces(PieceType::ROOK, ~COLOR);
+        const Bitboard queens = pieces(PieceType::QUEEN, ~COLOR);
+
+        Bitboard mask = Bitboard();
+        UInt8 checks = 0;
+
+        Bitboard pawnMask = Attacks::pawn(kingSq, COLOR) & pawns;
+        mask |= pawnMask;
+        checks += pawnMask.count();
+
+        Bitboard knightMask = Attacks::knight(kingSq) & knights;
+        mask |= knightMask;
+        checks += knightMask.count();
+
+        Bitboard bishopMask = Attacks::bishop(kingSq, occ) & (bishops | queens);
+        while (bishopMask) {
+            mask |= Attacks::between(kingSq, bishopMask.pop());
+            checks++;
+        }
+
+        Bitboard rookMask = Attacks::rook(kingSq, occ) & (rooks | queens);
+        while (rookMask) {
+            mask |= Attacks::between(kingSq, rookMask.pop());
+            checks++;
+        }
+
+        if (!mask) {
+            mask = Bitboard(0xFFFFFFFFFFFFFFFFULL);
+        }
+
+        return {mask, checks};
+    }
+
+    template<Color::ColorEnum C, PieceType::PieceTypeEnum PT>
+    Bitboard pinMask() const noexcept {
+        static_assert(C != Color::NONE);
+        static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK);
+        constexpr Color COLOR = Color(C);
+
+        const Square kingSq = kingSquare(COLOR);
+        const Bitboard friendlyOcc = friendly(COLOR);
+        const Bitboard enemyOcc = enemy(COLOR);
+
+        Bitboard sliders = Attacks::slider<PT>(kingSq, enemyOcc) & (pieces(PT) | pieces(PieceType::QUEEN)) & enemyOcc;
+        Bitboard mask = Bitboard();
+        while (sliders) {
+            const Bitboard possiblePin = Attacks::between(kingSq, sliders.pop());
+            if ((possiblePin & friendlyOcc).count() == 1) {
+                mask |= possiblePin;
+            }
+        }
+        return mask;
+    }
+
+    template<Color::ColorEnum C>
+    Bitboard blockMask() const noexcept {
+        static_assert(C != Color::NONE);
+        constexpr Color COLOR = Color(C);
+
+        const Square enemyKingSq = kingSquare(~COLOR);
+        const Bitboard friendlyOcc = friendly(COLOR);
+        const Bitboard enemyOcc = enemy(COLOR);
+
+        const Bitboard bishops = Attacks::bishop(enemyKingSq, enemyOcc) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN)) & friendlyOcc;
+        const Bitboard rooks = Attacks::rook(enemyKingSq, enemyOcc) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN)) & friendlyOcc;
+        Bitboard snipers = bishops | rooks;
+        Bitboard mask = Bitboard();
+        while (snipers) {
+            const Square sniperSquare = snipers.pop();
+            const Bitboard possibleBlock = Attacks::between(enemyKingSq, sniperSquare) ^ Bitboard(sniperSquare);
+            if ((possibleBlock & friendlyOcc).count() == 1) {
+                mask |= possibleBlock;
+            }
+        }
+        return mask;
+    }
+
+    template<Color::ColorEnum C>
+    Bitboard attackMask() const noexcept {
+        static_assert(C != Color::NONE);
+        constexpr Color COLOR = Color(C);
+
+        const Square kingSq = kingSquare(COLOR);
+        const Square enemyKingSq = kingSquare(~COLOR);
+        const Bitboard occ = occupied() ^ Bitboard(enemyKingSq);
+
+        const Bitboard pawns = pieces(PieceType::PAWN, COLOR);
+        Bitboard knights = pieces(PieceType::KNIGHT, COLOR);
+        Bitboard queens = pieces(PieceType::QUEEN, COLOR);
+        Bitboard bishops = pieces(PieceType::BISHOP, COLOR) | queens;
+        Bitboard rooks = pieces(PieceType::ROOK, COLOR) | queens;
+
+        Bitboard mask = Bitboard();
+
+        mask |= Attacks::allPawns<C>(pawns);
+        while (knights) {
+            mask |= Attacks::knight(knights.pop());
+        }
+        while (bishops) {
+            mask |= Attacks::bishop(bishops.pop(), occ);
+        }
+        while (rooks) {
+            mask |= Attacks::rook(rooks.pop(), occ);
+        }
+        mask |= Attacks::king(kingSq);
+
+        return mask;
+    }
+
     constexpr bool attacked(Square square, Color color) const noexcept {
         assert(square != Square::NONE && color != Color::NONE);
         if (Attacks::pawn(square, ~color) & pieces(PieceType::PAWN, color)) {
@@ -868,9 +988,138 @@ public:
         }
     }
 
+    constexpr bool pseudoLegal(const Move move) const noexcept {
+        assert(move != Move::NULL_MOVE);
+
+        if (move.from() == move.to()) {
+            return false;
+        }
+
+        const Piece piece = pieceAt(move.from());
+        if (piece == Piece::NONE || piece.color() != sideToMove_) {
+            return false;
+        }
+
+        const Piece capturedPiece = pieceAt(move.to());
+
+        Bitboard attackedSquares = Bitboard();
+        if (sideToMove_ == Color::WHITE) {
+            attackedSquares = attackMask<Color::BLACK>();
+        } else {
+            attackedSquares = attackMask<Color::WHITE>();
+        }
+
+        if (move.type() == MoveType::CASTLING) {
+            if (piece.type() != PieceType::KING || inCheck()) {
+                return false;
+            }
+
+            if (move.from() != Square(Square::SQUARE_E1, sideToMove_)) {
+                return false;
+            }
+
+            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            if (move.to() != CastlingRights::rookFrom(castlingSide) || capturedPiece != Piece(PieceType::ROOK, sideToMove_)) {
+                return false;
+            }
+
+            if (!castlingRights_.get(castlingSide)) {
+                return false;
+            }
+
+            return (castlingPath(castlingSide) & (occupied() | attackedSquares)) == Bitboard();
+        }
+
+        if (piece.type() != PieceType::PAWN && move.type() != MoveType::NORMAL) {
+            return false;
+        }
+
+        if ((capturedPiece != Piece::NONE && capturedPiece.color() == sideToMove_) || capturedPiece.type() == PieceType::KING) {
+            return false;
+        }
+
+        Bitboard checkSquares;
+        UInt8 checks;
+        if (sideToMove_ == Color::WHITE) {
+            std::tie(checkSquares, checks) = checkMask<Color::WHITE>();
+        } else {
+            std::tie(checkSquares, checks) = checkMask<Color::BLACK>();
+        }
+
+        if (checks >= 2 && piece.type() != PieceType::KING) {
+            return false;
+        }
+
+        if (piece.type() != PieceType::KING && move.type() != MoveType::EN_PASSANT && !(checkSquares & Bitboard(move.to()))) {
+            return false;
+        }
+
+        if (piece.type() == PieceType::PAWN) {
+            if (move.type() == MoveType::EN_PASSANT) {
+                if (move.to() != enPassantSquare_) {
+                    return false;
+                }
+
+                if (!(Attacks::pawn(move.from(), sideToMove_) & Bitboard(move.to()))) {
+                    return false;
+                }
+                const Direction down = Direction(Direction::SOUTH, sideToMove_);
+                const Square target = enPassantSquare_ + down;
+
+                return (checks == 0) || (Bitboard(target) & checkSquares);
+            }
+
+            const Direction up = Direction(Direction::NORTH, sideToMove_);
+            if (capturedPiece == Piece::NONE) {
+                if (move.to() == move.from() + up) {
+                    if (move.type() == MoveType::PROMOTION) {
+                        return Rank(Rank::RANK_7, sideToMove_) == move.from().rank();
+                    } else {
+                        return move.from().rank() < Rank(Rank::RANK_7, sideToMove_) && move.from().rank() > Rank(Rank::RANK_1, sideToMove_);
+                    }
+                } else if (move.to() == (move.from() + up) + up) {
+                    if (pieceAt(move.from() + up) != Piece::NONE) {
+                        return false;
+                    }
+                    return move.from().rank() == Rank(Rank::RANK_2, sideToMove_);
+                } else {
+                    return false;
+                }
+            } else {
+                if (!(Attacks::pawn(move.from(), sideToMove_) & Bitboard(move.to()))) {
+                    return false;
+                }
+
+                if (move.type() == MoveType::PROMOTION) {
+                    return Rank(Rank::RANK_7, sideToMove_) == move.from().rank();
+                } else {
+                    return move.from().rank() < Rank(Rank::RANK_7, sideToMove_) && move.from().rank() > Rank(Rank::RANK_1, sideToMove_);
+                }
+            }
+        }
+
+        Bitboard attacks;
+        if (piece.type() == PieceType::KNIGHT) {
+            attacks = Attacks::knight(move.from());
+        } else if (piece.type() == PieceType::BISHOP) {
+            attacks = Attacks::bishop(move.from(), occupied());
+        } else if (piece.type() == PieceType::ROOK) {
+            attacks = Attacks::rook(move.from(), occupied());
+        } else if (piece.type() == PieceType::QUEEN) {
+            attacks = Attacks::queen(move.from(), occupied());
+        } else if (piece.type() == PieceType::KING) {
+            attacks = Attacks::king(move.from()) & ~attackedSquares;
+        } else {
+            assert(false);
+            attacks = Bitboard();
+        }
+
+        return bool(attacks & Bitboard(move.to()));
+    }
+
     constexpr bool nonPawnMaterial(Color color) const noexcept {
         assert(color != Color::NONE);
-        return static_cast<bool>(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
+        return bool(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
     }
 
     bool repetition3Fold(Int32 searchPly) const noexcept { return repetitions_ > 1 || (repetitions_ == 1 && repetitionPly_ < searchPly); }

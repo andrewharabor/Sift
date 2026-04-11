@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <string>
+#include <string_view>
 
 #include "coords.hpp"
 #include "piece.hpp"
@@ -46,7 +47,7 @@ public:
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
     constexpr bool operator!=(const Move &other) const noexcept { return move_ != other.move_; }
 
-    constexpr explicit operator std::string() const noexcept {
+    constexpr explicit operator std::string() const {
         if (move_ == NULL_MOVE) {
             return "null";
         }
