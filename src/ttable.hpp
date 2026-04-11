@@ -33,8 +33,6 @@ struct TTableEntry {
 
 class TTable {
 public:
-
-
     TTable(USize sizeMB) : table_(nullptr), size_(0), age_(0) {
         resize(sizeMB);
     }
@@ -46,6 +44,8 @@ public:
     }
 
     void resize(USize sizeMB) {
+        assert(sizeMB > 0);
+
         USize buckets = (sizeMB * 1024 * 1024) / sizeof(Bucket);
         if (table_) {
             std::free(table_);
@@ -64,7 +64,7 @@ public:
         const Bucket &bucket = table_[index(key)];
         USize entryIndex = 0;
         bool found = false;
-        UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
+        const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
         for (USize i = 0; i < ENTRIES; i++) {
             if (bucket.entries[i].key16 == key16) {
                 entryIndex = i;
@@ -89,7 +89,7 @@ public:
     }
 
     void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 depth, bool pv, TTableEntry::Bound bound) {
-        UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
+        const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
         Bucket &bucket = table_[index(key)];
         Int32 bestQuality = std::numeric_limits<Int32>::max();
         USize replaceIndex = 0;
@@ -99,7 +99,7 @@ public:
                 break;
             }
 
-            Int32 entryQuality = quality(bucket.entries[i].gen(), bucket.entries[i].depth);
+            const Int32 entryQuality = quality(bucket.entries[i].gen(), bucket.entries[i].depth);
             if (entryQuality < bestQuality) {
                 bestQuality = entryQuality;
                 replaceIndex = i;
@@ -124,9 +124,10 @@ public:
         prefetchPtr(static_cast<const void *>(&table_[index(key)]));
     }
 
-    Int32 occupancy() const {
-        Int32 count = 0;
-        for (USize i = 0; i < size_; i++) {
+    USize hashfull() const {
+        USize count = 0;
+        USize sampleSize = std::min(size_, static_cast<USize>(1000));
+        for (USize i = 0; i < sampleSize; i++) {
             for (USize j = 0; j < ENTRIES; j++) {
                 const RawEntry &entry = table_[i].entries[j];
                 if (entry.bound() != TTableEntry::Bound::NONE && entry.gen() == age_) {
@@ -134,7 +135,7 @@ public:
                 }
             }
         }
-        return (count * 1000) / (size_ * ENTRIES);
+        return (count * 1000) / (sampleSize * ENTRIES);
     }
 
     void incrementAge() {
@@ -166,7 +167,7 @@ private:
         }
 
         void setBoundPVGen(TTableEntry::Bound bound, bool pv, UInt8 gen) {
-            boundPVGen = static_cast<UInt8>(bound) | (pv << 2) | (gen << 3);
+            boundPVGen = static_cast<UInt8>(bound) | (static_cast<UInt8>(pv << 2) | static_cast<UInt8>(gen << 3));
         }
     };
 
@@ -201,9 +202,9 @@ private:
     Int16 store(Int32 score, Int32 ply) const {
         if (Score::mate(score)) {
             if (score < 0) {
-                return score - ply;
+                return static_cast<Int16>(score - ply);
             } else {
-                return score + ply;
+                return static_cast<Int16>(score + ply);
             }
         }
         return static_cast<Int16>(score);

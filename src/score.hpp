@@ -10,11 +10,11 @@ namespace Score {
 constexpr Int32 MAX_PLY = 250;
 
 constexpr Int32 ZERO = 0;
-constexpr Int32 MAX = 32001;
+constexpr Int32 MAX = 32767;
 constexpr Int32 MIN = -MAX;
-constexpr Int32 NONE = 32002;
+constexpr Int32 NONE = -33000;
 
-constexpr Int32 MATE = 32000;
+constexpr Int32 MATE = 32700;
 constexpr Int32 MATED = -MATE;
 constexpr Int32 MATE_IN_MAX = MATE - MAX_PLY;
 constexpr Int32 MATED_IN_MAX = -MATE_IN_MAX;

@@ -17,7 +17,6 @@ using MS = std::chrono::milliseconds;
 struct SearchLimits {
     Int32 depth = std::numeric_limits<Int32>::max();
     UInt64 nodes = std::numeric_limits<UInt64>::max();
-    UInt64 softNodes = std::numeric_limits<UInt64>::max();
     MS time = MS::max();
 
     struct {
@@ -31,20 +30,23 @@ struct SearchLimits {
 
 class TimeManager {
 public:
-    constexpr TimeManager() noexcept : checkCount_(0), startTime_(), softBound_(), hardBound_(), prevBestMove_(), stability_(0) {}
+    constexpr TimeManager() noexcept : startTime_(), softBound_(), hardBound_(), checkCount_(0), prevBestMove_(), stability_(0) {}
 
-    MS elapsed() const noexcept {
-        return std::chrono::duration_cast<MS>(std::chrono::steady_clock::now() - startTime_);
-    }
+    MS elapsed() const noexcept { return std::chrono::duration_cast<MS>(std::chrono::steady_clock::now() - startTime_); }
 
-    void searchLimits(const SearchLimits &limits, Color color) noexcept {
+    void limits(const SearchLimits &limits, Color color, USize moveCount) noexcept {
         if (limits.clock.enabled) {
-            MS time = std::max(MS(1), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
-            MS increment = limits.clock.increment[static_cast<USize>(color)];
+            const MS time = std::max(MS(0), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
+            const MS increment = limits.clock.increment[static_cast<USize>(color)];
 
-            auto baseTime = (time / BASE_TIME_SCALE) + (increment * INCREMENT_SCALE);
+            const auto baseTime = (time * BASE_TIME_SCALE) + (increment * INCREMENT_SCALE);
             softBound_ = std::chrono::duration_cast<MS>(baseTime * SOFT_TIME_SCALE);
             hardBound_ = std::chrono::duration_cast<MS>(time * HARD_TIME_SCALE);
+
+            if (moveCount == 1) {
+                softBound_ = std::min(softBound_, ONE_MOVE_BOUND);
+                hardBound_ = std::min(hardBound_, ONE_MOVE_BOUND);
+            }
         }
     }
 
@@ -55,11 +57,7 @@ public:
         prevBestMove_ = Move::NULL_MOVE;
     }
 
-    bool stopSoft(const SearchLimits &limits, Move bestMove, UInt64 moveNodes, UInt64 nodes) noexcept {
-        if (nodes > limits.softNodes) {
-            return true;
-        }
-
+    bool stopSoft(const SearchLimits &limits, Move bestMove, UInt64 bestMoveNodes, UInt64 nodes) noexcept {
         if (bestMove == prevBestMove_) {
             stability_++;
         } else {
@@ -67,10 +65,10 @@ public:
             prevBestMove_ = bestMove;
         }
 
-        Float64 nodeFraction = static_cast<Float64>(moveNodes) / static_cast<Float64>(nodes + 1);
-        Float64 nodeScale = (NODE_TIME_BASE - nodeFraction) * NODE_TIME_SCALE;
-        Float64 stabilityScale = std::max(MOVE_STABILITY_MIN, MOVE_STABILITY_BASE + MOVE_STABILITY_SCALE * std::pow(stability_ + MOVE_STABILITY_OFFSET, MOVE_STABILITY_POWER));
-        Float64 scale = nodeScale * stabilityScale;
+        const Float64 nodeFraction = static_cast<Float64>(bestMoveNodes) / static_cast<Float64>(nodes + 1);
+        const Float64 nodeScale = (NODE_TIME_BASE - nodeFraction) * NODE_TIME_SCALE;
+        const Float64 stabilityScale = std::max(MOVE_STABILITY_MIN, MOVE_STABILITY_BASE + MOVE_STABILITY_SCALE * std::pow(stability_ + MOVE_STABILITY_OFFSET, MOVE_STABILITY_POWER));
+        const Float64 scale = nodeScale * stabilityScale;
 
         if (limits.clock.enabled && elapsed() > std::chrono::duration_cast<MS>(softBound_ * scale)) {
             return true;
@@ -99,16 +97,18 @@ public:
 private:
     static constexpr UInt32 CHECK_INTERVAL = 2048;
 
-    static constexpr Float64 BASE_TIME_SCALE = 0.2;
-    static constexpr Float64 HARD_TIME_SCALE = 0.61;
-    static constexpr Float64 SOFT_TIME_SCALE = 0.7;
+    static constexpr MS ONE_MOVE_BOUND = MS(500);
+
+    static constexpr Float64 BASE_TIME_SCALE = 0.05;
     static constexpr Float64 INCREMENT_SCALE = 0.89;
+    static constexpr Float64 SOFT_TIME_SCALE = 0.7;
+    static constexpr Float64 HARD_TIME_SCALE = 0.61;
 
     static constexpr Float64 NODE_TIME_BASE = 1.4;
     static constexpr Float64 NODE_TIME_SCALE = 1.59;
 
-    static constexpr Float64 MOVE_STABILITY_BASE = 0.77;
     static constexpr Float64 MOVE_STABILITY_MIN = 0.93;
+    static constexpr Float64 MOVE_STABILITY_BASE = 0.77;
     static constexpr Float64 MOVE_STABILITY_SCALE = 9.69;
     static constexpr Float64 MOVE_STABILITY_OFFSET = 2.66;
     static constexpr Float64 MOVE_STABILITY_POWER = -1.53;

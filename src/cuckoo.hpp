@@ -25,8 +25,8 @@ public:
             for (Color color : {Color::WHITE, Color::BLACK}) {
                 for (UInt8 i = 0; i < 63; i++) {
                     for (UInt8 j = i + 1; j < 64; j++) {
-                        Square from = Square(i);
-                        Square to = Square(j);
+                        const Square from = Square(i);
+                        const Square to = Square(j);
                         Bitboard attacks = Bitboard();
                         if (pieceType == PieceType::KNIGHT) {
                             attacks = Attacks::knight(from);

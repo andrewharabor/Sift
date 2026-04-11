@@ -1,0 +1,60 @@
+
+#include <iostream>
+#include <string>
+#include "search.hpp"
+#include "types.hpp"
+
+using namespace Clownfish;
+using namespace std;
+
+void printInfo(const SearchInfo &info);
+
+int main() {
+    Attacks::init();
+    CuckooTable::init();
+
+    Position position = Position();
+    SearchLimits limits;
+    limits.depth = 10;
+
+    Search search = Search(16, printInfo);
+    search.newGame();
+    auto [move, score] = search.run(position, limits);
+    cout << "bestmove " << string(move) << endl;
+
+    // position.make(Move(Square::SQUARE_E2, Square::SQUARE_E4));
+    // search.run(position, limits);
+}
+
+void printInfo(const SearchInfo &info) {
+    cout << "info depth " << info.depth;
+    cout << " seldepth " << info.selDepth;
+    cout << " time " << info.time.count();
+    cout << " nodes " << info.nodes;
+    const UInt64 elapsedMs = static_cast<UInt64>(info.time.count());
+    UInt64 nps = (info.nodes * 1000ULL) / (elapsedMs + 1ULL);
+    cout << " nps " << nps;
+    cout << " hashfull " << info.hashfull;
+    cout << " score ";
+    if (Score::mate(info.score)) {
+        if (info.score > 0) {
+            cout << "mate " << ((Score::MATE - info.score) + 1) / 2;
+        } else {
+            cout << "mate -" << (info.score + Score::MATE) / 2;
+        }
+    } else {
+        cout << "cp " << info.score;
+    }
+
+    if (info.lowerBound) {
+        cout << " lowerbound";
+    } else if (info.upperBound) {
+        cout << " upperbound";
+    }
+
+    cout << " pv ";
+    for (Move move : info.pv) {
+        cout << string(move) << " ";
+    }
+    cout << std::endl;
+}

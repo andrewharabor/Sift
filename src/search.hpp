@@ -34,27 +34,42 @@ struct SearchNode {
     UInt32 failHighCount;
 };
 
+struct SearchInfo {
+    Int32 depth;
+    Int32 selDepth;
+    MS time;
+    UInt64 nodes;
+    USize hashfull;
+    Int32 score;
+    bool lowerBound;
+    bool upperBound;
+    MoveList pv;
+};
+
+template<typename F>
 class Search {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    Search(USize tableSizeMB) noexcept : tTable_(tableSizeMB) {
-        reset();
-    }
+    Search(USize tableSizeMB, F uciPrintSearchInfo) : tTable_(tableSizeMB), timeManager_(), uciPrintSearchInfo_(std::move(uciPrintSearchInfo)) { reset(); }
 
-    void run(const Position &position, const SearchLimits &limits) noexcept {
+    std::pair<Move, Int32> run(const Position &position, const SearchLimits &limits) noexcept {
         reset();
         tTable_.incrementAge();
 
         position_ = position;
+
         initRootMoves();
+        if (rootMoves_.empty()) {
+            return {Move::NULL_MOVE, Score::NONE};
+        }
 
         timeUp_ = false;
         limits_ = limits;
-        timeManager_.searchLimits(limits, position_.sideToMove());
+        timeManager_.limits(limits, position_.sideToMove(), rootMoves_.size());
         timeManager_.start();
 
-        iterativeDeepening();
+        return iterativeDeepening();
     }
 
     constexpr void newGame() noexcept {
@@ -104,9 +119,10 @@ private:
         constexpr RootMove(Move move) noexcept : move(move) {}
     };
 
-    struct Info {
-        // TODO
-    };
+    static constexpr Int32 WINDOW_INIT_DELTA = 10;
+    static constexpr Int32 MIN_WINDOW_DEPTH = 6;
+    static constexpr Int32 WINDOW_WIDENING_FACTOR = 58;
+    static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
     Position position_;
 
@@ -124,9 +140,63 @@ private:
     SearchLimits limits_;
     bool timeUp_;
 
+    F uciPrintSearchInfo_;
+
     std::pair<Move, Int32> iterativeDeepening() noexcept {
-        // TODO
-        return {Move::NULL_MOVE, Score::NONE};
+        const Int32 maxDepth = std::min(limits_.depth, static_cast<Int32>(MAX_PLY - 1));
+        Int32 score = 0;
+
+        for (Int32 depth = 1; depth <= maxDepth; depth++) {
+            rootDepth_ = depth;
+            selDepth_ = 0;
+
+            Int32 alpha = Score::MIN;
+            Int32 beta = Score::MAX;
+            Int32 delta = WINDOW_INIT_DELTA;
+            Int32 searchDepth = depth;
+
+            if (depth >= MIN_WINDOW_DEPTH) {
+                alpha = std::max(score - delta, Score::MIN);
+                beta = std::min(score + delta, Score::MAX);
+            }
+
+            Int32 searchScore = 0;
+
+            while (true) {
+                searchScore = search(0, searchDepth, alpha, beta, true, false);
+                sortRootMoves();
+
+                printSearchInfo(depth);
+
+                if (timeUp_) {
+                    break;
+                }
+
+                if (searchScore <= alpha) {
+                    beta = (alpha + beta) / 2;
+                    alpha = std::max(alpha - delta, Score::MIN);
+                } else if (searchScore >= beta) {
+                    beta = std::min(beta + delta, Score::MAX);
+                } else {
+                    break;
+                }
+
+                delta += (delta * WINDOW_WIDENING_FACTOR) / WINDOW_WIDENING_SCALE;
+            }
+
+            if (timeUp_) {
+                break;
+            }
+
+            score = searchScore;
+
+            if (timeManager_.stopSoft(limits_, rootMoves_[0].move, rootMoves_[0].nodes, nodes_)) {
+                timeUp_ = true;
+                break;
+            }
+        }
+
+        return {rootMoves_[0].move, score};
     }
 
     Int32 search(USize ply, Int32 depth, Int32 alpha, Int32 beta, bool pvNode, bool cutNode) noexcept {
@@ -151,9 +221,9 @@ private:
             return alpha;
         }
 
-        bool rootNode = (rootPly_ == 0);
-        bool inCheck = position_.inCheck();
-        bool excludedMove = searchStack_[ply].excludedMove != Move::NULL_MOVE;
+        const bool rootNode = (rootPly_ == 0);
+        const bool inCheck = position_.inCheck();
+        const bool excludedMove = searchStack_[ply].excludedMove != Move::NULL_MOVE;
 
         searchStack_[ply].pv.clear();
 
@@ -164,11 +234,11 @@ private:
             }
         }
 
-        if (positionDraw(rootPly_)) {
+        if (positionDraw()) {
             return Score::DRAW;
         }
 
-        if (rootPly_ >= MAX_PLY) {
+        if (static_cast<USize>(rootPly_) >= MAX_PLY) {
             return SimPLYChessEval::evaluate(position_); // FIXME use Eval
         }
 
@@ -209,7 +279,7 @@ private:
             }
         }
 
-        bool tablePV = pvNode || (tableHit && tableEntry.pv);
+        const bool tablePV = pvNode || (tableHit && tableEntry.pv);
 
         searchStack_[ply + 1].killerMoves[0] = searchStack_[ply + 1].killerMoves[1] = Move::NULL_MOVE;
 
@@ -230,16 +300,16 @@ private:
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
-            auto [move, moveScore] = scoredMove;
+            const auto [move, moveScore] = scoredMove;
             if (move == searchStack_[ply].excludedMove) {
                 continue;
             }
 
-            bool quiet = position_.quiet(move);
+            const bool quiet = position_.quiet(move);
 
             tTable_.prefetch(position_.zobristAfter(move));
 
-            UInt64 nodesBefore = nodes_;
+            const UInt64 nodesBefore = nodes_;
 
             makeMove(ply, move);
             movesTried++;
@@ -250,7 +320,7 @@ private:
                 noisiesTried.add(move);
             }
 
-            Int32 newDepth = depth - 1;
+            const Int32 newDepth = depth - 1;
             Int32 score = 0;
 
             if (!pvNode || movesTried > 1) {
@@ -271,8 +341,10 @@ private:
                 RootMove &rootMove = findRootMove(move);
                 rootMove.prevScore = rootMove.score;
                 rootMove.nodes += nodes_ - nodesBefore;
+
                 if (movesTried == 1 || score > alpha) {
-                    rootMove.displayScore = rootMove.score = score;
+                    rootMove.score = score;
+                    rootMove.displayScore = score;
                     rootMove.selDepth = selDepth_;
                     rootMove.lowerBound = false;
                     rootMove.upperBound = false;
@@ -367,13 +439,13 @@ private:
         searchStack_[ply].pv.clear();
 
         auto [tableEntry, tableHit] = tTable_.probe(position_.hash(), rootPly_);
-        bool tablePV = pvNode || (tableHit && tableEntry.pv);
+        const bool tablePV = pvNode || (tableHit && tableEntry.pv);
 
         if (tableHit && !pvNode && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
             return tableEntry.score;
         }
 
-        bool inCheck = position_.inCheck();
+        const bool inCheck = position_.inCheck();
         Int32 staticEval = Score::NONE;
 
         if (inCheck) {
@@ -406,7 +478,7 @@ private:
             alpha = searchStack_[ply].eval;
         }
 
-        if (rootPly_ >= MAX_PLY) {
+        if (static_cast<USize>(rootPly_) >= MAX_PLY) {
             return alpha;
         }
 
@@ -440,7 +512,7 @@ private:
             //     break;
             // }
 
-            auto [move, moveScore] = scoredMove;
+            const auto [move, moveScore] = scoredMove;
 
             // TODO: SEE and futility pruning
 
@@ -449,7 +521,7 @@ private:
             makeMove(ply, move);
             movesTried++;
 
-            Int32 score = -quiescenceSearch(ply + 1, -beta, -alpha, pvNode);
+            const Int32 score = -quiescenceSearch(ply + 1, -beta, -alpha, pvNode);
 
             unmakeMove(ply);
 
@@ -492,7 +564,7 @@ private:
         return bestScore;
     }
 
-    bool positionDraw(USize ply) noexcept {
+    bool positionDraw() noexcept {
         bool noMoves = false;
         if (position_.halfmoveClock() >= 100) {
             MoveList moves;
@@ -518,12 +590,12 @@ private:
         searchStack_[ply].movedPiece = Piece::NONE;
     }
 
-    void makeNullMove(USize ply) noexcept {
+    void makeNullMove() noexcept {
         position_.makeNull();
         rootPly_++;
     }
 
-    void unmakeNullMove(USize ply) noexcept {
+    void unmakeNullMove() noexcept {
         position_.unmakeNull();
         rootPly_--;
     }
@@ -552,6 +624,21 @@ private:
             return rootMove.move == move;
         };
         return *std::find_if(rootMoves_.begin(), rootMoves_.end(), compare);
+    }
+
+    constexpr void printSearchInfo(Int32 depth) const noexcept {
+        SearchInfo info;
+        info.depth = depth;
+        info.selDepth = rootMoves_[0].selDepth;
+        info.time = timeManager_.elapsed();
+        info.nodes = nodes_;
+        info.hashfull = tTable_.hashfull();
+        info.score = rootMoves_[0].displayScore;
+        info.lowerBound = rootMoves_[0].lowerBound;
+        info.upperBound = rootMoves_[0].upperBound;
+        info.pv = rootMoves_[0].pv;
+
+        uciPrintSearchInfo_(info);
     }
 };
 

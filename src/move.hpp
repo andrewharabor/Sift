@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <string>
 
 #include "coords.hpp"
 #include "piece.hpp"
@@ -44,6 +45,28 @@ public:
 
     constexpr bool operator==(const Move &other) const noexcept { return move_ == other.move_; }
     constexpr bool operator!=(const Move &other) const noexcept { return move_ != other.move_; }
+
+    constexpr explicit operator std::string() const noexcept {
+        if (move_ == NULL_MOVE) {
+            return "null";
+        }
+
+        std::string fromString = std::string(from());
+        Square toSquare = to();
+        if (type() == MoveType::CASTLING) {
+            if (toSquare.file() == File::FILE_A) {
+                toSquare = Square(File::FILE_C, toSquare.rank());
+            } else if (toSquare.file() == File::FILE_H) {
+                toSquare = Square(File::FILE_G, toSquare.rank());
+            }
+        }
+        std::string toString = std::string(toSquare);
+        std::string promotionString;
+        if (type() == MoveType::PROMOTION) {
+            promotionString = std::string(promotion());
+        }
+        return fromString + toString + promotionString;
+    }
 
     constexpr Square from() const noexcept { return Square((move_ >> 6) & 0x3F); }
     constexpr Square to() const noexcept { return Square(move_ & 0x3F); }

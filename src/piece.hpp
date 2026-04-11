@@ -66,17 +66,17 @@ public:
         if (pieceType_ == PieceTypeEnum::NONE) {
             return " ";
         } else if (pieceType_ == PieceTypeEnum::PAWN) {
-            return "P";
+            return "p";
         } else if (pieceType_ == PieceTypeEnum::KNIGHT) {
-            return "N";
+            return "n";
         } else if (pieceType_ == PieceTypeEnum::BISHOP) {
-            return "B";
+            return "b";
         } else if (pieceType_ == PieceTypeEnum::ROOK) {
-            return "R";
+            return "r";
         } else if (pieceType_ == PieceTypeEnum::QUEEN) {
-            return "Q";
+            return "q";
         } else if (pieceType_ == PieceTypeEnum::KING) {
-            return "K";
+            return "k";
         } else {
             assert(false);
             return "";
