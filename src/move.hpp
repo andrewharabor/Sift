@@ -49,7 +49,7 @@ public:
 
     constexpr explicit operator std::string() const {
         if (move_ == NULL_MOVE) {
-            return "null";
+            return "0000";
         }
 
         std::string fromString = std::string(from());

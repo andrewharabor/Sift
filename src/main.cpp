@@ -13,14 +13,31 @@ int main() {
     Attacks::init();
     CuckooTable::init();
 
-    Position position = Position("8/3br3/4k3/8/8/4K3/8/8 b - - 0 1");
+    Position position = Position();
     SearchLimits limits;
     limits.time = MS(10000);
 
     Search search = Search(16, printInfo);
     search.newGame();
-    auto [move, score] = search.run(position, limits);
-    cout << "bestmove " << string(move) << endl;
+
+    MoveList played;
+    while (true) {
+        MoveList legal;
+        MoveGen::legal(position, legal);
+        if (legal.empty() || position.draw(0, legal.empty())) {
+            break;
+        }
+
+        auto [move, score] = search.run(position, limits);
+        cout << "bestmove " << string(move) << endl;
+        position.make(move);
+        played.add(move);
+    }
+
+    for (Move move : played) {
+        cout << string(move) << " ";
+    }
+    cout << endl;
 }
 
 void printInfo(const SearchInfo &info) {

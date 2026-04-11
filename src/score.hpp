@@ -7,7 +7,7 @@ namespace Clownfish {
 
 namespace Score {
 
-constexpr Int32 MAX_PLY = 250;
+constexpr Int32 MAX_PLY = 251;
 
 constexpr Int32 ZERO = 0;
 constexpr Int32 MAX = 32767;
