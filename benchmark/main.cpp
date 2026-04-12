@@ -1,13 +1,12 @@
 
 #include <chrono>
-#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <string>
 
 #include "../src/attacks.hpp"
-#include "../src/benchmark.hpp"
 #include "../src/move-gen.hpp"
+#include "../src/perft.hpp"
 #include "../src/position.hpp"
 #include "../src/types.hpp"
 
@@ -24,7 +23,7 @@ void benchmark(const TestCase &testCase) {
     Position position = Position(testCase.fen);
 
     const auto start = std::chrono::high_resolution_clock::now();
-    const UInt64 nodes = Benchmark::perft(position, testCase.depth);
+    const UInt64 nodes = Perft::run(position, testCase.depth);
     const auto end = std::chrono::high_resolution_clock::now();
     const UInt64 duration = static_cast<UInt64>(std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
 

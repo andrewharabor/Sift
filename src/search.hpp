@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <functional>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -46,12 +47,13 @@ struct SearchInfo {
     MoveList pv;
 };
 
-template<typename F>
 class Search {
 public:
+    using Callback = std::function<void(const SearchInfo &)>;
+
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    Search(USize tableSizeMB, F uciPrintSearchInfo) : tTable_(tableSizeMB), timeManager_(), uciPrintSearchInfo_(std::move(uciPrintSearchInfo)) { reset(); }
+    Search(USize tableSizeMB, Callback uciPrintSearchInfo) : tTable_(tableSizeMB), timeManager_(), uciPrintSearchInfo_(std::move(uciPrintSearchInfo)) { reset(); }
 
     std::pair<Move, Int32> run(const Position &position, const SearchLimits &limits) noexcept {
         reset();
@@ -98,9 +100,7 @@ public:
         limits_ = SearchLimits();
     }
 
-    constexpr void resizeTTable(USize sizeMB) noexcept {
-        tTable_.resize(sizeMB);
-    }
+    constexpr void resizeTTable(USize sizeMB) noexcept { tTable_.resize(sizeMB); }
 
 private:
     struct RootMove {
@@ -140,7 +140,7 @@ private:
     SearchLimits limits_;
     bool timeUp_;
 
-    F uciPrintSearchInfo_;
+    Callback uciPrintSearchInfo_;
 
     std::pair<Move, Int32> iterativeDeepening() noexcept {
         const Int32 maxDepth = std::min(limits_.depth, static_cast<Int32>(MAX_PLY - 1));

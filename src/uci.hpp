@@ -1,10 +1,455 @@
 #pragma once
 
+#include <cassert>
+#include <chrono>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+
+#include "clownfish.hpp"
+#include "color.hpp"
+#include "eval.hpp"
+#include "move.hpp"
+#include "move-gen.hpp"
+#include "perft.hpp"
+#include "position.hpp"
+#include "search.hpp"
+#include "time.hpp"
+#include "types.hpp"
 
 namespace Clownfish {
 
-class UCI {
+enum class OptionType {
+    CHECK,
+    SPIN,
+    STRING,
+    BUTTON,
+    NONE
+};
 
+struct CheckOption {
+    bool value;
+};
+
+struct SpinOption {
+    Int64 value;
+    Int64 defaultValue;
+    Int64 min;
+    Int64 max;
+};
+
+struct StringOption {
+    std::string value;
+    std::string defaultValue;
+};
+
+class Option {
+public:
+    using Callback = std::function<void(const Option &)>;
+
+    static constexpr Int64 DEFAULT_HASH_MB = 64;
+    static constexpr Int64 MIN_HASH_MB = 1;
+    static constexpr Int64 MAX_HASH_MB = 33554432;
+
+    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
+    static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
+    static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
+
+    Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
+    Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
+    Option(std::string_view name, SpinOption data, Callback callback) : type_(OptionType::SPIN), name_(name), data_(std::in_place_type<SpinOption>, data), callback_(std::move(callback)) {}
+    Option(std::string_view name, StringOption data, Callback callback) : type_(OptionType::STRING), name_(name), data_(std::in_place_type<StringOption>, data), callback_(std::move(callback)) {}
+    Option(std::string_view name, Callback callback) : type_(OptionType::BUTTON), name_(name), data_(std::in_place_type<std::monostate>), callback_(std::move(callback)) {}
+
+    constexpr OptionType type() const noexcept { return type_; }
+    constexpr const std::string &name() const noexcept { return name_; }
+
+    void setCheck(bool value) {
+        assert(type_ == OptionType::CHECK);
+        std::get<CheckOption>(data_).value = value;
+        callback_(*this);
+    }
+
+    void setSpin(Int64 value) {
+        assert(type_ == OptionType::SPIN);
+        SpinOption &spinData = std::get<SpinOption>(data_);
+        if (value < spinData.min) {
+            value = spinData.min;
+        } else if (value > spinData.max) {
+            value = spinData.max;
+        }
+        spinData.value = value;
+        callback_(*this);
+    }
+
+    void setString(const std::string &value) {
+        assert(type_ == OptionType::STRING);
+        std::get<StringOption>(data_).value = value;
+        callback_(*this);
+    }
+
+    void pressButton() {
+        assert(type_ == OptionType::BUTTON);
+        callback_(*this);
+    }
+
+    constexpr bool checkValue() const noexcept {
+        assert(type_ == OptionType::CHECK);
+        return std::get<CheckOption>(data_).value;
+    }
+
+    constexpr Int64 spinValue() const noexcept {
+        assert(type_ == OptionType::SPIN);
+        return std::get<SpinOption>(data_).value;
+    }
+
+    constexpr SpinOption spinData() const noexcept {
+        assert(type_ == OptionType::SPIN);
+        return std::get<SpinOption>(data_);
+    }
+
+    constexpr const std::string &stringValue() const noexcept {
+        assert(type_ == OptionType::STRING);
+        return std::get<StringOption>(data_).value;
+    }
+
+private:
+    OptionType type_;
+    std::string name_;
+    std::variant<std::monostate, CheckOption, SpinOption, StringOption> data_;
+    Callback callback_;
+};
+
+class UCI {
+public:
+    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, [this](const SearchInfo &info) { searchInfo(info); }) {
+        options_ = {
+            {"Hash", Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); })},
+            {"ClearHash", Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); })},
+            {"MoveOverhead", Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {})},
+        };
+
+        legalMoves_.clear();
+        MoveGen::legal(position_, legalMoves_);
+    }
+
+    void run() {
+        std::string line;
+        while (true) {
+            std::getline(std::cin, line);
+            if (execute(line)) {
+                break;
+            }
+        }
+    }
+
+private:
+    enum class Command {
+        UCI,
+        IS_READY,
+        NEW_GAME,
+        POSITION,
+        GO,
+        STOP,
+        SET_OPTION,
+        QUIT,
+        PERFT,
+        EVAL,
+        NONE
+    };
+
+    Position position_;
+    MoveList legalMoves_;
+    Search search_;
+    std::unordered_map<std::string, Option> options_;
+
+    bool execute(const std::string &line) {
+        std::istringstream stream = std::istringstream(line);
+        std::string token;
+        stream >> token;
+        Command cmd = command(token);
+
+        if (cmd == Command::UCI) {
+            uci();
+        } else if (cmd == Command::IS_READY) {
+            isReady();
+        } else if (cmd == Command::NEW_GAME) {
+            newGame();
+        } else if (cmd == Command::POSITION) {
+            position(stream);
+        } else if (cmd == Command::GO) {
+            go(stream);
+        } else if (cmd == Command::STOP) {
+            // TODO
+        } else if (cmd == Command::SET_OPTION) {
+            setOption(stream);
+        } else if (cmd == Command::QUIT) {
+            return true;
+        } else if (cmd == Command::PERFT) {
+            perft(stream);
+        } else if (cmd == Command::EVAL) {
+            eval();
+        }
+        return false;
+    }
+
+    constexpr Command command(const std::string &token) const noexcept {
+        if (token == "uci") {
+            return Command::UCI;
+        } else if (token == "isready") {
+            return Command::IS_READY;
+        } else if (token == "ucinewgame") {
+            return Command::NEW_GAME;
+        } else if (token == "position") {
+            return Command::POSITION;
+        } else if (token == "go") {
+            return Command::GO;
+        } else if (token == "stop") {
+            return Command::STOP;
+        } else if (token == "setoption") {
+            return Command::SET_OPTION;
+        } else if (token == "quit") {
+            return Command::QUIT;
+        } else if (token == "perft") {
+            return Command::PERFT;
+        } else if (token == "eval") {
+            return Command::EVAL;
+        }
+
+        return Command::NONE;
+    }
+
+    void uci() const {
+        std::cout << "id name " << ID::NAME << " " << ID::VERSION << std::endl;
+        std::cout << "id author " << ID::AUTHOR << std::endl;
+
+        for (const auto &[name, option] : options_) {
+            std::cout << "option name " << option.name() << " type ";
+            if (option.type() == OptionType::CHECK) {
+                std::cout << "check default " << std::boolalpha << option.checkValue() << std::noboolalpha << std::endl;
+            } else if (option.type() == OptionType::SPIN) {
+                std::cout << "spin default " << option.spinData().defaultValue << " min " << option.spinData().min << " max " << option.spinData().max << std::endl;
+            } else if (option.type() == OptionType::STRING) {
+                std::cout << "string default " << option.stringValue() << std::endl;
+            } else if (option.type() == OptionType::BUTTON) {
+                std::cout << "button" << std::endl;
+            }
+        }
+
+        std::cout << "uciok" << std::endl;
+    }
+
+    void isReady() const {
+        std::cout << "readyok" << std::endl;
+    }
+
+    void newGame() {
+        search_.newGame();
+    }
+
+    void position(std::istringstream &stream) {
+        position_ = Position();
+
+        std::string token;
+        stream >> token;
+        if (token == "startpos") {
+            position_ = Position();
+
+            stream >> token;
+            if (token != "moves") {
+                return;
+            }
+        } else if (token == "fen") {
+            std::string fen;
+            stream >> fen;
+            while (stream >> token) {
+                if (token == "moves") {
+                    break;
+                }
+                fen += " " + token;
+            }
+
+            if (!position_.set(fen)) {
+                return;
+            }
+
+        } else {
+            return;
+        }
+
+        while (stream >> token) {
+            auto compare = [&token](const Move move) { return std::string(move) == token; };
+            USize index = legalMoves_.findIf(compare);
+            if (index >= legalMoves_.size()) {
+                return;
+            }
+            position_.make(legalMoves_[index]);
+            legalMoves_.clear();
+            MoveGen::legal(position_, legalMoves_);
+        }
+    }
+
+    void go(std::istringstream &stream) {
+        std::string token;
+        SearchLimits limits = SearchLimits();
+        limits.overhead = MS(options_["MoveOverhead"].spinValue());
+
+        while (stream >> token) {
+            if (token == "wtime") {
+                Int32 whiteTime;
+                stream >> whiteTime;
+                limits.clock.time[static_cast<USize>(Color::WHITE)] = MS(whiteTime);
+                limits.clock.enabled = true;
+            } else if (token == "btime") {
+                Int32 blackTime;
+                stream >> blackTime;
+                limits.clock.time[static_cast<USize>(Color::BLACK)] = MS(blackTime);
+                limits.clock.enabled = true;
+            } else if (token == "winc") {
+                Int32 whiteIncrement;
+                stream >> whiteIncrement;
+                limits.clock.increment[static_cast<USize>(Color::WHITE)] = MS(whiteIncrement);
+                limits.clock.enabled = true;
+            } else if (token == "binc") {
+                Int32 blackIncrement;
+                stream >> blackIncrement;
+                limits.clock.increment[static_cast<USize>(Color::BLACK)] = MS(blackIncrement);
+                limits.clock.enabled = true;
+            } else if (token == "movestogo") {
+                Int32 movesToGo;
+                stream >> movesToGo;
+                continue; // TODO
+            } else if (token == "depth") {
+                Int32 depth;
+                stream >> depth;
+                limits.depth = depth;
+            } else if (token == "nodes") {
+                UInt64 nodes;
+                stream >> nodes;
+                limits.nodes = nodes;
+            } else if (token == "movetime") {
+                Int32 moveTime;
+                stream >> moveTime;
+                limits.time = MS(moveTime);
+            } else if (token == "infinite") {
+                continue;
+            }
+        }
+
+        auto [move, score] = search_.run(position_, limits);
+        bestMove(move);
+    }
+
+    void searchInfo(const SearchInfo &info) const {
+        std::cout << "info depth " << info.depth;
+        std::cout << " seldepth " << info.selDepth;
+        std::cout << " time " << info.time.count();
+        std::cout << " nodes " << info.nodes;
+        std::cout << " nps " << (info.nodes * 1000ULL) / (static_cast<UInt64>(info.time.count()) + 1);
+        std::cout << " hashfull " << info.hashfull;
+
+        std::cout << " score ";
+        if (Score::mate(info.score)) {
+            if (info.score > 0) {
+                std::cout << "mate " << ((Score::MATE - info.score) + 1) / 2;
+            } else {
+                std::cout << "mate -" << (info.score + Score::MATE) / 2;
+            }
+        } else {
+            std::cout << "cp " << info.score;
+        }
+        if (info.lowerBound) {
+            std::cout << " lowerbound";
+        }
+        if (info.upperBound) {
+            std::cout << " upperbound";
+        }
+
+        std::cout << " pv ";
+        for (const Move move : info.pv) {
+            std::cout << std::string(move) << " ";
+        }
+
+        std::cout << std::endl;
+    }
+
+    void bestMove(const Move bestMove) const {
+        std::cout << "bestmove " << std::string(bestMove) << std::endl;
+    }
+
+    void setOption(std::istringstream &stream) {
+        std::string token;
+        std::string name;
+
+        stream >> token;
+        if (token != "name") {
+            return;
+        }
+
+        stream >> name;
+        Option &option = options_[name];
+
+        stream >> token;
+        if (option.type() != OptionType::BUTTON && token != "value") {
+            return;
+        }
+
+        if (option.type() == OptionType::CHECK) {
+            std::string value;
+            stream >> value;
+            if (value == "true") {
+                option.setCheck(true);
+            } else if (value == "false") {
+                option.setCheck(false);
+            }
+        } else if (option.type() == OptionType::SPIN) {
+            Int64 value;
+            stream >> value;
+            option.setSpin(value);
+        } else if (option.type() == OptionType::STRING) {
+            std::string value;
+            stream >> value;
+            option.setString(value);
+        } else if (option.type() == OptionType::BUTTON) {
+            option.pressButton();
+        }
+    }
+
+    void perft(std::istringstream &stream) {
+        std::string token;
+        stream >> token;
+        if (token != "depth") {
+            return;
+        }
+
+        UInt32 depth;
+        stream >> depth;
+
+        const auto start = std::chrono::high_resolution_clock::now();
+        const UInt64 nodes = Perft::run(position_, depth);
+        const auto end = std::chrono::high_resolution_clock::now();
+        const UInt64 time = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+        std::cout << "info depth " << depth;
+        std::cout << " nodes " << nodes;
+        std::cout << " time " << time;
+        std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
+        std::cout << std::endl;
+    }
+
+    void eval() const {
+        std::cout << "info static eval ";
+        if (position_.inCheck()) {
+            std::cout << " none (in check)";
+        } else {
+            std::cout << SimPLYChessEval::evaluate(position_) << " cp"; // FIXME: use Eval
+        }
+        std::cout << std::endl;
+    }
 };
 
 }

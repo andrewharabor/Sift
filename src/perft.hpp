@@ -8,10 +8,10 @@
 
 namespace Clownfish {
 
-class Benchmark {
+class Perft {
 public:
     template<MoveGenType MGT = MoveGenType::ALL>
-    static UInt64 perft(Position &position, UInt32 depth) {
+    static UInt64 run(Position &position, UInt32 depth) {
         MoveList moveList;
 
         if (depth == 1) {
@@ -23,7 +23,7 @@ public:
         MoveGen::legal(position, moveList);
         for (const Move move : moveList) {
             position.make(move);
-            nodes += perft<MGT>(position, depth - 1);
+            nodes += run<MGT>(position, depth - 1);
             position.unmake(move);
         }
 

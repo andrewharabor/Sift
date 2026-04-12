@@ -145,12 +145,18 @@ public:
     constexpr bool empty() const noexcept { return size_ == 0; }
 
     template<typename F>
-    void sort(F func) noexcept {
-        std::stable_sort(moveList_.begin(), moveList_.begin() + size_, func);
+    void sort(F compare) noexcept {
+        std::stable_sort(moveList_.begin(), moveList_.begin() + size_, compare);
     }
 
     constexpr USize find(const Move move) const noexcept {
         auto it = std::find(moveList_.begin(), moveList_.begin() + size_, move);
+        return static_cast<USize>(it - moveList_.begin());
+    }
+
+    template<typename F>
+    constexpr USize findIf(F compare) const noexcept {
+        auto it = std::find_if(moveList_.begin(), moveList_.begin() + size_, compare);
         return static_cast<USize>(it - moveList_.begin());
     }
 
