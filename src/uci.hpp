@@ -134,8 +134,7 @@ public:
             {"MoveOverhead", Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {})},
         };
 
-        legalMoves_.clear();
-        MoveGen::legal(position_, legalMoves_);
+        legalMoves();
     }
 
     void run() {
@@ -282,6 +281,7 @@ private:
             return;
         }
 
+        legalMoves();
         while (stream >> token) {
             auto compare = [&token](const Move move) { return std::string(move) == token; };
             USize index = legalMoves_.findIf(compare);
@@ -289,8 +289,7 @@ private:
                 return;
             }
             position_.make(legalMoves_[index]);
-            legalMoves_.clear();
-            MoveGen::legal(position_, legalMoves_);
+            legalMoves();
         }
     }
 
@@ -449,6 +448,11 @@ private:
             std::cout << SimPLYChessEval::evaluate(position_) << " cp"; // FIXME: use Eval
         }
         std::cout << std::endl;
+    }
+
+    void legalMoves() noexcept {
+        legalMoves_.clear();
+        MoveGen::legal(position_, legalMoves_);
     }
 };
 
