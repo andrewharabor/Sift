@@ -451,6 +451,10 @@ private:
         std::cout << std::endl;
     }
 
+    void infoString(const std::string &info) const {
+        std::cout << "info string " << info << std::endl;
+    }
+
     void legalMoves() noexcept {
         legalMoves_.clear();
         MoveGen::legal(position_, legalMoves_);

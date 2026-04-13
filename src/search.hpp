@@ -190,7 +190,7 @@ private:
 
             score = searchScore;
 
-            if (timeManager_.stopSoft(limits_, rootMoves_[0].move, rootMoves_[0].nodes, nodes_)) {
+            if (timeManager_.stopSoft(limits_, depth, rootMoves_[0].move, score, rootMoves_[0].nodes, nodes_)) {
                 timeUp_ = true;
                 break;
             }
