@@ -322,7 +322,8 @@ private:
             } else if (token == "movestogo") {
                 Int32 movesToGo;
                 stream >> movesToGo;
-                continue; // TODO
+                limits.clock.movesToGo = movesToGo;
+                limits.clock.enabled = true;
             } else if (token == "depth") {
                 Int32 depth;
                 stream >> depth;

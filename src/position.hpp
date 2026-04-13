@@ -375,21 +375,6 @@ public:
         pliesFromNull_++;
         plies_++;
 
-        repetitionPly_ = 0;
-        repetitions_ = 0;
-
-        if (depth_ > 4) {
-            USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
-            for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
-                const BoardState &state = stateHistory_[depth_ - i - 1];
-                if (state.hash == hash_) {
-                    repetitionPly_ = static_cast<UInt16>(i);
-                    repetitions_ = state.repetitions + 1;
-                    break;
-                }
-            }
-        }
-
         if (enPassantSquare_ != Square::NONE) {
             hash_ ^= Zobrist::enPassant(enPassantSquare_.file());
             enPassantSquare_ = Square::NONE;
@@ -490,6 +475,21 @@ public:
 
         sideToMove_ = ~sideToMove_;
         hash_ ^= Zobrist::sideToMove();
+
+        repetitionPly_ = 0;
+        repetitions_ = 0;
+
+        if (depth_ > 4) {
+            USize reversible = static_cast<USize>(std::min(halfmoveClock_, pliesFromNull_));
+            for (USize i = 3; i <= reversible && depth_ >= i + 1; i += 2) {
+                const BoardState &state = stateHistory_[depth_ - i - 1];
+                if (state.hash == hash_) {
+                    repetitionPly_ = static_cast<UInt16>(i);
+                    repetitions_ = state.repetitions + 1;
+                    break;
+                }
+            }
+        }
     }
 
     void unmake(const Move move) noexcept {

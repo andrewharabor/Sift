@@ -20,12 +20,14 @@ struct SearchLimits {
     MS time = MS::max();
 
     struct {
-        std::array<MS, 2> time;
-        std::array<MS, 2> increment;
+        std::array<MS, 2> time = {MS(0), MS(0)};
+        std::array<MS, 2> increment = {MS(0), MS(0)};
+        Int32 movesToGo = 100;
+        // Int32 movesToGo = 20; // FIXME
         bool enabled = false;
     } clock;
 
-    MS overhead = MS(0);
+    MS overhead = MS(10);
 };
 
 class TimeManager {
@@ -36,10 +38,10 @@ public:
 
     void limits(const SearchLimits &limits, Color color, USize moveCount) noexcept {
         if (limits.clock.enabled) {
-            const MS time = std::max(MS(0), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
+            const MS time = std::max(MS(1), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
             const MS increment = limits.clock.increment[static_cast<USize>(color)];
 
-            const auto baseTime = (time * BASE_TIME_SCALE) + (increment * INCREMENT_SCALE);
+            const auto baseTime = (time / static_cast<Float64>(limits.clock.movesToGo)) + (increment * INCREMENT_SCALE);
             softBound_ = std::chrono::duration_cast<MS>(baseTime * SOFT_TIME_SCALE);
             hardBound_ = std::chrono::duration_cast<MS>(time * HARD_TIME_SCALE);
 
@@ -70,6 +72,18 @@ public:
         const Float64 stabilityScale = std::max(MOVE_STABILITY_MIN, MOVE_STABILITY_BASE + MOVE_STABILITY_SCALE * std::pow(stability_ + MOVE_STABILITY_OFFSET, MOVE_STABILITY_POWER));
         const Float64 scale = nodeScale * stabilityScale;
 
+        // FIXME
+        // #include <iostream>
+        //         std::cout << "debug:" << std::endl;
+        //         std::cout << "\tnodeFraction " << nodeFraction << std::endl;
+        //         std::cout << "\tnodeScale " << nodeScale << std::endl;
+        //         std::cout << "\tstability " << stability_ << std::endl;
+        //         std::cout << "\tstabilityScale " << stabilityScale << std::endl;
+        //         std::cout << "\tscale " << scale << std::endl;
+        //         std::cout << "\tsoftBound " << softBound_.count() << std::endl;
+        //         std::cout << "\thardBound " << hardBound_.count() << std::endl;
+        //         std::cout << "\teffective softBound " << (softBound_ * scale).count() << std::endl;
+
         if (limits.clock.enabled && elapsed() > std::chrono::duration_cast<MS>(softBound_ * scale)) {
             return true;
         }
@@ -99,9 +113,9 @@ private:
 
     static constexpr MS ONE_MOVE_BOUND = MS(500);
 
-    static constexpr Float64 BASE_TIME_SCALE = 0.05;
     static constexpr Float64 INCREMENT_SCALE = 0.89;
-    static constexpr Float64 SOFT_TIME_SCALE = 0.7;
+    static constexpr Float64 SOFT_TIME_SCALE = 0.28;
+    // static constexpr Float64 SOFT_TIME_SCALE = 0.7; // FIXME
     static constexpr Float64 HARD_TIME_SCALE = 0.61;
 
     static constexpr Float64 NODE_TIME_BASE = 1.4;
