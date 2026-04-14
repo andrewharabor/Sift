@@ -42,11 +42,15 @@ public:
             const MS time = std::max(MS(1), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
             const MS increment = limits.clock.increment[static_cast<USize>(color)];
 
-            const Float64 baseTimeScale = (limits.clock.movesToGo > 0) ? (static_cast<Float64>(limits.clock.movesToGo)) : BASE_TIME_SCALE;
-            const auto baseTime = (time / baseTimeScale) + (increment * INCREMENT_SCALE);
+            // const Float64 baseTimeScale = (limits.clock.movesToGo > 0) ? (static_cast<Float64>(limits.clock.movesToGo)) : BASE_TIME_SCALE;
+            // const auto baseTime = (time / baseTimeScale) + (increment * INCREMENT_SCALE);
 
-            softBound_ = std::chrono::duration_cast<MS>(baseTime * SOFT_TIME_SCALE);
-            hardBound_ = std::chrono::duration_cast<MS>(time * HARD_TIME_SCALE);
+            // softBound_ = std::chrono::duration_cast<MS>(baseTime * SOFT_TIME_SCALE);
+            // hardBound_ = std::chrono::duration_cast<MS>(time * HARD_TIME_SCALE);
+
+            // FIXME: go back to sophisticated time management once the search is more stable
+            softBound_ = std::chrono::duration_cast<MS>((time / 20.0) + (increment / 2.0));
+            hardBound_ = std::chrono::duration_cast<MS>(time * 0.25);
 
             if (moveCount == 1) {
                 softBound_ = std::min(softBound_, ONE_MOVE_BOUND);
@@ -62,8 +66,12 @@ public:
         prevBestMove_ = Move::NULL_MOVE;
     }
 
-    bool stopSoft(const SearchLimits &limits, Int32 depth, Move bestMove, Int32 score, UInt64 bestMoveNodes, UInt64 nodes) noexcept {
-        const Float64 scale = softBoundScale(depth, bestMove, score, bestMoveNodes, nodes);
+    // FIXME: remove [[maybe_unused]] after reverting time management changes
+    bool stopSoft(const SearchLimits &limits, [[maybe_unused]] Int32 depth, [[maybe_unused]] Move bestMove, [[maybe_unused]] Int32 score, [[maybe_unused]] UInt64 bestMoveNodes, [[maybe_unused]] UInt64 nodes) noexcept {
+        // const Float64 scale = softBoundScale(depth, bestMove, score, bestMoveNodes, nodes);
+
+        // FIXME: go back to sophisticated time management once the search is more stable
+        const Float64 scale = 1.0;
         if (limits.clock.enabled && elapsed() > std::chrono::duration_cast<MS>(softBound_ * scale)) {
             return true;
         }

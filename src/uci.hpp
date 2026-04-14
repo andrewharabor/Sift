@@ -446,7 +446,7 @@ private:
         if (position_.inCheck()) {
             std::cout << " none (in check)";
         } else {
-            std::cout << SimPLYChessEval::evaluate(position_) << " cp"; // FIXME: use Eval
+            std::cout << Eval::evaluate(position_) << " cp";
         }
         std::cout << std::endl;
     }

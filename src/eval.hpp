@@ -13,7 +13,7 @@ namespace Clownfish {
 
 // FIXME: replace with Eval
 // https://github.com/andrewharabor/simPLY_chess/blob/main/src/simPLY_chess.py
-class SimPLYChessEval {
+class Eval {
 
 public:
     static Int32 evaluate(const Position &position) noexcept {
@@ -101,10 +101,6 @@ private:
             return a / b;
         }
     }
-};
-
-class Evaluate {
-    // TODO: implement
 };
 
 }
