@@ -8,6 +8,7 @@ using namespace Clownfish;
 int main() {
     Attacks::init();
     CuckooTable::init();
+
     UCI uci;
     uci.run();
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -55,6 +56,10 @@ public:
     static constexpr Int64 DEFAULT_HASH_MB = 64;
     static constexpr Int64 MIN_HASH_MB = 1;
     static constexpr Int64 MAX_HASH_MB = 33554432;
+
+    static constexpr Int64 DEFAULT_THREADS = 1;
+    static constexpr Int64 MIN_THREADS = 1;
+    static constexpr Int64 MAX_THREADS = 2048;
 
     static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
@@ -127,12 +132,11 @@ private:
 
 class UCI {
 public:
-    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, [this](const SearchInfo &info) { searchInfo(info); }) {
-        options_ = {
-            {"Hash", Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); })},
-            {"ClearHash", Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); })},
-            {"MoveOverhead", Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {})},
-        };
+    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
+        options_["MoveOverhead"] = Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {});
+        options_["Threads"] = Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.setThreads(static_cast<Int32>(option.spinValue())); });
+        options_["ClearHash"] = Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); });
+        options_["Hash"] = Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); });
 
         legalMoves();
     }
@@ -165,13 +169,30 @@ private:
     Position position_;
     MoveList legalMoves_;
     Search search_;
+
     std::unordered_map<std::string, Option> options_;
+
+    mutable std::mutex stdoutMutex_;
+
+    std::unique_lock<std::mutex> lockStdout() const {
+        return std::unique_lock<std::mutex>(stdoutMutex_);
+    }
 
     bool execute(const std::string &line) {
         std::istringstream stream = std::istringstream(line);
         std::string token;
         stream >> token;
         Command cmd = command(token);
+
+        if (search_.running()) {
+            if (cmd == Command::STOP) {
+                stop();
+            } else if (cmd == Command::QUIT) {
+                stop();
+                return true;
+            }
+            return false;
+        }
 
         if (cmd == Command::UCI) {
             uci();
@@ -184,7 +205,7 @@ private:
         } else if (cmd == Command::GO) {
             go(stream);
         } else if (cmd == Command::STOP) {
-            // TODO
+            stop();
         } else if (cmd == Command::SET_OPTION) {
             setOption(stream);
         } else if (cmd == Command::QUIT) {
@@ -224,6 +245,8 @@ private:
     }
 
     void uci() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
         std::cout << "id name " << ID::NAME << " " << ID::VERSION << std::endl;
         std::cout << "id author " << ID::AUTHOR << std::endl;
 
@@ -244,6 +267,7 @@ private:
     }
 
     void isReady() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
         std::cout << "readyok" << std::endl;
     }
 
@@ -341,11 +365,18 @@ private:
             }
         }
 
-        auto [move, score] = search_.run(position_, limits);
-        bestMove(move);
+        search_.run(position_, limits);
+    }
+
+    void stop() {
+        if (search_.running()) {
+            search_.stop();
+        }
     }
 
     void searchInfo(const SearchInfo &info) const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
         std::cout << "info depth " << info.depth;
         std::cout << " seldepth " << info.selDepth;
         std::cout << " time " << info.time.count();
@@ -360,6 +391,8 @@ private:
             } else {
                 std::cout << "mate -" << (info.score + Score::MATE) / 2;
             }
+        } else if (info.score >= Score::DRAW_MIN && info.score <= Score::DRAW_MAX) {
+            std::cout << "cp 0";
         } else {
             std::cout << "cp " << info.score;
         }
@@ -378,7 +411,13 @@ private:
         std::cout << std::endl;
     }
 
+    void currMove(const Move move, Int32 moveNum, Int32 depth) const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        std::cout << "info depth " << depth << " currmove " << std::string(move) << " currmovenumber " << moveNum << std::endl;
+    }
+
     void bestMove(const Move bestMove) const {
+        std::unique_lock<std::mutex> lock = lockStdout();
         std::cout << "bestmove " << std::string(bestMove) << std::endl;
     }
 
@@ -392,6 +431,10 @@ private:
         }
 
         stream >> name;
+        if (options_.find(name) == options_.end()) {
+            return;
+        }
+
         Option &option = options_[name];
 
         stream >> token;
@@ -421,6 +464,8 @@ private:
     }
 
     void perft(std::istringstream &stream) {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
         std::string token;
         stream >> token;
         if (token != "depth") {
@@ -442,6 +487,8 @@ private:
     }
 
     void eval() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
         std::cout << "info static eval ";
         if (position_.inCheck()) {
             std::cout << " none (in check)";
@@ -452,6 +499,7 @@ private:
     }
 
     void infoString(const std::string &info) const {
+        std::unique_lock<std::mutex> lock = lockStdout();
         std::cout << "info string " << info << std::endl;
     }
 

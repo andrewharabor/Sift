@@ -79,8 +79,8 @@ public:
         return false;
     }
 
-    bool stopHard(const SearchLimits &limits, UInt64 nodes) noexcept {
-        if (nodes >= limits.nodes) {
+    bool stopHard(const SearchLimits &limits, UInt64 nodes, Int32 numThreads) noexcept {
+        if (nodes * static_cast<UInt64>(numThreads) >= limits.nodes) {
             return true;
         }
 
@@ -156,11 +156,11 @@ private:
             return MATE_SCORE_SCALE;
         }
 
-        if (Score::win(score)) {
+        if (score >= Score::KNOWN_WIN) {
             return WIN_SCORE_SCALE;
         }
 
-        if (Score::loss(score)) {
+        if (score <= Score::KNOWN_LOSS) {
             return LOSS_SCORE_SCALE;
         }
 

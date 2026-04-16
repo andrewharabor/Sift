@@ -4,7 +4,9 @@
 #include <array>
 #include <cstdlib>
 #include <limits>
+#include <thread>
 #include <utility>
+#include <vector>
 
 #include "move.hpp"
 #include "score.hpp"
@@ -34,7 +36,7 @@ struct TTableEntry {
 class TTable {
 public:
     TTable(USize sizeMB) : table_(nullptr), size_(0), age_(0) {
-        resize(sizeMB);
+        resize(sizeMB, 1);
     }
 
     ~TTable() {
@@ -43,7 +45,7 @@ public:
         }
     }
 
-    void resize(USize sizeMB) {
+    void resize(USize sizeMB, USize numThreads) {
         assert(sizeMB > 0);
 
         USize buckets = (sizeMB * 1024 * 1024) / sizeof(Bucket);
@@ -52,12 +54,20 @@ public:
         }
         table_ = static_cast<Bucket *>(std::aligned_alloc(64, buckets * sizeof(Bucket)));
         size_ = buckets;
-        reset();
+        reset(numThreads);
     }
 
-    constexpr void reset() {
+    void reset(USize numThreads) {
         age_ = 0;
-        std::fill_n(table_, size_, Bucket{});
+        std::vector<std::jthread> threads;
+        threads.reserve(numThreads);
+        for (USize i = 0; i < numThreads; i++) {
+            threads.emplace_back([this, i, numThreads] {
+                USize start = (size_ * i) / numThreads;
+                USize end = (size_ * (i + 1)) / numThreads;
+                std::fill(table_ + start, table_ + end, Bucket());
+            });
+        }
     }
 
     std::pair<TTableEntry, bool> probe(UInt64 key, Int32 ply) const {

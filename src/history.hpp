@@ -7,7 +7,7 @@
 
 namespace Clownfish {
 
-struct HistoryNode {
+struct HistoryStack {
     Move playedMove;
     Piece movedPiece;
 

@@ -20,6 +20,8 @@ public:
     static constexpr Int32 MATED_IN_MAX = -MATE_IN_MAX;
 
     static constexpr Int32 DRAW = 0;
+    static constexpr Int32 DRAW_MAX = 2;
+    static constexpr Int32 DRAW_MIN = -DRAW_MAX;
     static constexpr Int32 WIN = 31000;
     static constexpr Int32 LOSS = -WIN;
     static constexpr Int32 KNOWN_WIN = 10000;
@@ -31,8 +33,7 @@ public:
     static constexpr Int32 mateIn(Int32 ply) noexcept { return MATE - ply; }
     static constexpr Int32 matedIn(Int32 ply) noexcept { return MATED + ply; }
 
-    static constexpr bool win(Int32 score) noexcept { return score >= KNOWN_WIN; }
-    static constexpr bool loss(Int32 score) noexcept { return score <= KNOWN_LOSS; }
+    static constexpr Int32 draw(UInt64 seed) noexcept { return 2 - static_cast<Int32>(seed % 4); }
 };
 
 class MoveScore {
