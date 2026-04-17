@@ -392,6 +392,8 @@ private:
         Position &position = thread.position;
         SearchStack &stack = thread.stack[rootPly];
 
+        stack.pv.clear();
+
         if (thread.main() && timeManager_.stopHard(thread.limits, thread.nodes.load(std::memory_order_relaxed), static_cast<Int32>(threads_.size()))) {
             stop_.store(true, std::memory_order_relaxed);
             return alpha;
@@ -415,8 +417,6 @@ private:
 
         const bool inCheck = position.inCheck();
         const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
-
-        stack.pv.clear();
 
         const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
@@ -638,6 +638,8 @@ private:
         Position &position = thread.position;
         SearchStack &stack = thread.stack[rootPly];
 
+        stack.pv.clear();
+
         if (thread.main() && timeManager_.stopHard(thread.limits, thread.nodes.load(std::memory_order_relaxed), static_cast<Int32>(threads_.size()))) {
             stop_.store(true, std::memory_order_relaxed);
             return alpha;
@@ -672,8 +674,6 @@ private:
             }
             return Eval::evaluate(position);
         }
-
-        stack.pv.clear();
 
         auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
         const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
