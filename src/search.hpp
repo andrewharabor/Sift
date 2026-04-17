@@ -189,7 +189,7 @@ public:
 
     Search(USize hashSizeMB, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)) {
         stop_.store(false, std::memory_order_relaxed);
-        setThreads(1);
+        threadCount(1);
     }
 
     ~Search() noexcept {
@@ -199,7 +199,7 @@ public:
         joinThreads();
     }
 
-    void setThreads(Int32 count) noexcept {
+    void threadCount(Int32 count) noexcept {
         if (threads_.size() != static_cast<USize>(count)) {
             joinThreads();
             threads_.clear();
@@ -304,14 +304,14 @@ private:
             if (flag == ThreadFlag::STOP) {
                 return;
             } else if (flag == ThreadFlag::START) {
-                iterativeDeepening(thread);
+                searchRoot(thread);
             } else {
                 assert(false);
             }
         }
     }
 
-    void iterativeDeepening(SearchThread &thread) noexcept {
+    void searchRoot(SearchThread &thread) noexcept {
         const Int32 maxDepth = std::min(thread.limits.depth, static_cast<Int32>(MAX_PLY - 1));
         Int32 score = 0;
 
@@ -332,7 +332,7 @@ private:
             Int32 searchScore = 0;
 
             while (true) {
-                searchScore = search(thread, searchDepth, alpha, beta, true, false);
+                searchScore = search<true, true>(thread, searchDepth, alpha, beta, false);
                 thread.sortRootMoves();
 
                 if (stop_.load(std::memory_order_relaxed)) {
@@ -381,10 +381,12 @@ private:
         }
     }
 
-    Int32 search(SearchThread &thread, Int32 depth, Int32 alpha, Int32 beta, bool pvNode, bool cutNode) noexcept {
+    template<bool PV_NODE = false, bool ROOT_NODE = false>
+    Int32 search(SearchThread &thread, Int32 depth, Int32 alpha, Int32 beta, bool cutNode) noexcept {
+        static_assert(PV_NODE || !ROOT_NODE);
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
-        assert(!(pvNode && cutNode));
+        assert(!(PV_NODE && cutNode));
 
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
@@ -411,7 +413,6 @@ private:
             return alpha;
         }
 
-        const bool rootNode = (rootPly == 0);
         const bool inCheck = position.inCheck();
         const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
 
@@ -419,10 +420,12 @@ private:
 
         const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
-        if (!rootNode && position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(static_cast<Int32>(rootPly))) {
-            alpha = draw;
-            if (alpha >= beta) {
-                return alpha;
+        if constexpr (!ROOT_NODE) {
+            if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(static_cast<Int32>(rootPly))) {
+                alpha = draw;
+                if (alpha >= beta) {
+                    return alpha;
+                }
             }
         }
 
@@ -440,7 +443,7 @@ private:
         SearchStack &nextStack = thread.stack[rootPly + 1];
 
         if (depth <= 0) {
-            return quiescenceSearch(thread, alpha, beta, pvNode);
+            return quiescenceSearch<PV_NODE>(thread, alpha, beta);
         }
 
         TTableEntry tableEntry = TTableEntry();
@@ -453,8 +456,10 @@ private:
         if (!excludedMove) {
             std::tie(tableEntry, tableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
 
-            if (tableHit && !pvNode && tableEntry.depth >= depth && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
-                return tableEntry.score;
+            if constexpr (!PV_NODE) {
+                if (tableHit && tableEntry.depth >= depth && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
+                    return tableEntry.score;
+                }
             }
 
             if (inCheck) {
@@ -476,7 +481,7 @@ private:
             }
         }
 
-        const bool tablePV = pvNode || (tableHit && tableEntry.pv);
+        const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
 
@@ -502,8 +507,10 @@ private:
                 continue;
             }
 
-            if (rootNode && thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
-                uciCurrMove_(move, movesTried + 1, thread.rootDepth);
+            if constexpr (ROOT_NODE) {
+                if (thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
+                    uciCurrMove_(move, movesTried + 1, thread.rootDepth);
+                }
             }
 
             const bool quiet = position.quiet(move);
@@ -524,12 +531,14 @@ private:
             const Int32 newDepth = depth - 1;
             Int32 score = 0;
 
-            if (!pvNode || movesTried > 1) {
-                score = -search(thread, newDepth, -alpha - 1, -alpha, false, !cutNode);
+            if (!PV_NODE || movesTried > 1) {
+                score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
             }
 
-            if (pvNode && (movesTried == 1 || score > alpha)) {
-                score = -search(thread, newDepth, -beta, -alpha, true, false);
+            if constexpr (PV_NODE) {
+                if (movesTried == 1 || score > alpha) {
+                    score = -search<true, false>(thread, newDepth, -beta, -alpha, false);
+                }
             }
 
             unmakeMove(thread);
@@ -538,7 +547,7 @@ private:
                 return alpha;
             }
 
-            if (rootNode) {
+            if constexpr (ROOT_NODE) {
                 RootMove &rootMove = thread.findRootMove(move);
                 rootMove.prevScore = rootMove.score;
                 rootMove.nodes += thread.nodes.load(std::memory_order_relaxed) - nodesBefore;
@@ -575,7 +584,7 @@ private:
                     bound = TTableEntry::Bound::EXACT;
                     alpha = bestScore;
                     bestMove = move;
-                    if (pvNode) {
+                    if constexpr (PV_NODE) {
                         stack.pv.clear();
                         stack.pv.add(move);
                         for (Move pvMove : nextStack.pv) {
@@ -620,7 +629,8 @@ private:
         return bestScore;
     }
 
-    Int32 quiescenceSearch(SearchThread &thread, Int32 alpha, Int32 beta, bool pvNode) noexcept {
+    template<bool PV_NODE = false>
+    Int32 quiescenceSearch(SearchThread &thread, Int32 alpha, Int32 beta) noexcept {
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
 
@@ -666,10 +676,12 @@ private:
         stack.pv.clear();
 
         auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
-        const bool tablePV = pvNode || (tableHit && tableEntry.pv);
+        const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
 
-        if (tableHit && !pvNode && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
-            return tableEntry.score;
+        if constexpr (!PV_NODE) {
+            if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
+                return tableEntry.score;
+            }
         }
 
         Int32 staticEval = Score::NONE;
@@ -735,7 +747,7 @@ private:
             makeMove(thread, move, 0);
             movesTried++;
 
-            const Int32 score = -quiescenceSearch(thread, -beta, -alpha, pvNode);
+            const Int32 score = -quiescenceSearch<PV_NODE>(thread, -beta, -alpha);
 
             unmakeMove(thread);
 

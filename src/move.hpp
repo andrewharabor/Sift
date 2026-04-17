@@ -144,8 +144,8 @@ public:
     constexpr USize size() const noexcept { return size_; }
     constexpr bool empty() const noexcept { return size_ == 0; }
 
-    template<typename F>
-    void sort(F compare) noexcept {
+    template<typename FUNCTION>
+    void sort(FUNCTION compare) noexcept {
         std::stable_sort(moveList_.begin(), moveList_.begin() + size_, compare);
     }
 
@@ -154,8 +154,8 @@ public:
         return static_cast<USize>(it - moveList_.begin());
     }
 
-    template<typename F>
-    constexpr USize findIf(F compare) const noexcept {
+    template<typename FUNCTION>
+    constexpr USize findIf(FUNCTION compare) const noexcept {
         auto it = std::find_if(moveList_.begin(), moveList_.begin() + size_, compare);
         return static_cast<USize>(it - moveList_.begin());
     }

@@ -53,13 +53,13 @@ class Option {
 public:
     using Callback = std::function<void(const Option &)>;
 
-    static constexpr Int64 DEFAULT_HASH_MB = 64;
-    static constexpr Int64 MIN_HASH_MB = 1;
-    static constexpr Int64 MAX_HASH_MB = 33554432;
-
     static constexpr Int64 DEFAULT_THREADS = 1;
     static constexpr Int64 MIN_THREADS = 1;
     static constexpr Int64 MAX_THREADS = 2048;
+
+    static constexpr Int64 DEFAULT_HASH_MB = 64;
+    static constexpr Int64 MIN_HASH_MB = 1;
+    static constexpr Int64 MAX_HASH_MB = 33554432;
 
     static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
@@ -134,14 +134,16 @@ class UCI {
 public:
     UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
         options_["MoveOverhead"] = Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {});
-        options_["Threads"] = Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.setThreads(static_cast<Int32>(option.spinValue())); });
         options_["ClearHash"] = Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); });
         options_["Hash"] = Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); });
+        options_["Threads"] = Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); });
 
         legalMoves();
     }
 
     void run() {
+        info();
+
         std::string line;
         while (true) {
             std::getline(std::cin, line);
@@ -242,6 +244,12 @@ private:
         }
 
         return Command::NONE;
+    }
+
+    void info() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        std::cout << "Clownfish " << ID::VERSION << " by " << ID::AUTHOR << std::endl;
+        std::cout << "https://github.com/andrewharabor/Clownfish" << std::endl;
     }
 
     void uci() const {
@@ -379,10 +387,6 @@ private:
 
         std::cout << "info depth " << info.depth;
         std::cout << " seldepth " << info.selDepth;
-        std::cout << " time " << info.time.count();
-        std::cout << " nodes " << info.nodes;
-        std::cout << " nps " << (info.nodes * 1000ULL) / (static_cast<UInt64>(info.time.count()) + 1);
-        std::cout << " hashfull " << info.hashfull;
 
         std::cout << " score ";
         if (Score::mate(info.score)) {
@@ -402,6 +406,11 @@ private:
         if (info.upperBound) {
             std::cout << " upperbound";
         }
+
+        std::cout << " time " << info.time.count();
+        std::cout << " nodes " << info.nodes;
+        std::cout << " nps " << (info.nodes * 1000ULL) / (static_cast<UInt64>(info.time.count()) + 1);
+        std::cout << " hashfull " << info.hashfull;
 
         std::cout << " pv ";
         for (const Move move : info.pv) {

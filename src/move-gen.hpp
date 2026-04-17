@@ -40,21 +40,21 @@ enum class MoveGenType : UInt8 {
 
 class MoveGen {
 public:
-    template<MoveGenType MGT = MoveGenType::ALL>
+    template<MoveGenType MOVE_GEN_TYPE = MoveGenType::ALL>
     static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
         moveList.clear();
         if (position.sideToMove() == Color::WHITE) {
-            legal<Color::WHITE, MGT>(position, moveList, pieces);
+            legal<Color::WHITE, MOVE_GEN_TYPE>(position, moveList, pieces);
         } else {
-            legal<Color::BLACK, MGT>(position, moveList, pieces);
+            legal<Color::BLACK, MOVE_GEN_TYPE>(position, moveList, pieces);
         }
     }
 
 private:
-    template<Color::ColorEnum C, MoveGenType MGT>
+    template<Color::ColorEnum COLOR_ENUM, MoveGenType MOVE_GEN_TYPE>
     static void pawn(const Position &position, MoveList &moveList, Square kingSquare, Bitboard occupied, Bitboard enemyOccupied, Bitboard diagonalPins, Bitboard orthogonalPins, Bitboard checkMask) {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         constexpr Direction UP = Direction(Direction::NORTH, COLOR);
         constexpr Direction DOWN = Direction(Direction::SOUTH, COLOR);
@@ -92,7 +92,7 @@ private:
             Bitboard rightPromotions = rightAttacks & PROMOTION_RANK;
             Bitboard pushPromotion = singlePush & PROMOTION_RANK;
 
-            if constexpr (MGT != MoveGenType::QUIET) {
+            if constexpr (MOVE_GEN_TYPE != MoveGenType::QUIET) {
                 while (leftPromotions) {
                     const Square to = Square(leftPromotions.pop());
                     const Square from = to + DOWN_RIGHT;
@@ -126,7 +126,7 @@ private:
         leftAttacks &= ~PROMOTION_RANK;
         rightAttacks &= ~PROMOTION_RANK;
 
-        if constexpr (MGT != MoveGenType::QUIET) {
+        if constexpr (MOVE_GEN_TYPE != MoveGenType::QUIET) {
             while (leftAttacks) {
                 const Square to = Square(leftAttacks.pop());
                 const Square from = to + DOWN_RIGHT;
@@ -140,7 +140,7 @@ private:
             }
         }
 
-        if constexpr (MGT != MoveGenType::NOISY) {
+        if constexpr (MOVE_GEN_TYPE != MoveGenType::NOISY) {
             while (singlePush) {
                 const Square to = Square(singlePush.pop());
                 const Square from = to + DOWN;
@@ -154,18 +154,18 @@ private:
             }
         }
 
-        if constexpr (MGT != MoveGenType::QUIET) {
+        if constexpr (MOVE_GEN_TYPE != MoveGenType::QUIET) {
             const Square enPassantSquare = position.enPassantSquare();
             if (enPassantSquare != Square::NONE) {
-                enPassant<C>(position, moveList, kingSquare, occupied, diagonalPins, checkMask, diagonalPawns, enPassantSquare);
+                enPassant<COLOR_ENUM>(position, moveList, kingSquare, occupied, diagonalPins, checkMask, diagonalPawns, enPassantSquare);
             }
         }
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     static void enPassant(const Position &position, MoveList &moveList, Square kingSquare, Bitboard occupied, Bitboard diagonalPins, Bitboard checkMask, Bitboard attackingPawns, Square enPassantSquare) {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         assert(enPassantSquare != Square::NONE);
         assert((enPassantSquare.rank() == Rank::RANK_3 && COLOR == Color::BLACK) || (enPassantSquare.rank() == Rank::RANK_6 && COLOR == Color::WHITE));
@@ -229,10 +229,10 @@ private:
         return Attacks::king(square) & ~attackMask;
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     static Bitboard castling(const Position &position, Square kingSquare, Bitboard occupied, Bitboard attackMask) {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         if (!kingSquare.backRank(COLOR) || !position.castlingRights().get(COLOR)) {
             return Bitboard();
@@ -272,10 +272,10 @@ private:
         return moves;
     }
 
-    template<Color::ColorEnum C, MoveGenType MGT>
+    template<Color::ColorEnum COLOR_ENUM, MoveGenType MOVE_GEN_TYPE>
     static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         const Square kingSquare = position.kingSquare(COLOR);
 
@@ -283,18 +283,18 @@ private:
         const Bitboard friendlyOccupied = position.friendly(COLOR);
         const Bitboard enemyOccupied = position.enemy(COLOR);
 
-        const auto [checkMask, checks] = position.checkMask<C>();
+        const auto [checkMask, checks] = position.checkMask<COLOR_ENUM>();
         Bitboard attackMask = position.attackMask<(~COLOR).internal()>();
 
-        const Bitboard diagonalPins = position.pinMask<C, PieceType::BISHOP>();
-        const Bitboard orthogonalPins = position.pinMask<C, PieceType::ROOK>();
+        const Bitboard diagonalPins = position.pinMask<COLOR_ENUM, PieceType::BISHOP>();
+        const Bitboard orthogonalPins = position.pinMask<COLOR_ENUM, PieceType::ROOK>();
 
         Bitboard movable = Bitboard();
-        if constexpr (MGT == MoveGenType::ALL) {
+        if constexpr (MOVE_GEN_TYPE == MoveGenType::ALL) {
             movable = ~friendlyOccupied;
-        } else if constexpr (MGT == MoveGenType::NOISY) {
+        } else if constexpr (MOVE_GEN_TYPE == MoveGenType::NOISY) {
             movable = enemyOccupied;
-        } else if constexpr (MGT == MoveGenType::QUIET) {
+        } else if constexpr (MOVE_GEN_TYPE == MoveGenType::QUIET) {
             movable = ~occupied;
         } else {
             static_assert(false);
@@ -304,9 +304,9 @@ private:
             auto genKing = [&](Square square) { return king(square, attackMask) & movable; };
             whileBitboardAddMoves(moveList, Bitboard(kingSquare), genKing);
 
-            if constexpr (MGT != MoveGenType::NOISY) {
+            if constexpr (MOVE_GEN_TYPE != MoveGenType::NOISY) {
                 if (checks == 0) {
-                    Bitboard castlingMoves = castling<C>(position, kingSquare, occupied, attackMask);
+                    Bitboard castlingMoves = castling<COLOR_ENUM>(position, kingSquare, occupied, attackMask);
                     while (castlingMoves) {
                         const Square to = Square(castlingMoves.pop());
                         moveList.add(Move(kingSquare, to, MoveType::CASTLING));
@@ -322,7 +322,7 @@ private:
         movable &= checkMask;
 
         if (pieces & PieceFlag::PAWN) {
-            pawn<C, MGT>(position, moveList, kingSquare, occupied, enemyOccupied, diagonalPins, orthogonalPins, checkMask);
+            pawn<COLOR_ENUM, MOVE_GEN_TYPE>(position, moveList, kingSquare, occupied, enemyOccupied, diagonalPins, orthogonalPins, checkMask);
         }
 
         if (pieces & PieceFlag::KNIGHT) {
@@ -350,8 +350,8 @@ private:
         }
     }
 
-    template<typename F>
-    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, F movesFunc) {
+    template<typename FUNCTION>
+    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, FUNCTION movesFunc) {
         while (bitboard) {
             const Square from = Square(bitboard.pop());
             Bitboard moves = movesFunc(from);

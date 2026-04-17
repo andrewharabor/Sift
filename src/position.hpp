@@ -734,10 +734,10 @@ public:
         return pieces(PieceType::KING, color).lsb();
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     std::pair<Bitboard, UInt8> checkMask() const noexcept {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         const Square kingSq = kingSquare(COLOR);
         const Bitboard occ = occupied();
@@ -778,17 +778,17 @@ public:
         return {mask, checks};
     }
 
-    template<Color::ColorEnum C, PieceType::PieceTypeEnum PT>
+    template<Color::ColorEnum COLOR_ENUM, PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
     Bitboard pinMask() const noexcept {
-        static_assert(C != Color::NONE);
-        static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         const Square kingSq = kingSquare(COLOR);
         const Bitboard friendlyOcc = friendly(COLOR);
         const Bitboard enemyOcc = enemy(COLOR);
 
-        Bitboard sliders = Attacks::slider<PT>(kingSq, enemyOcc) & (pieces(PT) | pieces(PieceType::QUEEN)) & enemyOcc;
+        Bitboard sliders = Attacks::slider<PIECE_TYPE_ENUM>(kingSq, enemyOcc) & (pieces(PIECE_TYPE_ENUM) | pieces(PieceType::QUEEN)) & enemyOcc;
         Bitboard mask = Bitboard();
         while (sliders) {
             const Bitboard possiblePin = Attacks::between(kingSq, sliders.pop());
@@ -799,10 +799,10 @@ public:
         return mask;
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     Bitboard blockMask() const noexcept {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         const Square enemyKingSq = kingSquare(~COLOR);
         const Bitboard friendlyOcc = friendly(COLOR);
@@ -822,10 +822,10 @@ public:
         return mask;
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     Bitboard attackMask() const noexcept {
-        static_assert(C != Color::NONE);
-        constexpr Color COLOR = Color(C);
+        static_assert(COLOR_ENUM != Color::NONE);
+        constexpr Color COLOR = Color(COLOR_ENUM);
 
         const Square kingSq = kingSquare(COLOR);
         const Square enemyKingSq = kingSquare(~COLOR);
@@ -839,7 +839,7 @@ public:
 
         Bitboard mask = Bitboard();
 
-        mask |= Attacks::allPawns<C>(pawns);
+        mask |= Attacks::allPawns<COLOR_ENUM>(pawns);
         while (knights) {
             mask |= Attacks::knight(knights.pop());
         }

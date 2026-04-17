@@ -27,24 +27,24 @@ public:
         0x1010101010101010, 0x2020202020202020, 0x4040404040404040, 0x8080808080808080,
     };
 
-    template<Direction::DirectionEnum D>
+    template<Direction::DirectionEnum DIRECTION_ENUM>
     static constexpr Bitboard shift(const Bitboard bitboard) noexcept {
-        static_assert(D != Direction::NONE);
-        if constexpr (D == Direction::NORTH) {
+        static_assert(DIRECTION_ENUM != Direction::NONE);
+        if constexpr (DIRECTION_ENUM == Direction::NORTH) {
             return bitboard << 8;
-        } else if constexpr (D == Direction::EAST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::EAST) {
             return (bitboard & ~FILE_MASKS[7]) << 1;
-        } else if constexpr (D == Direction::SOUTH) {
+        } else if constexpr (DIRECTION_ENUM == Direction::SOUTH) {
             return bitboard >> 8;
-        } else if constexpr (D == Direction::WEST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::WEST) {
             return (bitboard & ~FILE_MASKS[0]) >> 1;
-        } else if constexpr (D == Direction::NORTH_EAST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::NORTH_EAST) {
             return (bitboard & ~FILE_MASKS[7]) << 9;
-        } else if constexpr (D == Direction::SOUTH_EAST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::SOUTH_EAST) {
             return (bitboard & ~FILE_MASKS[7]) >> 7;
-        } else if constexpr (D == Direction::SOUTH_WEST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::SOUTH_WEST) {
             return (bitboard & ~FILE_MASKS[0]) >> 9;
-        } else if constexpr (D == Direction::NORTH_WEST) {
+        } else if constexpr (DIRECTION_ENUM == Direction::NORTH_WEST) {
             return (bitboard & ~FILE_MASKS[0]) << 7;
         } else {
             static_assert(false);
@@ -63,12 +63,12 @@ public:
         SQUARES_BETWEEN_BITBOARDS = initSquaresBetween();
     }
 
-    template<Color::ColorEnum C>
+    template<Color::ColorEnum COLOR_ENUM>
     static constexpr Bitboard allPawns(const Bitboard pawns) noexcept {
-        static_assert(C != Color::NONE);
-        if constexpr (C == Color::WHITE) {
+        static_assert(COLOR_ENUM != Color::NONE);
+        if constexpr (COLOR_ENUM == Color::WHITE) {
             return shift<Direction::NORTH_WEST>(pawns) | shift<Direction::NORTH_EAST>(pawns);
-        } else if constexpr (C == Color::BLACK) {
+        } else if constexpr (COLOR_ENUM == Color::BLACK) {
             return shift<Direction::SOUTH_EAST>(pawns) | shift<Direction::SOUTH_WEST>(pawns);
         } else {
             static_assert(false);
@@ -107,15 +107,15 @@ public:
         return KING_ATTACKS[square.index()];
     }
 
-    template<PieceType::PieceTypeEnum PT>
+    template<PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
     static Bitboard slider(Square square, Bitboard occupied) noexcept {
-        static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK || PT == PieceType::QUEEN);
+        static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK || PIECE_TYPE_ENUM == PieceType::QUEEN);
         assert(square != Square::NONE);
-        if constexpr (PT == PieceType::BISHOP) {
+        if constexpr (PIECE_TYPE_ENUM == PieceType::BISHOP) {
             return bishop(square, occupied);
-        } else if constexpr (PT == PieceType::ROOK) {
+        } else if constexpr (PIECE_TYPE_ENUM == PieceType::ROOK) {
             return rook(square, occupied);
-        } else if constexpr (PT == PieceType::QUEEN) {
+        } else if constexpr (PIECE_TYPE_ENUM == PieceType::QUEEN) {
             return queen(square, occupied);
         } else {
             static_assert(false);
@@ -278,15 +278,15 @@ private:
         } while (occupied);
     }
 
-    template<PieceType::PieceTypeEnum PT>
+    template<PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
     static Bitboard sliderSlow(Square square, Bitboard occupied) noexcept {
-        static_assert(PT == PieceType::BISHOP || PT == PieceType::ROOK);
+        static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK);
         assert(square != Square::NONE);
         static constexpr Int8 directions[2][4][2] = {
             {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}},
             {{0, 1}, {1, 0}, {0, -1}, {-1, 0}}
         };
-        const bool isRook = (PT == PieceType::ROOK);
+        const bool isRook = (PIECE_TYPE_ENUM == PieceType::ROOK);
         Bitboard attacks = 0ULL;
 
         Int32 file = square.file();
