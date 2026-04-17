@@ -7,7 +7,7 @@ namespace Clownfish {
 namespace ID {
 
 constexpr std::string NAME = "Clownfish";
-constexpr std::string VERSION = "dev4-threads";
+constexpr std::string VERSION = "dev5-simplewindow";
 constexpr std::string AUTHOR = "andrewharabor";
 
 }
