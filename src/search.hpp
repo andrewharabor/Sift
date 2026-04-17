@@ -270,7 +270,7 @@ public:
 private:
     static constexpr Int32 WINDOW_INIT_DELTA = 10;
     static constexpr Int32 WINDOW_MIN_DEPTH = 6;
-    static constexpr Int32 WINDOW_MAX_DEPTH_BACKOFF = 5;
+    // static constexpr Int32 WINDOW_MAX_DEPTH_BACKOFF = 5;
     static constexpr Int32 WINDOW_WIDENING_FACTOR = 58;
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
@@ -322,7 +322,7 @@ private:
             Int32 alpha = Score::MIN;
             Int32 beta = Score::MAX;
             Int32 delta = WINDOW_INIT_DELTA + (score * score / ((Score::MAX + 1) / 2));
-            Int32 searchDepth = depth;
+            // Int32 searchDepth = depth;
 
             if (depth >= WINDOW_MIN_DEPTH) {
                 alpha = std::max(score - delta, Score::MIN);
@@ -332,7 +332,7 @@ private:
             Int32 searchScore = 0;
 
             while (true) {
-                searchScore = search<true, true>(thread, searchDepth, alpha, beta, false);
+                searchScore = search<true, true>(thread, depth, alpha, beta, false);
                 thread.sortRootMoves();
 
                 if (stop_.load(std::memory_order_relaxed)) {
@@ -346,11 +346,13 @@ private:
                 if (searchScore <= alpha) {
                     beta = (alpha + beta) / 2;
                     alpha = std::max(alpha - delta, Score::MIN);
-                    searchDepth = depth;
+                    // TODO: try this
+                    // searchDepth = depth;
                 } else if (searchScore >= beta) {
                     beta = std::min(beta + delta, Score::MAX);
-                    searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_BACKOFF);
-                    searchDepth = std::max(searchDepth, 1);
+                    // TODO: try this
+                    // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_BACKOFF);
+                    // searchDepth = std::max(searchDepth, 1);
                 } else {
                     break;
                 }
