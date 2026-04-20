@@ -7,7 +7,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 class Bitboard {
 public:

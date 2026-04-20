@@ -5,7 +5,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 class Color {
 public:

@@ -11,7 +11,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 using TimePoint = std::chrono::steady_clock::time_point;
 using MS = std::chrono::milliseconds;

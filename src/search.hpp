@@ -23,7 +23,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 struct SearchStack {
     MoveList pv;
@@ -184,7 +184,6 @@ public:
 
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
-    static constexpr MS WINDOW_WIDEN_UPDATE_INTERVAL = MS(1000);
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
 
     Search(USize hashSizeMB, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)) {
@@ -335,12 +334,12 @@ private:
                 searchScore = search<true, true>(thread, depth, alpha, beta, false);
                 thread.sortRootMoves();
 
-                if (stop_.load(std::memory_order_relaxed)) {
-                    break;
+                if (thread.main()) {
+                    printSearchInfo(thread, depth);
                 }
 
-                if (thread.main() && (searchScore <= alpha || searchScore >= beta) && timeManager_.elapsed() > WINDOW_WIDEN_UPDATE_INTERVAL) {
-                    printSearchInfo(thread, depth);
+                if (stop_.load(std::memory_order_relaxed)) {
+                    break;
                 }
 
                 if (searchScore <= alpha) {
@@ -361,10 +360,6 @@ private:
             }
 
             thread.sortRootMoves();
-
-            if (thread.main()) {
-                printSearchInfo(thread, depth);
-            }
 
             if (stop_.load(std::memory_order_relaxed)) {
                 break;

@@ -10,7 +10,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 struct ScoredMove {
     Move move;

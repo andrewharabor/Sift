@@ -9,7 +9,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 #define SQUARE_DECLARE_RANK(X)                                         \
     static constexpr SquareEnum SQUARE_A##X = SquareEnum::SQUARE_A##X; \

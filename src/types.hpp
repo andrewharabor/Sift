@@ -4,7 +4,7 @@
 #include <cstdint>
 
 
-namespace Clownfish {
+namespace Syft {
 
 using UInt8 = std::uint8_t;
 using UInt16 = std::uint16_t;

@@ -9,10 +9,9 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
-// FIXME: replace with Eval
-// https://github.com/andrewharabor/simPLY_chess/blob/main/src/simPLY_chess.py
+// FIXME
 class Eval {
 
 public:

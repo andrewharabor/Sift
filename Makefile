@@ -33,14 +33,14 @@ endif
 
 ifeq ($(OS),Windows_NT)
     CXX ?= g++
-    TARGET_EXEC := Clownfish.exe
+    TARGET_EXEC := Syft.exe
     MKDIR = mkdir
     RM_FILE = del /f /q
     RM_DIR = rmdir /s /q
     SEP = \\
 else
     CXX ?= c++
-    TARGET_EXEC := Clownfish
+    TARGET_EXEC := Syft
     MKDIR = mkdir -p
     RM_FILE = rm -f
     RM_DIR = rm -rf

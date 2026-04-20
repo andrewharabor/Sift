@@ -11,7 +11,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 enum class MoveType : UInt16 {
     NORMAL = 0,

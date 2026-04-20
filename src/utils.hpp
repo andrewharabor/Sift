@@ -4,7 +4,7 @@
 #include <vector>
 
 
-namespace Clownfish {
+namespace Syft {
 
 class Utils {
 public:

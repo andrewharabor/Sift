@@ -3,7 +3,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 class Score {
 public:

@@ -10,7 +10,7 @@
 #include "../src/position.hpp"
 #include "../src/types.hpp"
 
-using namespace Clownfish;
+using namespace Syft;
 
 
 struct TestCase {

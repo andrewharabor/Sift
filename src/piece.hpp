@@ -8,7 +8,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 class PieceType {
 public:

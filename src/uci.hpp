@@ -12,7 +12,6 @@
 #include <utility>
 #include <variant>
 
-#include "clownfish.hpp"
 #include "color.hpp"
 #include "eval.hpp"
 #include "move.hpp"
@@ -20,10 +19,11 @@
 #include "perft.hpp"
 #include "position.hpp"
 #include "search.hpp"
+#include "syft.hpp"
 #include "time.hpp"
 #include "types.hpp"
 
-namespace Clownfish {
+namespace Syft {
 
 enum class OptionType {
     CHECK,
@@ -248,8 +248,8 @@ private:
 
     void info() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "Clownfish " << ID::VERSION << " by " << ID::AUTHOR << std::endl;
-        std::cout << "https://github.com/andrewharabor/Clownfish" << std::endl;
+        std::cout << ID::NAME << " " << ID::VERSION << " by " << ID::AUTHOR << std::endl;
+        std::cout << ID::GITHUB_URL << std::endl;
     }
 
     void uci() const {

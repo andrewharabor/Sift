@@ -13,7 +13,7 @@
 #include "types.hpp"
 
 
-namespace Clownfish {
+namespace Syft {
 
 struct TTableEntry {
     enum class Bound : UInt8 {

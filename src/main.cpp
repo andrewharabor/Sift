@@ -3,7 +3,7 @@
 #include "cuckoo.hpp"
 #include "uci.hpp"
 
-using namespace Clownfish;
+using namespace Syft;
 
 int main() {
     Attacks::init();
