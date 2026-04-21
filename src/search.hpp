@@ -311,9 +311,9 @@ private:
     }
 
     void searchRoot(SearchThread &thread) noexcept {
-        const Int32 maxDepth = std::min(thread.limits.depth, static_cast<Int32>(MAX_PLY - 1));
         Int32 score = 0;
 
+        const Int32 maxDepth = std::min(thread.limits.depth, static_cast<Int32>(MAX_PLY - 1));
         for (Int32 depth = 1; depth <= maxDepth; depth++) {
             thread.rootDepth = depth;
             thread.selDepth = 0;
@@ -329,7 +329,6 @@ private:
             }
 
             Int32 searchScore = 0;
-
             while (true) {
                 searchScore = search<true, true>(thread, depth, alpha, beta, false);
                 thread.sortRootMoves();
