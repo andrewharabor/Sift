@@ -475,12 +475,6 @@ private:
     void perft(std::istringstream &stream) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::string token;
-        stream >> token;
-        if (token != "depth") {
-            return;
-        }
-
         UInt32 depth;
         stream >> depth;
 
