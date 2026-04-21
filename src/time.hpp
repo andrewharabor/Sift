@@ -20,6 +20,7 @@ struct SearchLimits {
     Int32 depth = std::numeric_limits<Int32>::max();
     UInt64 nodes = std::numeric_limits<UInt64>::max();
     MS time = MS::max();
+    MoveList moves;
 
     struct {
         std::array<MS, 2> time = {MS(0), MS(0)};

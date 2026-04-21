@@ -53,6 +53,8 @@ struct SearchInfo {
     bool lowerBound;
     bool upperBound;
 
+    USize pvIndex;
+
     MoveList pv;
 };
 
@@ -61,8 +63,9 @@ struct RootMove {
     MoveList pv;
 
     Int32 score = Score::NONE;
-    Int32 displayScore = Score::NONE;
     Int32 prevScore = Score::NONE;
+    Int32 windowScore = Score::NONE;
+    Int32 displayScore = Score::NONE;
     bool lowerBound = false;
     bool upperBound = false;
 
@@ -97,6 +100,8 @@ struct SearchThread {
     Int32 rootDepth;
     Int32 selDepth;
 
+    USize pvIndex;
+
     std::vector<RootMove> rootMoves;
 
     std::array<SearchStack, MAX_PLY + 1> stack;
@@ -112,6 +117,8 @@ struct SearchThread {
         rootPly = 0;
         rootDepth = 0;
         selDepth = 0;
+
+        pvIndex = 0;
 
         for (USize i = 0; i <= MAX_PLY; i++) {
             stack[i].pv.clear();
@@ -149,30 +156,49 @@ struct SearchThread {
         thread.join();
     }
 
-    void initRootMoves() {
+    void initMoves() {
         rootMoves.clear();
         MoveList moves;
-        MoveGen::legal(position, moves);
+        if (limits.moves.empty()) {
+            MoveGen::legal(position, moves);
+        } else {
+            moves = limits.moves;
+        }
+
         for (const Move move : moves) {
             rootMoves.push_back(RootMove(move));
         }
     }
 
-    void sortRootMoves() {
+    void sortSearchedMoves() {
         auto compare = [](const RootMove &move1, const RootMove &move2) {
             if (move1.score == move2.score) {
                 return move1.prevScore > move2.prevScore;
             }
             return move1.score > move2.score;
         };
-        std::stable_sort(rootMoves.begin(), rootMoves.end(), compare);
+        std::stable_sort(rootMoves.begin(), rootMoves.begin() + static_cast<Int64>(pvIndex) + 1, compare);
     }
 
-    RootMove &findRootMove(Move move) {
+    void sortRemainingMoves() {
+        auto compare = [](const RootMove &move1, const RootMove &move2) {
+            if (move1.score == move2.score) {
+                return move1.prevScore > move2.prevScore;
+            }
+            return move1.score > move2.score;
+        };
+        std::stable_sort(rootMoves.begin() + static_cast<Int64>(pvIndex), rootMoves.end(), compare);
+    }
+
+    USize findRootMove(Move move) {
         auto compare = [move](const RootMove &rootMove) {
             return rootMove.move == move;
         };
-        return *std::find_if(rootMoves.begin(), rootMoves.end(), compare);
+        auto it = std::find_if(rootMoves.begin() + static_cast<Int64>(pvIndex), rootMoves.end(), compare);
+        if (it != rootMoves.end()) {
+            return static_cast<USize>(it - rootMoves.begin());
+        }
+        return rootMoves.size();
     }
 };
 
@@ -186,7 +212,7 @@ public:
 
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
 
-    Search(USize hashSizeMB, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)) {
+    Search(USize hashSizeMB, USize multiPV, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), multiPV_(multiPV), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)) {
         stop_.store(false, std::memory_order_relaxed);
         threadCount(1);
     }
@@ -224,9 +250,9 @@ public:
             thread->wait();
         }
 
-        MoveList moves;
-        MoveGen::legal(position, moves);
-        if (moves.empty()) {
+        MoveList legalMoves;
+        MoveGen::legal(position, legalMoves);
+        if (legalMoves.empty()) {
             uciBestMove_(Move::NULL_MOVE);
             return;
         }
@@ -235,14 +261,14 @@ public:
 
         stop_.store(false, std::memory_order_relaxed);
 
-        timeManager_.limits(limits, position.sideToMove(), moves.size());
+        timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
         timeManager_.start();
 
         for (auto &thread : threads_) {
             thread->reset();
             thread->position = position;
             thread->limits = limits;
-            thread->initRootMoves();
+            thread->initMoves();
             thread->start();
         }
     }
@@ -266,6 +292,8 @@ public:
 
     void resizeTTable(USize sizeMB) noexcept { tTable_.resize(sizeMB, threads_.size()); }
 
+    void multiPV(USize multiPV) noexcept { multiPV_ = multiPV; }
+
 private:
     static constexpr Int32 WINDOW_INIT_DELTA = 10;
     static constexpr Int32 WINDOW_MIN_DEPTH = 6;
@@ -274,6 +302,8 @@ private:
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
     TTable tTable_;
+
+    USize multiPV_;
 
     TimeManager timeManager_;
     std::atomic_bool stop_;
@@ -311,62 +341,76 @@ private:
     }
 
     void searchRoot(SearchThread &thread) noexcept {
-        Int32 score = 0;
-
         const Int32 maxDepth = std::min(thread.limits.depth, static_cast<Int32>(MAX_PLY - 1));
         for (Int32 depth = 1; depth <= maxDepth; depth++) {
             thread.rootDepth = depth;
             thread.selDepth = 0;
 
-            Int32 alpha = Score::MIN;
-            Int32 beta = Score::MAX;
-            Int32 delta = WINDOW_INIT_DELTA + (score * score / ((Score::MAX + 1) / 2));
-            // Int32 searchDepth = depth;
-
-            if (depth >= WINDOW_MIN_DEPTH) {
-                alpha = std::max(score - delta, Score::MIN);
-                beta = std::min(score + delta, Score::MAX);
+            for (RootMove &rootMove : thread.rootMoves) {
+                rootMove.prevScore = rootMove.score;
             }
 
-            Int32 searchScore = 0;
-            while (true) {
-                searchScore = search<true, true>(thread, depth, alpha, beta, false);
-                thread.sortRootMoves();
+            for (thread.pvIndex = 0; thread.pvIndex < std::min(multiPV_, thread.rootMoves.size()); thread.pvIndex++) {
 
-                if (thread.main()) {
-                    printSearchInfo(thread, depth);
+                const RootMove &rootMove = thread.rootMoves[thread.pvIndex];
+
+                Int32 alpha = Score::MIN;
+                Int32 beta = Score::MAX;
+                Int32 delta = WINDOW_INIT_DELTA + (rootMove.windowScore * rootMove.windowScore / ((Score::MAX + 1) / 2));
+                // Int32 searchDepth = depth;
+
+                if (depth >= WINDOW_MIN_DEPTH) {
+                    alpha = std::max(rootMove.windowScore - delta, Score::MIN);
+                    beta = std::min(rootMove.windowScore + delta, Score::MAX);
                 }
+
+                while (true) {
+                    Int32 score = search<true, true>(thread, depth, alpha, beta, false);
+                    thread.sortRemainingMoves();
+
+                    if (stop_.load(std::memory_order_relaxed)) {
+                        break;
+                    }
+
+                    if (thread.main() && (score <= alpha || score >= beta) && multiPV_ == 1) {
+                        printSearchInfo(thread, thread.pvIndex, depth);
+                    }
+
+                    if (score <= alpha) {
+                        beta = (alpha + beta) / 2;
+                        alpha = std::max(alpha - delta, Score::MIN);
+                        // TODO: try this
+                        // searchDepth = depth;
+                    } else if (score >= beta) {
+                        beta = std::min(beta + delta, Score::MAX);
+                        // TODO: try this
+                        // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_BACKOFF);
+                        // searchDepth = std::max(searchDepth, 1);
+                    } else {
+                        break;
+                    }
+
+                    delta += (delta * WINDOW_WIDENING_FACTOR) / WINDOW_WIDENING_SCALE;
+                }
+
+                thread.sortSearchedMoves();
 
                 if (stop_.load(std::memory_order_relaxed)) {
                     break;
                 }
-
-                if (searchScore <= alpha) {
-                    beta = (alpha + beta) / 2;
-                    alpha = std::max(alpha - delta, Score::MIN);
-                    // TODO: try this
-                    // searchDepth = depth;
-                } else if (searchScore >= beta) {
-                    beta = std::min(beta + delta, Score::MAX);
-                    // TODO: try this
-                    // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_BACKOFF);
-                    // searchDepth = std::max(searchDepth, 1);
-                } else {
-                    break;
-                }
-
-                delta += (delta * WINDOW_WIDENING_FACTOR) / WINDOW_WIDENING_SCALE;
             }
 
-            thread.sortRootMoves();
+            if (thread.main()) {
+                for (USize idx = 0; idx < std::min(multiPV_, thread.rootMoves.size()); idx++) {
+                    printSearchInfo(thread, idx, depth);
+                }
+            }
 
             if (stop_.load(std::memory_order_relaxed)) {
                 break;
             }
 
-            score = searchScore;
-
-            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, score, thread.rootMoves[0].nodes, thread.nodes.load(std::memory_order_relaxed))) {
+            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, thread.rootMoves[0].score, thread.rootMoves[0].nodes, thread.nodes.load(std::memory_order_relaxed))) {
                 break;
             }
         }
@@ -477,6 +521,8 @@ private:
             }
         }
 
+        const Move hashMove = ROOT_NODE ? thread.rootMoves[thread.pvIndex].move : tableEntry.move;
+
         const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
@@ -494,7 +540,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, tableEntry.move, stack.killerMoves);
+        MoveOrder moveOrder = MoveOrder(position, hashMove, stack.killerMoves);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -504,6 +550,10 @@ private:
             }
 
             if constexpr (ROOT_NODE) {
+                if (thread.findRootMove(move) >= thread.rootMoves.size()) {
+                    continue;
+                }
+
                 if (thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
                     uciCurrMove_(move, movesTried + 1, thread.rootDepth);
                 }
@@ -544,8 +594,13 @@ private:
             }
 
             if constexpr (ROOT_NODE) {
-                RootMove &rootMove = thread.findRootMove(move);
-                rootMove.prevScore = rootMove.score;
+                USize rootMoveIndex = thread.findRootMove(move);
+                if (rootMoveIndex >= thread.rootMoves.size()) {
+                    continue;
+                }
+
+                RootMove &rootMove = thread.rootMoves[rootMoveIndex];
+                rootMove.windowScore = rootMove.score;
                 rootMove.nodes += thread.nodes.load(std::memory_order_relaxed) - nodesBefore;
 
                 if (movesTried == 1 || score > alpha) {
@@ -619,7 +674,9 @@ private:
         if (!excludedMove) {
             // TODO: history update
 
-            tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, staticEval, bestMove, depth, tablePV, bound);
+            if (!ROOT_NODE || thread.pvIndex == 0) {
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, staticEval, bestMove, depth, tablePV, bound);
+            }
         }
 
         return bestScore;
@@ -836,20 +893,21 @@ private:
         thread.position.unmakeNull();
     }
 
-    void printSearchInfo(SearchThread &thread, Int32 depth) const noexcept {
+    void printSearchInfo(SearchThread &thread, USize pvIndex, Int32 depth) const noexcept {
         SearchInfo info;
         info.depth = depth;
-        info.selDepth = thread.rootMoves[0].selDepth;
+        info.selDepth = thread.rootMoves[pvIndex].selDepth;
         info.time = timeManager_.elapsed();
         info.nodes = 0;
         for (auto &searchThread : threads_) {
             info.nodes += searchThread->nodes.load(std::memory_order_relaxed);
         }
         info.hashfull = tTable_.hashfull();
-        info.score = thread.rootMoves[0].displayScore;
-        info.lowerBound = thread.rootMoves[0].lowerBound;
-        info.upperBound = thread.rootMoves[0].upperBound;
-        info.pv = thread.rootMoves[0].pv;
+        info.score = thread.rootMoves[pvIndex].displayScore;
+        info.lowerBound = thread.rootMoves[pvIndex].lowerBound;
+        info.upperBound = thread.rootMoves[pvIndex].upperBound;
+        info.pvIndex = pvIndex;
+        info.pv = thread.rootMoves[pvIndex].pv;
 
         uciSearchInfo_(info);
     }

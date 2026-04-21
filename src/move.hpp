@@ -157,7 +157,10 @@ public:
     template<typename FUNCTION>
     constexpr USize findIf(FUNCTION compare) const noexcept {
         auto it = std::find_if(moveList_.begin(), moveList_.begin() + size_, compare);
-        return static_cast<USize>(it - moveList_.begin());
+        if (it != moveList_.begin() + size_) {
+            return static_cast<USize>(it - moveList_.begin());
+        }
+        return size_;
     }
 
 private:

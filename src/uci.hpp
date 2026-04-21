@@ -61,6 +61,10 @@ public:
     static constexpr Int64 MIN_HASH_MB = 1;
     static constexpr Int64 MAX_HASH_MB = 33554432;
 
+    static constexpr Int64 DEFAULT_MULTI_PV = 1;
+    static constexpr Int64 MIN_MULTI_PV = 1;
+    static constexpr Int64 MAX_MULTI_PV = 256;
+
     static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
@@ -132,8 +136,9 @@ private:
 
 class UCI {
 public:
-    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
+    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, Option::DEFAULT_MULTI_PV, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
         options_["MoveOverhead"] = Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {});
+        options_["MultiPV"] = Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); });
         options_["ClearHash"] = Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); });
         options_["Hash"] = Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); });
         options_["Threads"] = Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); });
@@ -368,6 +373,16 @@ private:
                 Int32 moveTime;
                 stream >> moveTime;
                 limits.time = MS(moveTime);
+            } else if (token == "searchmoves") {
+                legalMoves();
+                while (stream >> token) {
+                    auto compare = [&token](const Move move) { return std::string(move) == token; };
+                    USize index = legalMoves_.findIf(compare);
+                    if (index >= legalMoves_.size()) {
+                        continue;
+                    }
+                    limits.moves.add(legalMoves_[index]);
+                }
             } else if (token == "infinite") {
                 continue;
             }
@@ -387,6 +402,7 @@ private:
 
         std::cout << "info depth " << info.depth;
         std::cout << " seldepth " << info.selDepth;
+        std::cout << " multipv " << (info.pvIndex + 1);
 
         std::cout << " score ";
         if (Score::mate(info.score)) {
