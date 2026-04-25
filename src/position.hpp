@@ -24,61 +24,61 @@ class Position {
 public:
     class CastlingRights {
     public:
-        enum class CastlingSide : UInt8 {
+        enum class Side : UInt8 {
             WHITE_KINGSIDE = 1 << 0,
             WHITE_QUEENSIDE = 1 << 1,
             BLACK_KINGSIDE = 1 << 2,
             BLACK_QUEENSIDE = 1 << 3
         };
 
-        static constexpr CastlingSide WHITE_KINGSIDE = CastlingSide::WHITE_KINGSIDE;
-        static constexpr CastlingSide WHITE_QUEENSIDE = CastlingSide::WHITE_QUEENSIDE;
-        static constexpr CastlingSide BLACK_KINGSIDE = CastlingSide::BLACK_KINGSIDE;
-        static constexpr CastlingSide BLACK_QUEENSIDE = CastlingSide::BLACK_QUEENSIDE;
+        static constexpr Side WHITE_KINGSIDE = Side::WHITE_KINGSIDE;
+        static constexpr Side WHITE_QUEENSIDE = Side::WHITE_QUEENSIDE;
+        static constexpr Side BLACK_KINGSIDE = Side::BLACK_KINGSIDE;
+        static constexpr Side BLACK_QUEENSIDE = Side::BLACK_QUEENSIDE;
 
         constexpr CastlingRights() noexcept : rights_(0) {}
-        constexpr CastlingRights(CastlingSide side) noexcept : rights_(static_cast<UInt8>(side)) {}
+        constexpr CastlingRights(Side side) noexcept : rights_(static_cast<UInt8>(side)) {}
         constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights < 16); }
 
         constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
         constexpr operator UInt8() const noexcept { return rights_; }
 
-        constexpr void set(CastlingSide side) noexcept { rights_ |= static_cast<UInt8>(side); }
-        constexpr bool get(CastlingSide side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
+        constexpr void set(Side side) noexcept { rights_ |= static_cast<UInt8>(side); }
+        constexpr bool get(Side side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
 
         constexpr bool get(Color color) const noexcept {
             assert(color != Color::NONE);
             if (color == Color::WHITE) {
-                return get(CastlingSide::WHITE_KINGSIDE) || get(CastlingSide::WHITE_QUEENSIDE);
+                return get(Side::WHITE_KINGSIDE) || get(Side::WHITE_QUEENSIDE);
             } else {
-                return get(CastlingSide::BLACK_KINGSIDE) || get(CastlingSide::BLACK_QUEENSIDE);
+                return get(Side::BLACK_KINGSIDE) || get(Side::BLACK_QUEENSIDE);
             }
         }
 
         constexpr void clear() noexcept { rights_ = 0; }
 
-        constexpr void clear(CastlingSide side) noexcept { rights_ &= ~static_cast<UInt8>(side); }
+        constexpr void clear(Side side) noexcept { rights_ &= ~static_cast<UInt8>(side); }
 
         constexpr void clear(Color color) noexcept {
             assert(color != Color::NONE);
             if (color == Color::WHITE) {
-                clear(CastlingSide::WHITE_KINGSIDE);
-                clear(CastlingSide::WHITE_QUEENSIDE);
+                clear(Side::WHITE_KINGSIDE);
+                clear(Side::WHITE_QUEENSIDE);
             } else {
-                clear(CastlingSide::BLACK_KINGSIDE);
-                clear(CastlingSide::BLACK_QUEENSIDE);
+                clear(Side::BLACK_KINGSIDE);
+                clear(Side::BLACK_QUEENSIDE);
             }
         }
 
         constexpr bool empty() const noexcept { return rights_ == 0; }
 
         constexpr UInt8 hash() const noexcept { return rights_; }
-        static constexpr UInt8 hashIndex(CastlingSide side) noexcept { return static_cast<UInt8>(std::countr_zero(static_cast<UInt8>(side))); }
+        static constexpr UInt8 hashIndex(Side side) noexcept { return static_cast<UInt8>(std::countr_zero(static_cast<UInt8>(side))); }
 
-        static constexpr Color color(CastlingSide side) noexcept {
-            if (side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::WHITE_QUEENSIDE) {
+        static constexpr Color color(Side side) noexcept {
+            if (side == Side::WHITE_KINGSIDE || side == Side::WHITE_QUEENSIDE) {
                 return Color::WHITE;
-            } else if (side == CastlingSide::BLACK_KINGSIDE || side == CastlingSide::BLACK_QUEENSIDE) {
+            } else if (side == Side::BLACK_KINGSIDE || side == Side::BLACK_QUEENSIDE) {
                 return Color::BLACK;
             } else {
                 assert(false);
@@ -86,11 +86,11 @@ public:
             }
         }
 
-        static constexpr bool kingside(CastlingSide side) noexcept {
-            return side == CastlingSide::WHITE_KINGSIDE || side == CastlingSide::BLACK_KINGSIDE;
+        static constexpr bool kingside(Side side) noexcept {
+            return side == Side::WHITE_KINGSIDE || side == Side::BLACK_KINGSIDE;
         }
 
-        static constexpr CastlingSide closestSide(Square square, Square kingSquare, Color color) noexcept {
+        static constexpr Side closestSide(Square square, Square kingSquare, Color color) noexcept {
             assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
             UInt8 shift = 0;
             if (color == Color::BLACK) {
@@ -99,10 +99,10 @@ public:
             if (square < kingSquare) {
                 shift += 1;
             }
-            return static_cast<CastlingSide>(1 << shift);
+            return static_cast<Side>(1 << shift);
         }
 
-        static constexpr Square rookFrom(CastlingSide side) noexcept {
+        static constexpr Square rookFrom(Side side) noexcept {
             if (kingside(side)) {
                 return Square(Square::SQUARE_H1, color(side));
             } else {
@@ -110,7 +110,7 @@ public:
             }
         }
 
-        static constexpr Square kingTo(CastlingSide side) noexcept {
+        static constexpr Square kingTo(Side side) noexcept {
             if (kingside(side)) {
                 return Square(Square::SQUARE_G1, color(side));
             } else {
@@ -118,7 +118,7 @@ public:
             }
         }
 
-        static constexpr Square rookTo(CastlingSide side) noexcept {
+        static constexpr Square rookTo(Side side) noexcept {
             if (kingside(side)) {
                 return Square(Square::SQUARE_F1, color(side));
             } else {
@@ -335,7 +335,7 @@ public:
 
     constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
 
-    constexpr Bitboard castlingPath(CastlingRights::CastlingSide castlingSide) const noexcept {
+    constexpr Bitboard castlingPath(CastlingRights::Side castlingSide) const noexcept {
         return castlingPathBitboards_[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
     }
 
@@ -389,7 +389,7 @@ public:
 
                 if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                     const Square kingSq = kingSquare(~sideToMove_);
-                    const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                    const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                     if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
                         castlingRights_.clear(castlingSide);
                         hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
@@ -404,7 +404,7 @@ public:
             hash_ ^= Zobrist::castling(castlingRights_.hash());
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
             if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
                 castlingRights_.clear(castlingSide);
                 hash_ ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
@@ -426,7 +426,7 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = pieceAt(move.from());
@@ -508,7 +508,7 @@ public:
         sideToMove_ = ~sideToMove_;
 
         if (move.type() == MoveType::CASTLING) {
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = Piece(PieceType::KING, sideToMove_);
@@ -638,7 +638,7 @@ public:
 
             if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                 const Square kingSq = kingSquare(~sideToMove_);
-                const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
+                const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                 if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
                     key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
@@ -653,7 +653,7 @@ public:
             key ^= Zobrist::castling(newRights.hash());
         } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
             const Square kingSq = kingSquare(sideToMove_);
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
             if (castlingRights_.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
                 key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
@@ -669,7 +669,7 @@ public:
             assert(pieceAt(move.from()).type() == PieceType::KING);
             assert(pieceAt(move.to()).type() == PieceType::ROOK);
 
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             const Square kingTo = CastlingRights::kingTo(castlingSide);
             const Piece king = pieceAt(move.from());
@@ -885,6 +885,54 @@ public:
         return attacks & occupied();
     }
 
+    constexpr std::pair<Bitboard, Bitboard> threats() const noexcept {
+        Bitboard threats = Bitboard();
+        Bitboard winningThreats = Bitboard();
+        Bitboard targets = Bitboard();
+
+        Bitboard occ = occupied() ^ Bitboard(kingSquare(sideToMove_));
+
+        Bitboard pawns = pieces(PieceType::PAWN, ~sideToMove_);
+        Bitboard knights = pieces(PieceType::KNIGHT, ~sideToMove_);
+        Bitboard bishops = pieces(PieceType::BISHOP, ~sideToMove_);
+        Bitboard rooks = pieces(PieceType::ROOK, ~sideToMove_);
+        Bitboard queens = pieces(PieceType::QUEEN, ~sideToMove_);
+
+        while (queens) {
+            threats |= Attacks::queen(queens.pop(), occ);
+        }
+        targets |= pieces(PieceType::QUEEN, sideToMove_);
+
+        while (rooks) {
+            const Bitboard attacks = Attacks::rook(rooks.pop(), occ);
+            threats |= attacks;
+            winningThreats |= attacks & targets;
+        }
+        targets |= pieces(PieceType::ROOK, sideToMove_);
+
+        while (bishops) {
+            const Bitboard attacks = Attacks::bishop(bishops.pop(), occ);
+            threats |= attacks;
+            winningThreats |= attacks & targets;
+        }
+
+        while (knights) {
+            const Bitboard attacks = Attacks::knight(knights.pop());
+            threats |= attacks;
+            winningThreats |= attacks & targets;
+        }
+
+        targets |= pieces(PieceType::BISHOP, sideToMove_) | pieces(PieceType::KNIGHT, sideToMove_);
+
+        const Bitboard pawnAttacks = (sideToMove_ == Color::WHITE) ? Attacks::allPawns<Color::BLACK>(pawns) : Attacks::allPawns<Color::WHITE>(pawns);
+        threats |= pawnAttacks;
+        winningThreats |= pawnAttacks & targets;
+
+        threats |= Attacks::king(kingSquare(~sideToMove_));
+
+        return {threats, winningThreats};
+    }
+
     constexpr bool inCheck() const noexcept { return attacked(kingSquare(sideToMove_), ~sideToMove_); }
 
     constexpr bool capture(const Move move) const noexcept {
@@ -975,7 +1023,7 @@ public:
                 return false;
             }
         } else if (move.type() == MoveType::CASTLING) {
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             if (Attacks::rook(kingSq, occ) & Bitboard(rookTo)) {
                 return true;
@@ -988,133 +1036,174 @@ public:
         }
     }
 
-    constexpr bool pseudoLegal(const Move move) const noexcept {
-        assert(move != Move::NULL_MOVE);
-
-        if (move.from() == move.to()) {
+    constexpr bool legal(const Move move) const noexcept {
+        if (move == Move::NULL_MOVE) {
             return false;
         }
 
-        const Piece piece = pieceAt(move.from());
+        const Square from = move.from();
+        const UInt8 fromIndex = from.index();
+        const Square to = move.to();
+        const UInt8 toIndex = to.index();
+        const Piece piece = pieceAt(from);
+        const Piece capturedPiece = pieceAt(to);
+
         if (piece == Piece::NONE || piece.color() != sideToMove_) {
             return false;
         }
 
-        const Piece capturedPiece = pieceAt(move.to());
-
-        Bitboard attackedSquares = Bitboard();
-        if (sideToMove_ == Color::WHITE) {
-            attackedSquares = attackMask<Color::BLACK>();
-        } else {
-            attackedSquares = attackMask<Color::WHITE>();
-        }
-
-        if (move.type() == MoveType::CASTLING) {
-            if (piece.type() != PieceType::KING || inCheck()) {
-                return false;
-            }
-
-            if (move.from() != Square(Square::SQUARE_E1, sideToMove_)) {
-                return false;
-            }
-
-            const CastlingRights::CastlingSide castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
-            if (move.to() != CastlingRights::rookFrom(castlingSide) || capturedPiece != Piece(PieceType::ROOK, sideToMove_)) {
-                return false;
-            }
-
-            if (!castlingRights_.get(castlingSide)) {
-                return false;
-            }
-
-            return (castlingPath(castlingSide) & (occupied() | attackedSquares)) == Bitboard();
-        }
-
-        if (piece.type() != PieceType::PAWN && move.type() != MoveType::NORMAL) {
+        if (capturedPiece != Piece::NONE && ((capturedPiece.color() == sideToMove_ && (move.type() != MoveType::CASTLING || piece.type() != PieceType::KING || capturedPiece != Piece(PieceType::ROOK, sideToMove_))) || capturedPiece.type() == PieceType::KING)) {
             return false;
         }
 
-        if ((capturedPiece != Piece::NONE && capturedPiece.color() == sideToMove_) || capturedPiece.type() == PieceType::KING) {
-            return false;
+        const Bitboard occ = occupied();
+        const Bitboard attackedSquares = (sideToMove_ == Color::WHITE) ? attackMask<Color::BLACK>() : attackMask<Color::WHITE>();
+
+        if (piece.type() == PieceType::KING && move.type() == MoveType::NORMAL) {
+            if (attackedSquares.get(toIndex) || !Attacks::king(from).get(toIndex)) {
+                return false;
+            }
+            return true;
         }
 
-        Bitboard checkSquares;
-        UInt8 checks;
-        if (sideToMove_ == Color::WHITE) {
-            std::tie(checkSquares, checks) = checkMask<Color::WHITE>();
-        } else {
-            std::tie(checkSquares, checks) = checkMask<Color::BLACK>();
-        }
+        const Square kingSq = kingSquare(sideToMove_);
+
+        const auto [checkSquares, checks] = (sideToMove_ == Color::WHITE) ? checkMask<Color::WHITE>() : checkMask<Color::BLACK>();
+        const Bitboard orthogonalPins = (sideToMove_ == Color::WHITE) ? pinMask<Color::WHITE, PieceType::ROOK>() : pinMask<Color::BLACK, PieceType::ROOK>();
+        const Bitboard diagonalPins = (sideToMove_ == Color::WHITE) ? pinMask<Color::WHITE, PieceType::BISHOP>() : pinMask<Color::BLACK, PieceType::BISHOP>();
 
         if (checks >= 2 && piece.type() != PieceType::KING) {
             return false;
         }
 
-        if (piece.type() != PieceType::KING && move.type() != MoveType::EN_PASSANT && !(checkSquares & Bitboard(move.to()))) {
+        if (move.type() == MoveType::CASTLING) {
+            if (checks != 0) {
+                return false;
+            }
+
+            if (!from.backRank(sideToMove_) || !to.backRank(sideToMove_)) {
+                return false;
+            }
+
+            if (piece != Piece(PieceType::KING, sideToMove_) || capturedPiece != Piece(PieceType::ROOK, sideToMove_)) {
+                return false;
+            }
+
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(to, from, sideToMove_);
+            if (!castlingRights_.get(castlingSide)) {
+                return false;
+            }
+
+            if (castlingPath(castlingSide) & occ) {
+                return false;
+            }
+
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
+            if (Attacks::between(from, kingTo) & attackedSquares) {
+                return false;
+            }
+
+            return true;
+        } else if (move.type() == MoveType::EN_PASSANT) {
+            if (enPassantSquare_ == Square::NONE || to != enPassantSquare_) {
+                return false;
+            }
+
+            assert(capturedPiece == Piece::NONE);
+
+            if (piece.type() != PieceType::PAWN || !Attacks::pawn(from, sideToMove_).get(toIndex)) {
+                return false;
+            }
+
+            const Square captureSq = Square(to.file(), from.rank());
+            if (!checkSquares.get(captureSq) && !checkSquares.get(toIndex)) {
+                return false;
+            }
+
+            if (orthogonalPins.get(fromIndex) || (diagonalPins.get(fromIndex) && !diagonalPins.get(toIndex))) {
+                return false;
+            }
+
+            const Bitboard enPassantPawns = Bitboard(from) | Bitboard(captureSq);
+            const Bitboard kingMask = Bitboard(kingSq) & Bitboard(captureSq.rank());
+            const Bitboard enemyRooksQueens = pieces(PieceType::ROOK, ~sideToMove_) | pieces(PieceType::QUEEN, ~sideToMove_);
+            const bool possiblePin = kingMask && enemyRooksQueens;
+            if (possiblePin && (Attacks::rook(kingSq, occ ^ enPassantPawns) & enemyRooksQueens)) {
+                return false;
+            }
+
+            return true;
+        } else if (move.type() == MoveType::PROMOTION) {
+            if (piece.type() != PieceType::PAWN) {
+                return false;
+            }
+        }
+
+        if (!checkSquares.get(toIndex)) {
             return false;
         }
 
         if (piece.type() == PieceType::PAWN) {
-            if (move.type() == MoveType::EN_PASSANT) {
-                if (move.to() != enPassantSquare_) {
+            const Rank promotionRank = Rank(Rank::RANK_8, sideToMove_);
+            if ((to.rank() == promotionRank) != (move.type() == MoveType::PROMOTION)) {
+                return false;
+            }
+
+            if (capturedPiece != Piece::NONE) {
+                if (orthogonalPins.get(fromIndex) || (diagonalPins.get(fromIndex) && !diagonalPins.get(toIndex))) {
                     return false;
                 }
 
-                if (!(Attacks::pawn(move.from(), sideToMove_) & Bitboard(move.to()))) {
-                    return false;
-                }
-                const Direction down = Direction(Direction::SOUTH, sideToMove_);
-                const Square target = enPassantSquare_ + down;
+                return Attacks::pawn(from, sideToMove_).get(toIndex);
+            }
 
-                return (checks == 0) || (Bitboard(target) & checkSquares);
+            if (diagonalPins.get(fromIndex) || (orthogonalPins.get(fromIndex) && !orthogonalPins.get(toIndex))) {
+                return false;
             }
 
             const Direction up = Direction(Direction::NORTH, sideToMove_);
-            if (capturedPiece == Piece::NONE) {
-                if (move.to() == move.from() + up) {
-                    if (move.type() == MoveType::PROMOTION) {
-                        return Rank(Rank::RANK_7, sideToMove_) == move.from().rank();
-                    } else {
-                        return move.from().rank() < Rank(Rank::RANK_7, sideToMove_) && move.from().rank() > Rank(Rank::RANK_1, sideToMove_);
-                    }
-                } else if (move.to() == (move.from() + up) + up) {
-                    if (pieceAt(move.from() + up) != Piece::NONE) {
-                        return false;
-                    }
-                    return move.from().rank() == Rank(Rank::RANK_2, sideToMove_);
-                } else {
-                    return false;
-                }
-            } else {
-                if (!(Attacks::pawn(move.from(), sideToMove_) & Bitboard(move.to()))) {
-                    return false;
-                }
+            const Rank startRank = Rank(Rank::RANK_2, sideToMove_);
 
-                if (move.type() == MoveType::PROMOTION) {
-                    return Rank(Rank::RANK_7, sideToMove_) == move.from().rank();
-                } else {
-                    return move.from().rank() < Rank(Rank::RANK_7, sideToMove_) && move.from().rank() > Rank(Rank::RANK_1, sideToMove_);
-                }
+            if (to == from + up) {
+                return true;
             }
-        }
 
-        Bitboard attacks;
-        if (piece.type() == PieceType::KNIGHT) {
-            attacks = Attacks::knight(move.from());
+            if (from.rank() == startRank && to == from + up + up) {
+                return pieceAt(from + up) == Piece::NONE;
+            }
+
+            return false;
+        } else if (piece.type() == PieceType::KNIGHT) {
+            if (orthogonalPins.get(fromIndex) || diagonalPins.get(fromIndex)) {
+                return false;
+            }
+            return Attacks::knight(from).get(toIndex);
         } else if (piece.type() == PieceType::BISHOP) {
-            attacks = Attacks::bishop(move.from(), occupied());
+            if (orthogonalPins.get(fromIndex) || (diagonalPins.get(fromIndex) && !diagonalPins.get(toIndex))) {
+                return false;
+            }
+            return Attacks::bishop(from, occ).get(toIndex);
         } else if (piece.type() == PieceType::ROOK) {
-            attacks = Attacks::rook(move.from(), occupied());
+            if (diagonalPins.get(fromIndex) || (orthogonalPins.get(fromIndex) && !orthogonalPins.get(toIndex))) {
+                return false;
+            }
+            return Attacks::rook(from, occ).get(toIndex);
         } else if (piece.type() == PieceType::QUEEN) {
-            attacks = Attacks::queen(move.from(), occupied());
-        } else if (piece.type() == PieceType::KING) {
-            attacks = Attacks::king(move.from()) & ~attackedSquares;
+            if (diagonalPins.get(fromIndex)) {
+                return (Attacks::bishop(from, occ) & diagonalPins).get(toIndex);
+            }
+
+            if (orthogonalPins.get(fromIndex)) {
+                return (Attacks::rook(from, occ) & orthogonalPins).get(toIndex);
+            }
+
+            return Attacks::queen(from, occ).get(toIndex);
         } else {
             assert(false);
-            attacks = Bitboard();
+            return false;
         }
 
-        return bool(attacks & Bitboard(move.to()));
+        return false;
     }
 
     constexpr bool nonPawnMaterial(Color color) const noexcept {

@@ -238,20 +238,20 @@ private:
             return Bitboard();
         }
 
-        constexpr std::array<Position::CastlingRights::CastlingSide, 2> castlingSides = [COLOR] {
+        constexpr std::array<Position::CastlingRights::Side, 2> castlingSides = [COLOR] {
             if constexpr (COLOR == Color::WHITE) {
-                return std::array<Position::CastlingRights::CastlingSide, 2>{Position::CastlingRights::WHITE_KINGSIDE, Position::CastlingRights::WHITE_QUEENSIDE};
+                return std::array<Position::CastlingRights::Side, 2>{Position::CastlingRights::WHITE_KINGSIDE, Position::CastlingRights::WHITE_QUEENSIDE};
             } else  if constexpr (COLOR == Color::BLACK) {
-                return std::array<Position::CastlingRights::CastlingSide, 2>{Position::CastlingRights::BLACK_KINGSIDE, Position::CastlingRights::BLACK_QUEENSIDE};
+                return std::array<Position::CastlingRights::Side, 2>{Position::CastlingRights::BLACK_KINGSIDE, Position::CastlingRights::BLACK_QUEENSIDE};
             } else {
                 static_assert(false);
-                return std::array<Position::CastlingRights::CastlingSide, 2>{};
+                return std::array<Position::CastlingRights::Side, 2>{};
             }
         }();
 
         const Position::CastlingRights castlingRights = position.castlingRights();
         Bitboard moves = Bitboard();
-        for (const Position::CastlingRights::CastlingSide castlingSide : castlingSides) {
+        for (const Position::CastlingRights::Side castlingSide : castlingSides) {
             if (!castlingRights.get(castlingSide)) {
                 continue;
             }
