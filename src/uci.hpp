@@ -65,7 +65,7 @@ public:
     static constexpr Int64 MIN_MULTI_PV = 1;
     static constexpr Int64 MAX_MULTI_PV = 256;
 
-    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
+    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 20;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
 

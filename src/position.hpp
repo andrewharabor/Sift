@@ -1206,6 +1206,22 @@ public:
         return false;
     }
 
+    constexpr Piece moved(const Move move) noexcept {
+        return pieceAt(move.from());
+    }
+
+    constexpr Piece captured(const Move move) noexcept {
+        if (move.type() == MoveType::EN_PASSANT) {
+            return Piece(PieceType::PAWN, ~sideToMove_);
+        }
+
+        if (move.type() == MoveType::CASTLING) {
+            return Piece::NONE;
+        }
+
+        return pieceAt(move.to());
+    }
+
     constexpr bool nonPawnMaterial(Color color) const noexcept {
         assert(color != Color::NONE);
         return bool(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
