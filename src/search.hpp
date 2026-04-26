@@ -461,7 +461,7 @@ private:
         const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
         if constexpr (!ROOT_NODE) {
-            if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(static_cast<Int32>(rootPly))) {
+            if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
                 alpha = draw;
                 if (alpha >= beta) {
                     return alpha;
@@ -710,7 +710,7 @@ private:
 
         const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
-        if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(static_cast<Int32>(rootPly))) {
+        if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
             alpha = draw;
             if (alpha >= beta) {
                 return alpha;
@@ -850,7 +850,7 @@ private:
             MoveGen::legal(thread.position, moves);
             noMoves = moves.empty();
         }
-        return thread.position.draw(static_cast<Int32>(thread.rootPly), noMoves);
+        return thread.position.draw(thread.rootPly, noMoves);
     }
 
     void makeMove(SearchThread &thread, Move move, Int32 historyScore) noexcept {
@@ -874,7 +874,7 @@ private:
 
         SearchStack &stack = thread.stack[thread.rootPly];
 
-        thread.position.unmake(stack.history.playedMove);
+        thread.position.unmake();
 
         stack.history.playedMove = Move::NULL_MOVE;
         stack.history.movedPiece = Piece::NONE;
@@ -883,14 +883,14 @@ private:
     }
 
     void makeNullMove(SearchThread &thread) noexcept {
-        thread.position.makeNull();
+        thread.position.make();
         thread.rootPly++;
     }
 
     void unmakeNullMove(SearchThread &thread) noexcept {
         assert(thread.rootPly != 0);
         thread.rootPly--;
-        thread.position.unmakeNull();
+        thread.position.unmake();
     }
 
     void printSearchInfo(SearchThread &thread, USize pvIndex, Int32 depth) const noexcept {

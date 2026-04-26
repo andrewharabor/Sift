@@ -24,7 +24,7 @@ public:
         for (const Move move : moveList) {
             position.make(move);
             nodes += run<MOVE_GEN_TYPE>(position, depth - 1);
-            position.unmake(move);
+            position.unmake();
         }
 
         return nodes;

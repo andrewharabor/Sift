@@ -283,11 +283,12 @@ private:
         const Bitboard friendlyOccupied = position.friendly(COLOR);
         const Bitboard enemyOccupied = position.enemy(COLOR);
 
-        const auto [checkMask, checks] = position.checkMask<COLOR_ENUM>();
-        Bitboard attackMask = position.attackMask<(~COLOR).internal()>();
+        const UInt8 checks = position.checks();
+        const Bitboard checkMask = position.checkMask();
+        const Bitboard threats = position.threats();
 
-        const Bitboard diagonalPins = position.pinMask<COLOR_ENUM, PieceType::BISHOP>();
-        const Bitboard orthogonalPins = position.pinMask<COLOR_ENUM, PieceType::ROOK>();
+        const Bitboard diagonalPins = position.diagonalPinMask();
+        const Bitboard orthogonalPins = position.orthogonalPinMask();
 
         Bitboard movable = Bitboard();
         if constexpr (MOVE_GEN_TYPE == MoveGenType::ALL) {
@@ -301,12 +302,12 @@ private:
         }
 
         if (pieces & PieceFlag::KING) {
-            auto genKing = [&](Square square) { return king(square, attackMask) & movable; };
+            auto genKing = [&](Square square) { return king(square, threats) & movable; };
             whileBitboardAddMoves(moveList, Bitboard(kingSquare), genKing);
 
             if constexpr (MOVE_GEN_TYPE != MoveGenType::NOISY) {
                 if (checks == 0) {
-                    Bitboard castlingMoves = castling<COLOR_ENUM>(position, kingSquare, occupied, attackMask);
+                    Bitboard castlingMoves = castling<COLOR_ENUM>(position, kingSquare, occupied, threats);
                     while (castlingMoves) {
                         const Square to = Square(castlingMoves.pop());
                         moveList.add(Move(kingSquare, to, MoveType::CASTLING));
