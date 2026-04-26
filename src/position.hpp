@@ -20,117 +20,119 @@
 
 namespace Syft {
 
+class CastlingRights {
+public:
+    enum class Side : UInt8 {
+        WHITE_KINGSIDE = 1 << 0,
+        WHITE_QUEENSIDE = 1 << 1,
+        BLACK_KINGSIDE = 1 << 2,
+        BLACK_QUEENSIDE = 1 << 3
+    };
+
+    static constexpr Side WHITE_KINGSIDE = Side::WHITE_KINGSIDE;
+    static constexpr Side WHITE_QUEENSIDE = Side::WHITE_QUEENSIDE;
+    static constexpr Side BLACK_KINGSIDE = Side::BLACK_KINGSIDE;
+    static constexpr Side BLACK_QUEENSIDE = Side::BLACK_QUEENSIDE;
+
+    constexpr CastlingRights() noexcept : rights_(0) {}
+    constexpr CastlingRights(Side side) noexcept : rights_(static_cast<UInt8>(side)) {}
+    constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights < 16); }
+
+    constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
+    constexpr operator UInt8() const noexcept { return rights_; }
+
+    constexpr void set(Side side) noexcept { rights_ |= static_cast<UInt8>(side); }
+    constexpr bool get(Side side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
+
+    constexpr bool get(Color color) const noexcept {
+        assert(color != Color::NONE);
+        if (color == Color::WHITE) {
+            return get(Side::WHITE_KINGSIDE) || get(Side::WHITE_QUEENSIDE);
+        } else {
+            return get(Side::BLACK_KINGSIDE) || get(Side::BLACK_QUEENSIDE);
+        }
+    }
+
+    constexpr void clear() noexcept { rights_ = 0; }
+
+    constexpr void clear(Side side) noexcept { rights_ &= ~static_cast<UInt8>(side); }
+
+    constexpr void clear(Color color) noexcept {
+        assert(color != Color::NONE);
+        if (color == Color::WHITE) {
+            clear(Side::WHITE_KINGSIDE);
+            clear(Side::WHITE_QUEENSIDE);
+        } else {
+            clear(Side::BLACK_KINGSIDE);
+            clear(Side::BLACK_QUEENSIDE);
+        }
+    }
+
+    constexpr bool empty() const noexcept { return rights_ == 0; }
+
+    constexpr UInt8 hash() const noexcept { return rights_; }
+    static constexpr UInt8 hashIndex(Side side) noexcept { return static_cast<UInt8>(std::countr_zero(static_cast<UInt8>(side))); }
+
+    static constexpr Color color(Side side) noexcept {
+        if (side == Side::WHITE_KINGSIDE || side == Side::WHITE_QUEENSIDE) {
+            return Color::WHITE;
+        } else if (side == Side::BLACK_KINGSIDE || side == Side::BLACK_QUEENSIDE) {
+            return Color::BLACK;
+        } else {
+            assert(false);
+            return Color::NONE;
+        }
+    }
+
+    static constexpr bool kingside(Side side) noexcept {
+        return side == Side::WHITE_KINGSIDE || side == Side::BLACK_KINGSIDE;
+    }
+
+    static constexpr Side closestSide(Square square, Square kingSquare, Color color) noexcept {
+        assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
+        UInt8 shift = 0;
+        if (color == Color::BLACK) {
+            shift = 2;
+        }
+        if (square < kingSquare) {
+            shift += 1;
+        }
+        return static_cast<Side>(1 << shift);
+    }
+
+    static constexpr Square rookFrom(Side side) noexcept {
+        if (kingside(side)) {
+            return Square(Square::SQUARE_H1, color(side));
+        } else {
+            return Square(Square::SQUARE_A1, color(side));
+        }
+    }
+
+    static constexpr Square kingTo(Side side) noexcept {
+        if (kingside(side)) {
+            return Square(Square::SQUARE_G1, color(side));
+        } else {
+            return Square(Square::SQUARE_C1, color(side));
+        }
+    }
+
+    static constexpr Square rookTo(Side side) noexcept {
+        if (kingside(side)) {
+            return Square(Square::SQUARE_F1, color(side));
+        } else {
+            return Square(Square::SQUARE_D1, color(side));
+        }
+    }
+
+    constexpr UInt8 internal() const noexcept { return rights_; }
+
+private:
+    UInt8 rights_;
+};
+
 class Position {
 public:
-    class CastlingRights {
-    public:
-        enum class Side : UInt8 {
-            WHITE_KINGSIDE = 1 << 0,
-            WHITE_QUEENSIDE = 1 << 1,
-            BLACK_KINGSIDE = 1 << 2,
-            BLACK_QUEENSIDE = 1 << 3
-        };
 
-        static constexpr Side WHITE_KINGSIDE = Side::WHITE_KINGSIDE;
-        static constexpr Side WHITE_QUEENSIDE = Side::WHITE_QUEENSIDE;
-        static constexpr Side BLACK_KINGSIDE = Side::BLACK_KINGSIDE;
-        static constexpr Side BLACK_QUEENSIDE = Side::BLACK_QUEENSIDE;
-
-        constexpr CastlingRights() noexcept : rights_(0) {}
-        constexpr CastlingRights(Side side) noexcept : rights_(static_cast<UInt8>(side)) {}
-        constexpr CastlingRights(UInt8 rights) noexcept : rights_(rights) { assert(rights < 16); }
-
-        constexpr bool operator==(const CastlingRights &other) const noexcept { return rights_ == other.rights_; }
-        constexpr operator UInt8() const noexcept { return rights_; }
-
-        constexpr void set(Side side) noexcept { rights_ |= static_cast<UInt8>(side); }
-        constexpr bool get(Side side) const noexcept { return (rights_ & static_cast<UInt8>(side)) != 0; }
-
-        constexpr bool get(Color color) const noexcept {
-            assert(color != Color::NONE);
-            if (color == Color::WHITE) {
-                return get(Side::WHITE_KINGSIDE) || get(Side::WHITE_QUEENSIDE);
-            } else {
-                return get(Side::BLACK_KINGSIDE) || get(Side::BLACK_QUEENSIDE);
-            }
-        }
-
-        constexpr void clear() noexcept { rights_ = 0; }
-
-        constexpr void clear(Side side) noexcept { rights_ &= ~static_cast<UInt8>(side); }
-
-        constexpr void clear(Color color) noexcept {
-            assert(color != Color::NONE);
-            if (color == Color::WHITE) {
-                clear(Side::WHITE_KINGSIDE);
-                clear(Side::WHITE_QUEENSIDE);
-            } else {
-                clear(Side::BLACK_KINGSIDE);
-                clear(Side::BLACK_QUEENSIDE);
-            }
-        }
-
-        constexpr bool empty() const noexcept { return rights_ == 0; }
-
-        constexpr UInt8 hash() const noexcept { return rights_; }
-        static constexpr UInt8 hashIndex(Side side) noexcept { return static_cast<UInt8>(std::countr_zero(static_cast<UInt8>(side))); }
-
-        static constexpr Color color(Side side) noexcept {
-            if (side == Side::WHITE_KINGSIDE || side == Side::WHITE_QUEENSIDE) {
-                return Color::WHITE;
-            } else if (side == Side::BLACK_KINGSIDE || side == Side::BLACK_QUEENSIDE) {
-                return Color::BLACK;
-            } else {
-                assert(false);
-                return Color::NONE;
-            }
-        }
-
-        static constexpr bool kingside(Side side) noexcept {
-            return side == Side::WHITE_KINGSIDE || side == Side::BLACK_KINGSIDE;
-        }
-
-        static constexpr Side closestSide(Square square, Square kingSquare, Color color) noexcept {
-            assert(square != Square::NONE && kingSquare != Square::NONE && color != Color::NONE);
-            UInt8 shift = 0;
-            if (color == Color::BLACK) {
-                shift = 2;
-            }
-            if (square < kingSquare) {
-                shift += 1;
-            }
-            return static_cast<Side>(1 << shift);
-        }
-
-        static constexpr Square rookFrom(Side side) noexcept {
-            if (kingside(side)) {
-                return Square(Square::SQUARE_H1, color(side));
-            } else {
-                return Square(Square::SQUARE_A1, color(side));
-            }
-        }
-
-        static constexpr Square kingTo(Side side) noexcept {
-            if (kingside(side)) {
-                return Square(Square::SQUARE_G1, color(side));
-            } else {
-                return Square(Square::SQUARE_C1, color(side));
-            }
-        }
-
-        static constexpr Square rookTo(Side side) noexcept {
-            if (kingside(side)) {
-                return Square(Square::SQUARE_F1, color(side));
-            } else {
-                return Square(Square::SQUARE_D1, color(side));
-            }
-        }
-
-        constexpr UInt8 internal() const noexcept { return rights_; }
-
-    private:
-        UInt8 rights_;
-    };
 
     static constexpr const std::string_view FEN_STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     static constexpr USize MAX_POSITION_DEPTH = 1024;
