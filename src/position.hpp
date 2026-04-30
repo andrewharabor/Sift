@@ -135,6 +135,7 @@ public:
     static constexpr const std::string_view FEN_STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     explicit Position(std::string_view fen = FEN_STARTPOS) {
+        states_.reserve(MAX_STATES);
         if (!set(fen)) {
             assert(false);
             reset();
@@ -144,7 +145,10 @@ public:
     void reset() noexcept {
         states_.clear();
         states_.push_back(State());
-        state().board.fill(Piece::NONE);
+
+        pieceBitboards_.fill(Bitboard());
+        occupancyBitboards_.fill(Bitboard());
+        board_.fill(Piece::NONE);
 
         sideToMove_ = Color::WHITE;
         ply_ = 0;
@@ -336,7 +340,7 @@ public:
     constexpr Bitboard threats() const noexcept { return state().threats; }
     constexpr Bitboard winningThreats() const noexcept { return state().winningThreats; }
 
-    constexpr const std::array<Piece, 64> &board() const noexcept { return state().board; }
+    constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
 
     constexpr Bitboard castlingPath(CastlingRights::Side castlingSide) const noexcept {
         return CASTLING_PATH_BITBOARDS[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
@@ -351,6 +355,8 @@ public:
         const PieceType pieceType = pieceAt(move.from()).type();
 
         states_.push_back(state());
+        state().lastMove = move;
+        state().capturedPiece = capturedPiece;
         state().halfmoveClock++;
         state().nullPly++;
 
@@ -453,6 +459,8 @@ public:
 
     void make() {
         states_.push_back(state());
+        state().lastMove = Move::NULL_MOVE;
+        state().capturedPiece = Piece::NONE;
         state().halfmoveClock++;
         state().nullPly = 0;
         state().repetitionPly = 0;
@@ -475,9 +483,68 @@ public:
     }
 
     void unmake() noexcept {
+        const Move move = state().lastMove;
+        const Piece capturedPiece = state().capturedPiece;
+
         states_.pop_back();
         ply_--;
         sideToMove_ = ~sideToMove_;
+
+        if (move == Move::NULL_MOVE) {
+            assert(capturedPiece == Piece::NONE);
+            return;
+        }
+
+        if (move.type() == MoveType::CASTLING) {
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
+            const Piece king = Piece(PieceType::KING, sideToMove_);
+            const Piece rook = Piece(PieceType::ROOK, sideToMove_);
+
+            assert(pieceAt(kingTo) == king);
+            assert(pieceAt(rookTo) == rook);
+            assert(king == Piece(PieceType::KING, sideToMove_));
+            assert(rook == Piece(PieceType::ROOK, sideToMove_));
+
+            removePiece<false>(king, kingTo);
+            removePiece<false>(rook, rookTo);
+            placePiece<false>(king, move.from());
+            placePiece<false>(rook, move.to());
+        } else if (move.type() == MoveType::PROMOTION) {
+            const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
+            const Piece promotionPiece = pieceAt(move.to());
+
+            assert(promotionPiece.type() == move.promotion());
+
+            removePiece<false>(promotionPiece, move.to());
+            placePiece<false>(pawn, move.from());
+
+            if (capturedPiece != Piece::NONE) {
+                assert(pieceAt(move.to()) == Piece::NONE);
+                placePiece<false>(capturedPiece, move.to());
+            }
+        } else {
+            assert(pieceAt(move.to()) != Piece::NONE);
+            assert(pieceAt(move.from()) == Piece::NONE);
+
+            const Piece movedPiece = pieceAt(move.to());
+
+            removePiece<false>(movedPiece, move.to());
+            placePiece<false>(movedPiece, move.from());
+
+            if (move.type() == MoveType::EN_PASSANT) {
+                Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
+                Square pawnSquare = Square(move.to().file(), move.from().rank());
+
+                assert(pieceAt(pawnSquare) == Piece::NONE);
+
+                placePiece<false>(pawn, pawnSquare);
+            } else if (capturedPiece != Piece::NONE) {
+                assert(pieceAt(move.to()) == Piece::NONE);
+                placePiece<false>(capturedPiece, move.to());
+            }
+        }
     }
 
     constexpr UInt64 zobrist() const noexcept {
@@ -590,7 +657,7 @@ public:
 
     constexpr Bitboard friendly(Color color) const noexcept {
         assert(color != Color::NONE);
-        return state().occupancyBitboards[static_cast<USize>(color)];
+        return occupancyBitboards_[static_cast<USize>(color)];
     }
 
     constexpr Bitboard enemy(Color color) const noexcept {
@@ -598,21 +665,21 @@ public:
         return friendly(~color);
     }
 
-    constexpr Bitboard occupied() const noexcept { return state().occupancyBitboards[0] | state().occupancyBitboards[1]; }
+    constexpr Bitboard occupied() const noexcept { return occupancyBitboards_[0] | occupancyBitboards_[1]; }
 
     constexpr Piece pieceAt(Square square) const noexcept {
         assert(square != Square::NONE);
-        return state().board[static_cast<USize>(square.index())];
+        return board_[static_cast<USize>(square.index())];
     }
 
     constexpr Bitboard pieces(PieceType pieceType) const noexcept {
         assert(pieceType != PieceType::NONE);
-        return state().pieceBitboards[static_cast<USize>(pieceType)];
+        return pieceBitboards_[static_cast<USize>(pieceType)];
     }
 
     constexpr Bitboard pieces(PieceType pieceType, Color color) const noexcept {
         assert(pieceType != PieceType::NONE && color != Color::NONE);
-        return state().pieceBitboards[static_cast<USize>(pieceType)] & state().occupancyBitboards[static_cast<USize>(color)];
+        return pieceBitboards_[static_cast<USize>(pieceType)] & occupancyBitboards_[static_cast<USize>(color)];
     }
 
     constexpr Square kingSquare(Color color) const noexcept {
@@ -1020,6 +1087,8 @@ public:
     }
 
 private:
+    static constexpr USize MAX_STATES = 2048;
+
     static constexpr std::array<Bitboard, 4> CASTLING_PATH_BITBOARDS = {
         Bitboard(Square::SQUARE_F1) | Bitboard(Square::SQUARE_G1),
         Bitboard(Square::SQUARE_B1) | Bitboard(Square::SQUARE_C1) | Bitboard(Square::SQUARE_D1),
@@ -1028,9 +1097,8 @@ private:
     };
 
     struct State {
-        std::array<Bitboard, 6> pieceBitboards;
-        std::array<Bitboard, 2> occupancyBitboards;
-        std::array<Piece, 64> board;
+        Move lastMove;
+        Piece capturedPiece;
 
         CastlingRights castlingRights;
         Square enPassantSquare;
@@ -1057,6 +1125,10 @@ private:
     };
 
     std::vector<State> states_;
+
+    std::array<Bitboard, 6> pieceBitboards_;
+    std::array<Bitboard, 2> occupancyBitboards_;
+    std::array<Piece, 64> board_;
 
     Color sideToMove_;
     UInt16 ply_;
@@ -1087,9 +1159,9 @@ private:
             }
         }
 
-        state().pieceBitboards[static_cast<USize>(pieceType)].set(index);
-        state().occupancyBitboards[static_cast<USize>(color)].set(index);
-        state().board[static_cast<USize>(index)] = piece;
+        pieceBitboards_[static_cast<USize>(pieceType)].set(index);
+        occupancyBitboards_[static_cast<USize>(color)].set(index);
+        board_[static_cast<USize>(index)] = piece;
     }
 
     template<bool UPDATE_HASH>
@@ -1115,9 +1187,9 @@ private:
             }
         }
 
-        state().pieceBitboards[static_cast<USize>(pieceType)].clear(index);
-        state().occupancyBitboards[static_cast<USize>(color)].clear(index);
-        state().board[static_cast<USize>(index)] = Piece::NONE;
+        pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
+        occupancyBitboards_[static_cast<USize>(color)].clear(index);
+        board_[static_cast<USize>(index)] = Piece::NONE;
     }
 
     constexpr void updateRepetitions() noexcept {
