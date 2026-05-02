@@ -72,7 +72,7 @@ private:
 using ContCorrHistoryEntry = MultiArray<CorrHistoryEntry, 12, 64>;
 
 using MainHistory = MultiArray<HistoryEntry, 2, 4096, 2, 2>;
-using PawnHistory = MultiArray<HistoryEntry, 512, 12, 64>;
+using PawnHistory = MultiArray<HistoryEntry, 8192, 12, 64>;
 using ContHistory = MultiArray<ContHistoryEntry, 12, 64>;
 using CaptureHistory = MultiArray<HistoryEntry, 7, 12, 64, 2, 2>;
 
