@@ -986,11 +986,11 @@ public:
         return false;
     }
 
-    constexpr Piece moved(const Move move) noexcept {
+    constexpr Piece moved(const Move move) const noexcept {
         return pieceAt(move.from());
     }
 
-    constexpr Piece captured(const Move move) noexcept {
+    constexpr Piece captured(const Move move) const noexcept {
         if (move.type() == MoveType::EN_PASSANT) {
             return Piece(PieceType::PAWN, ~sideToMove_);
         }

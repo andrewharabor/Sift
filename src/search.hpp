@@ -36,8 +36,6 @@ struct SearchStack {
     Int32 eval;
 
     UInt32 failHighCount;
-
-    HistoryStack history;
 };
 
 struct SearchInfo {
@@ -106,7 +104,9 @@ struct SearchThread {
 
     std::array<SearchStack, MAX_PLY + 1> stack;
 
-    SearchThread(Int32 id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START) { reset(); }
+    History history;
+
+    SearchThread(Int32 id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history() { reset(); }
 
     SearchThread(const SearchThread &) = delete;
     SearchThread &operator=(const SearchThread &) = delete;
@@ -128,9 +128,11 @@ struct SearchThread {
             stack[i].eval = Score::NONE;
             stack[i].failHighCount = 0;
 
-            stack[i].history.playedMove = Move::NULL_MOVE;
-            stack[i].history.movedPiece = Piece::NONE;
-            stack[i].history.score = 0;
+            history.stack[i].playedMove = Move::NULL_MOVE;
+            history.stack[i].movedPiece = Piece::NONE;
+            history.stack[i].contCorrEntry = nullptr;
+            history.stack[i].contEntry = nullptr;
+            history.stack[i].score = 0;
         }
     }
 
@@ -856,11 +858,12 @@ private:
     void makeMove(SearchThread &thread, Move move, Int32 historyScore) noexcept {
         assert(move != Move::NULL_MOVE);
 
-        SearchStack &stack = thread.stack[thread.rootPly];
-
-        stack.history.playedMove = move;
-        stack.history.movedPiece = thread.position.pieceAt(move.from());
-        stack.history.score = historyScore;
+        HistoryStack &historyStack = thread.history.stack[thread.rootPly];
+        historyStack.playedMove = move;
+        historyStack.movedPiece = thread.position.moved(move);
+        historyStack.contCorrEntry = &thread.history.contCorrEntry(thread.position, move);
+        historyStack.contEntry = &thread.history.contEntry(thread.position, move);
+        historyStack.score = historyScore;
 
         thread.position.make(move);
         thread.nodes.store(thread.nodes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
@@ -871,18 +874,21 @@ private:
         assert(thread.rootPly != 0);
 
         thread.rootPly--;
-
-        SearchStack &stack = thread.stack[thread.rootPly];
-
         thread.position.unmake();
 
-        stack.history.playedMove = Move::NULL_MOVE;
-        stack.history.movedPiece = Piece::NONE;
-        stack.history.score = 0;
+        HistoryStack &historyStack = thread.history.stack[thread.rootPly];
+        historyStack.playedMove = Move::NULL_MOVE;
+        historyStack.movedPiece = Piece::NONE;
+        historyStack.contCorrEntry = nullptr;
+        historyStack.contEntry = nullptr;
+        historyStack.score = 0;
 
     }
 
     void makeNullMove(SearchThread &thread) noexcept {
+        HistoryStack &historyStack = thread.history.stack[thread.rootPly];
+        historyStack.contCorrEntry = &thread.history.contCorrEntry(thread.position, Move::NULL_MOVE);
+
         thread.position.make();
         thread.rootPly++;
     }
@@ -891,6 +897,9 @@ private:
         assert(thread.rootPly != 0);
         thread.rootPly--;
         thread.position.unmake();
+
+        HistoryStack &historyStack = thread.history.stack[thread.rootPly];
+        historyStack.contCorrEntry = nullptr;
     }
 
     void printSearchInfo(SearchThread &thread, USize pvIndex, Int32 depth) const noexcept {

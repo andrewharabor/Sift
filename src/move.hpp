@@ -81,6 +81,8 @@ public:
         return PieceType(((move_ >> 12) & 3) + PieceType(PieceType::KNIGHT));
     }
 
+    constexpr UInt16 fromTo() const noexcept { return move_ & 0xFFF; }
+
     constexpr UInt16 internal() const noexcept { return move_; }
 
 private:

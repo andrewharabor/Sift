@@ -3,6 +3,8 @@
 #include <string_view>
 #include <vector>
 
+#include "types.hpp"
+
 
 namespace Syft {
 
@@ -21,6 +23,15 @@ public:
         }
         return result;
     }
+
+    static constexpr UInt64 murmurHash3(UInt64 value) noexcept {
+        value ^= value >> 33;
+        value *= 0xFF51AFD7ED558CCD;
+        value ^= value >> 33;
+        value *= 0xC4CEB9FE1A85EC53;
+        value ^= value >> 33;
+        return value;
+    };
 };
 
 }
