@@ -243,6 +243,7 @@ public:
     void newGame() noexcept {
         for (auto &thread : threads_) {
             thread->reset();
+            thread->history.reset();
         }
         tTable_.reset(threads_.size());
     }
