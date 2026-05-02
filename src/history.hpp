@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cstring>
 
 #include "color.hpp"
 #include "bitboard.hpp"
@@ -120,16 +119,16 @@ public:
     History() noexcept : main_(), pawn_(), cont_(), capture_(), pawnCorr_(), nonPawnCorr_(), threatsCorr_(), minorPieceCorr_(), majorPieceCorr_(), contCorr_() { reset(); }
 
     void reset() noexcept {
-        std::memset(&main_, 0, sizeof(main_));
-        std::memset(&pawn_, 0, sizeof(pawn_));
-        std::memset(&cont_, 0, sizeof(cont_));
-        std::memset(&capture_, 0, sizeof(capture_));
-        std::memset(&pawnCorr_, 0, sizeof(pawnCorr_));
-        std::memset(&nonPawnCorr_, 0, sizeof(nonPawnCorr_));
-        std::memset(&threatsCorr_, 0, sizeof(threatsCorr_));
-        std::memset(&minorPieceCorr_, 0, sizeof(minorPieceCorr_));
-        std::memset(&majorPieceCorr_, 0, sizeof(majorPieceCorr_));
-        std::memset(&contCorr_, 0, sizeof(contCorr_));
+        main_.fill({});
+        pawn_.fill({});
+        cont_.fill({});
+        capture_.fill({});
+        pawnCorr_ = {};
+        nonPawnCorr_.fill({});
+        threatsCorr_ = {};
+        minorPieceCorr_ = {};
+        majorPieceCorr_ = {};
+        contCorr_.fill({});
 
         for (USize i = 0; i <= MAX_PLY; i++) {
             stack[i].playedMove = Move::NULL_MOVE;
