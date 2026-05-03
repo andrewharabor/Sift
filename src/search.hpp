@@ -300,8 +300,8 @@ public:
 private:
     static constexpr Int32 WINDOW_INIT_DELTA = 10;
     static constexpr Int32 WINDOW_MIN_DEPTH = 6;
-    // static constexpr Int32 WINDOW_MAX_DEPTH_BACKOFF = 5;
-    static constexpr Int32 WINDOW_WIDENING_FACTOR = 58;
+    static constexpr Int32 WINDOW_MAX_DEPTH_REDUCTION = 5;
+    static constexpr Int32 WINDOW_WIDENING_COEFF = 58;
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
     TTable tTable_;
@@ -360,7 +360,7 @@ private:
                 Int32 alpha = Score::MIN;
                 Int32 beta = Score::MAX;
                 Int32 delta = WINDOW_INIT_DELTA + (rootMove.windowScore * rootMove.windowScore / ((Score::MAX + 1) / 2));
-                // Int32 searchDepth = depth;
+                Int32 searchDepth = depth;
 
                 if (depth >= WINDOW_MIN_DEPTH) {
                     alpha = std::max(rootMove.windowScore - delta, Score::MIN);
@@ -368,7 +368,7 @@ private:
                 }
 
                 while (true) {
-                    Int32 score = search<true, true>(thread, depth, alpha, beta, false);
+                    Int32 score = search<true, true>(thread, searchDepth, alpha, beta, false);
                     thread.sortRemainingMoves();
 
                     if (stop_.load(std::memory_order_relaxed)) {
@@ -382,18 +382,18 @@ private:
                     if (score <= alpha) {
                         beta = (alpha + beta) / 2;
                         alpha = std::max(alpha - delta, Score::MIN);
-                        // TODO: try this
+                        // TODO: try this again sometime later
                         // searchDepth = depth;
                     } else if (score >= beta) {
                         beta = std::min(beta + delta, Score::MAX);
-                        // TODO: try this
-                        // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_BACKOFF);
+                        // TODO: try this again sometime later
+                        // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_REDUCTION);
                         // searchDepth = std::max(searchDepth, 1);
                     } else {
                         break;
                     }
 
-                    delta += (delta * WINDOW_WIDENING_FACTOR) / WINDOW_WIDENING_SCALE;
+                    delta += delta * WINDOW_WIDENING_COEFF / WINDOW_WIDENING_SCALE;
                 }
 
                 thread.sortSearchedMoves();
