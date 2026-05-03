@@ -382,13 +382,11 @@ private:
                     if (score <= alpha) {
                         beta = (alpha + beta) / 2;
                         alpha = std::max(alpha - delta, Score::MIN);
-                        // TODO: try this again sometime later
-                        // searchDepth = depth;
+                        searchDepth = depth;
                     } else if (score >= beta) {
                         beta = std::min(beta + delta, Score::MAX);
-                        // TODO: try this again sometime later
-                        // searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_REDUCTION);
-                        // searchDepth = std::max(searchDepth, 1);
+                        searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_REDUCTION);
+                        searchDepth = std::max(searchDepth, 1);
                     } else {
                         break;
                     }
