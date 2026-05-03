@@ -15,13 +15,7 @@ namespace Syft {
 class Eval {
 public:
     static constexpr Int32 evaluate(const Position &position) noexcept {
-        const std::array<Int32, 2> colorFactors = [&]() {
-            if (position.sideToMove() == Color::WHITE) {
-                return std::array<Int32, 2>{1, -1};
-            } else {
-                return std::array<Int32, 2>{-1, 1};
-            }
-        }();
+        const std::array<Int32, 2> colorFactors = [&]() { return (position.sideToMove() == Color::WHITE) ? std::array<Int32, 2>{1, -1} : std::array<Int32, 2>{-1, 1}; }();
 
         Int32 scores[2] = {0, 0};
         Int32 gamePhase = 0;

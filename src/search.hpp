@@ -304,6 +304,10 @@ private:
     static constexpr Int32 WINDOW_WIDENING_COEFF = 58;
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
+    static constexpr Int32 HIST_PRUNING_MAX_DEPTH = 7;
+    static constexpr Int32 HIST_PRUNING_MARGIN = -1743;
+    static constexpr Int32 HIST_BETA_MARGIN = 39;
+
     TTable tTable_;
 
     USize multiPV_;
@@ -432,6 +436,7 @@ private:
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         SearchStack &stack = thread.stack[rootPly];
+        History &history = thread.history;
 
         stack.pv.clear();
 
@@ -475,10 +480,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            if (inCheck) {
-                return 0;
-            }
-            return Eval::evaluate(position);
+            return (inCheck) ? 0 : Eval::evaluate(position);
         }
 
         SearchStack &nextStack = thread.stack[rootPly + 1];
@@ -490,9 +492,8 @@ private:
         TTableEntry tableEntry = TTableEntry();
         bool tableHit = false;
 
-        Int32 staticEval = Score::NONE;
-
-        // FIXME: correplexity?
+        Int32 rawStaticEval = Score::NONE;
+        // Int32 complexity = 0; // FIXME
 
         if (!excludedMove) {
             std::tie(tableEntry, tableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -507,14 +508,10 @@ private:
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                if (tableHit) {
-                    staticEval = tableEntry.staticEval;
-                } else {
-                    staticEval = Eval::evaluate(position);
-                }
+                rawStaticEval = (tableHit) ? tableEntry.staticEval : Eval::evaluate(position);
+                stack.staticEval = history.correct(position, rawStaticEval, rootPly);
+                // complexity = std::abs(stack.staticEval - rawStaticEval); // FIXME
 
-                // FIXME: history
-                stack.staticEval = staticEval;
                 stack.eval = stack.staticEval;
                 if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= stack.eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= stack.eval))) {
                     stack.eval = tableEntry.score;
@@ -561,12 +558,24 @@ private:
             }
 
             const bool quiet = position.quiet(move);
+            Int32 historyScore = (quiet) ? history.quietStats(position, move, rootPly) : history.noisyStats(position, move);
+
+            // TODO: try history pruning
+            // if constexpr (!ROOT_NODE) {
+            //     if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
+            //         // TODO: more pruning
+
+            //         if (quiet && depth <= HIST_PRUNING_MAX_DEPTH && historyScore < HIST_PRUNING_MARGIN * depth) {
+            //             break;
+            //         }
+            //     }
+            // }
 
             tTable_.prefetch(position.zobristAfter(move));
 
             const UInt64 nodesBefore = thread.nodes.load(std::memory_order_relaxed);
 
-            makeMove(thread, move, 0); // FIXME: histScore
+            makeMove(thread, move, historyScore);
             movesTried++;
 
             if (quiet) {
@@ -654,7 +663,26 @@ private:
                         stack.killerMoves[0] = move;
                     }
 
-                    // TODO: history updates
+                    Int32 historyDepth = depth + ((bestScore > beta) + HIST_BETA_MARGIN);
+                    Int32 bonus = history.bonus(historyDepth);
+                    Int32 penalty = history.penalty(historyDepth);
+
+                    if (quiet) {
+                        history.updateQuietStats(position, move, rootPly, bonus);
+                        for (const Move quietMove : quietsTried) {
+                            if (quietMove != move) {
+                                history.updateQuietStats(position, quietMove, rootPly, penalty);
+                            }
+                        }
+                    } else {
+                        history.updateNoisyStats(position, move, bonus);
+                    }
+
+                    for (const Move noisyMove : noisiesTried) {
+                        if (noisyMove != move) {
+                            history.updateNoisyStats(position, noisyMove, penalty);
+                        }
+                    }
 
                     break;
                 }
@@ -665,18 +693,17 @@ private:
             if (excludedMove) {
                 return alpha;
             }
-            if (inCheck) {
-                return Score::matedIn(static_cast<Int32>(rootPly));
-            } else {
-                return Score::DRAW;
-            }
+
+            return (inCheck) ? Score::matedIn(static_cast<Int32>(rootPly)) : Score::DRAW;
         }
 
         if (!excludedMove) {
-            // TODO: history update
+            if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
+                history.updateCorr(position, depth, rootPly, bestScore - stack.staticEval);
+            }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, staticEval, bestMove, depth, tablePV, bound);
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, depth, tablePV, bound);
             }
         }
 
@@ -691,6 +718,7 @@ private:
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         SearchStack &stack = thread.stack[rootPly];
+        History &history = thread.history;
 
         stack.pv.clear();
 
@@ -723,14 +751,12 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            if (inCheck) {
-                return 0;
-            }
-            return Eval::evaluate(position);
+            return (inCheck) ? 0 : Eval::evaluate(position);
         }
 
         auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
         const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
+        const Move hashMove = tableEntry.move;
 
         if constexpr (!PV_NODE) {
             if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
@@ -738,17 +764,15 @@ private:
             }
         }
 
-        Int32 staticEval = Score::NONE;
+        Int32 rawStaticEval = Score::NONE;
 
         if (inCheck) {
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            staticEval = (tableHit) ? tableEntry.staticEval : Eval::evaluate(position);
+            rawStaticEval = (tableHit) ? tableEntry.staticEval : Eval::evaluate(position);
+            stack.staticEval = history.correct(position, rawStaticEval, rootPly);
 
-            // TODO: history stuff
-
-            stack.staticEval = staticEval;
             stack.eval = stack.staticEval;
             if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= stack.eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= stack.eval))) {
                 stack.eval = tableEntry.score;
@@ -757,7 +781,7 @@ private:
 
         if (stack.eval >= beta) {
             if (!tableHit) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), stack.eval, staticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), stack.eval, rawStaticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
             }
             return stack.eval;
         }
@@ -777,13 +801,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = [&]() {
-            if (inCheck) {
-                return MoveOrder(position, tableEntry.move, stack.killerMoves);
-            } else {
-                return MoveOrder(position, tableEntry.move);
-            }
-        }();
+        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, hashMove, stack.killerMoves) : MoveOrder(position, hashMove);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -830,7 +848,7 @@ private:
             }
 
             // TODO: try this
-            // if (position_.quiet(move) && inCheck && bestScore > Score::LOSS) {
+            // if (position.quiet(move) && inCheck && bestScore > Score::LOSS) {
             //     break;
             // }
         }
@@ -839,7 +857,7 @@ private:
             return Score::matedIn(static_cast<Int32>(rootPly));
         }
 
-        tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, staticEval, bestMove, 0, tablePV, bound);
+        tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, tablePV, bound);
 
         return bestScore;
     }

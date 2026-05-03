@@ -278,19 +278,23 @@ public:
     }
 
     constexpr ContCorrHistoryEntry &contCorrEntry(const Position &position, const Move move) noexcept {
-        if (move == Move::NULL_MOVE) {
-            return contCorr_[static_cast<USize>(Piece(PieceType::PAWN, position.sideToMove()))][static_cast<USize>(move.to())];
-        }
-        const Piece movedPiece = position.moved(move);
+        const Piece movedPiece = (move == Move::NULL_MOVE) ? Piece(PieceType::PAWN, position.sideToMove()) : position.moved(move);
         return contCorr_[static_cast<USize>(movedPiece)][static_cast<USize>(move.to())];
     }
 
     constexpr const ContCorrHistoryEntry &contCorrEntry(const Position &position, const Move move) const noexcept {
-        if (move == Move::NULL_MOVE) {
-            return contCorr_[static_cast<USize>(Piece(PieceType::PAWN, position.sideToMove()))][static_cast<USize>(move.to())];
-        }
-        const Piece movedPiece = position.moved(move);
+        const Piece movedPiece = (move == Move::NULL_MOVE) ? Piece(PieceType::PAWN, position.sideToMove()) : position.moved(move);
         return contCorr_[static_cast<USize>(movedPiece)][static_cast<USize>(move.to())];
+    }
+
+    static constexpr Int32 bonus(Int32 depth) noexcept {
+        Int32 result = (BONUS_QUADRATIC * depth * depth / BONUS_SCALE) + (BONUS_LINEAR * depth) - BONUS_OFFSET;
+        return std::min(result, BONUS_MAX);
+    }
+
+    static constexpr Int32 penalty(Int32 depth) noexcept {
+        Int32 result = (PENALTY_QUADRATIC * depth * depth / PENALTY_SCALE) + (PENALTY_LINEAR * depth) - PENALTY_OFFSET;
+        return -std::min(result, PENALTY_MAX);
     }
 
 private:
@@ -379,17 +383,6 @@ private:
         const bool toThreat = threats.get(move.to().index());
         capture_[static_cast<USize>(capturedPiece.type())][static_cast<USize>(movedPiece)][move.to().index()][fromThreat][toThreat].update(bonus);
     }
-
-    static constexpr Int32 bonus(Int32 depth) noexcept {
-        Int32 result = (BONUS_QUADRATIC * depth * depth / BONUS_SCALE) + (BONUS_LINEAR * depth) - BONUS_OFFSET;
-        return std::min(result, BONUS_MAX);
-    }
-
-    static constexpr Int32 penalty(Int32 depth) noexcept {
-        Int32 result = (PENALTY_QUADRATIC * depth * depth / PENALTY_SCALE) + (PENALTY_LINEAR * depth) - PENALTY_OFFSET;
-        return std::min(result, PENALTY_MAX);
-    }
-
 };
 
 }

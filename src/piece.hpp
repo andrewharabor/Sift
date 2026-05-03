@@ -158,11 +158,9 @@ public:
     }
 
     constexpr Piece(PieceType pieceType, Color color) noexcept : piece_(PieceEnum::NONE) {
-        if (pieceType == PieceType::NONE || color == Color::NONE) {
-            piece_ = PieceEnum::NONE;
-            return;
+        if (pieceType != PieceType::NONE && color != Color::NONE) {
+            piece_ = static_cast<PieceEnum>(color * 6 + pieceType);
         }
-        piece_ = static_cast<PieceEnum>(color * 6 + pieceType);
     }
 
     constexpr bool operator==(const Piece &other) const noexcept { return piece_ == other.piece_; }
@@ -216,19 +214,9 @@ public:
     constexpr bool operator==(const Color &other) const noexcept { return color() == other; }
     constexpr bool operator!=(const Color &other) const noexcept { return color() != other; }
 
-    constexpr PieceType type() const noexcept {
-        if (piece_ == PieceEnum::NONE) {
-            return PieceType::NONE;
-        }
-        return PieceType(static_cast<UInt8>(piece_) % 6);
-    }
+    constexpr PieceType type() const noexcept { return (piece_ == PieceEnum::NONE) ? PieceType::NONE : PieceType(static_cast<UInt8>(piece_) % 6); }
 
-    constexpr Color color() const noexcept {
-        if (piece_ == PieceEnum::NONE) {
-            return Color::NONE;
-        }
-        return Color(static_cast<UInt8>(piece_) / 6);
-    }
+    constexpr Color color() const noexcept { return (piece_ == PieceEnum::NONE) ? Color::NONE : Color(static_cast<UInt8>(piece_) / 6); }
 
     constexpr PieceEnum internal() const noexcept { return piece_; }
 

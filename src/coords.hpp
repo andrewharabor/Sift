@@ -285,10 +285,7 @@ public:
 
     constexpr bool backRank(Color color) const noexcept {
         assert(color != Color::NONE);
-        if (color == Color::WHITE) {
-            return rank() == Rank::RANK_1;
-        }
-        return rank() == Rank::RANK_8;
+        return (color == Color::WHITE) ? (rank() == Rank::RANK_1) : (rank() == Rank::RANK_8);
     }
 
     static constexpr bool sameColor(Square square1, Square square2) noexcept {

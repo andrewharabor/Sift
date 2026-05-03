@@ -35,9 +35,7 @@ struct TTableEntry {
 
 class TTable {
 public:
-    TTable(USize sizeMB) : table_(nullptr), size_(0), age_(0) {
-        resize(sizeMB, 1);
-    }
+    TTable(USize sizeMB) : table_(nullptr), size_(0), age_(0) { resize(sizeMB, 1); }
 
     ~TTable() {
         if (table_) {
@@ -130,9 +128,7 @@ public:
         }
     }
 
-    void prefetch(UInt64 key) const {
-        prefetchPtr(static_cast<const void *>(&table_[index(key)]));
-    }
+    void prefetch(UInt64 key) const { prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
 
     USize hashfull() const {
         USize count = 0;
@@ -148,9 +144,7 @@ public:
         return (count * 1000) / (sampleSize * ENTRIES);
     }
 
-    void incrementAge() {
-        age_ = (age_ + 1) % GENERATIONS;
-    }
+    void incrementAge() { age_ = (age_ + 1) % GENERATIONS; }
 
 private:
     static constexpr USize ENTRIES = 3;
@@ -164,17 +158,9 @@ private:
         UInt8 depth;
         UInt8 boundPVGen;
 
-        TTableEntry::Bound bound() const {
-            return static_cast<TTableEntry::Bound>(boundPVGen & 3);
-        }
-
-        bool pv() const {
-            return boundPVGen & 4;
-        }
-
-        UInt8 gen() const {
-            return boundPVGen >> 3;
-        }
+        TTableEntry::Bound bound() const { return static_cast<TTableEntry::Bound>(boundPVGen & 3); }
+        bool pv() const { return boundPVGen & 4; }
+        UInt8 gen() const { return boundPVGen >> 3; }
 
         void setBoundPVGen(TTableEntry::Bound bound, bool pv, UInt8 gen) {
             boundPVGen = static_cast<UInt8>(bound) | (static_cast<UInt8>(pv << 2) | static_cast<UInt8>(gen << 3));
@@ -200,49 +186,31 @@ private:
 
     Int32 retrieve(Int16 score, Int32 ply) const {
         if (Score::mate(score)) {
-            if (score < 0) {
-                return score + ply;
-            } else {
-                return score - ply;
-            }
+            return (score < 0) ? (score + ply) : (score - ply);
         }
         return score;
     }
 
     Int16 store(Int32 score, Int32 ply) const {
         if (Score::mate(score)) {
-            if (score < 0) {
-                return static_cast<Int16>(score - ply);
-            } else {
-                return static_cast<Int16>(score + ply);
-            }
+            return (score < 0) ? static_cast<Int16>(score - ply) : static_cast<Int16>(score + ply);
         }
         return static_cast<Int16>(score);
     }
 
-    USize index(UInt64 key) const {
-        return mulHi64(key, size_);
-    }
+    USize index(UInt64 key) const { return mulHi64(key, size_); }
 
 #if defined(__GNUC__) || defined(__clang__)
 
-    void prefetchPtr(const void *ptr) const {
-        __builtin_prefetch(ptr);
-    }
+    void prefetchPtr(const void *ptr) const { __builtin_prefetch(ptr); }
 
-    UInt64 mulHi64(UInt64 a, UInt64 b) const {
-        return __uint128_t(a) * __uint128_t(b) >> 64;
-    }
+    UInt64 mulHi64(UInt64 a, UInt64 b) const { return __uint128_t(a) * __uint128_t(b) >> 64; }
 
 #elif defined(_MSC_VER) && !defined(__clang__)
 
-    void prefetchPtr(const void *ptr) const {
-        _mm_prefetch(static_cast<const char *>(ptr), _MM_HINT_T0);
-    }
+    void prefetchPtr(const void *ptr) const { _mm_prefetch(static_cast<const char *>(ptr), _MM_HINT_T0); }
 
-    U64 mulHi64(U64 a, U64 b) const {
-        return __umulh(a, b);
-    }
+    U64 mulHi64(U64 a, U64 b) const { return __umulh(a, b); }
 
 #else
 
