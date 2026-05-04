@@ -351,8 +351,8 @@ private:
         }
     }
 
-    template<typename FUNCTION>
-    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, FUNCTION movesFunc) {
+    template<typename Function>
+    static void whileBitboardAddMoves(MoveList &moveList, Bitboard bitboard, Function movesFunc) {
         while (bitboard) {
             const Square from = Square(bitboard.pop());
             Bitboard moves = movesFunc(from);

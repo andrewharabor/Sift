@@ -24,19 +24,19 @@ using Float64 = double;
 
 namespace Internal {
 
-template<typename TYPE, USize SIZE, USize... SIZES>
+template<typename Type, USize SIZE, USize... SIZES>
 struct MultiArrayImpl {
-    using Type = std::array<typename MultiArrayImpl<TYPE, SIZES...>::Type, SIZE>;
+    using Type = std::array<typename MultiArrayImpl<Type, SIZES...>::Type, SIZE>;
 };
 
-template<typename TYPE, USize SIZE>
-struct MultiArrayImpl<TYPE, SIZE> {
-    using Type = std::array<TYPE, SIZE>;
+template<typename Type, USize SIZE>
+struct MultiArrayImpl<Type, SIZE> {
+    using Type = std::array<Type, SIZE>;
 };
 
 }
 
-template<typename TYPE, USize... SIZES>
-using MultiArray = typename Internal::MultiArrayImpl<TYPE, SIZES...>::Type;
+template<typename Type, USize... SIZES>
+using MultiArray = typename Internal::MultiArrayImpl<Type, SIZES...>::Type;
 
 }
