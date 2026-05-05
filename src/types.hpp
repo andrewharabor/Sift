@@ -26,17 +26,17 @@ namespace Internal {
 
 template<typename Type, USize SIZE, USize... SIZES>
 struct MultiArrayImpl {
-    using Type = std::array<typename MultiArrayImpl<Type, SIZES...>::Type, SIZE>;
+    using ArrayType = std::array<typename MultiArrayImpl<Type, SIZES...>::ArrayType, SIZE>;
 };
 
 template<typename Type, USize SIZE>
 struct MultiArrayImpl<Type, SIZE> {
-    using Type = std::array<Type, SIZE>;
+    using ArrayType = std::array<Type, SIZE>;
 };
 
 }
 
 template<typename Type, USize... SIZES>
-using MultiArray = typename Internal::MultiArrayImpl<Type, SIZES...>::Type;
+using MultiArray = typename Internal::MultiArrayImpl<Type, SIZES...>::ArrayType;
 
 }
