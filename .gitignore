@@ -3,8 +3,6 @@ Syft
 build/
 test/
 
-books/book.bin
-
 *.d
 
 *.slo
