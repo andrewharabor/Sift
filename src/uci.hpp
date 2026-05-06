@@ -508,7 +508,7 @@ private:
     void eval() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::cout << "info staticeval ";
+        std::cout << "info eval ";
         if (position_.inCheck()) {
             std::cout << "(none)";
         } else {
