@@ -1183,40 +1183,41 @@ public:
                 if (score < favorable) {
                     break;
                 }
-                currOccupied ^= Bitboard(pawns.lsb());
+                currOccupied ^= Bitboard(Square(pawns.lsb()));
                 currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
             } else if (knights) {
                 score = pieceTypeValue(PieceType::KNIGHT) - score;
                 if (score < favorable) {
                     break;
                 }
-                currOccupied ^= Bitboard(knights.lsb());
+                currOccupied ^= Bitboard(Square(knights.lsb()));
             } else if (bishops) {
                 score = pieceTypeValue(PieceType::BISHOP) - score;
                 if (score < favorable) {
                     break;
                 }
-                currOccupied ^= Bitboard(bishops.lsb());
+                currOccupied ^= Bitboard(Square(bishops.lsb()));
                 currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
             } else if (rooks) {
                 score = pieceTypeValue(PieceType::ROOK) - score;
                 if (score < favorable) {
                     break;
                 }
-                currOccupied ^= Bitboard(rooks.lsb());
+                currOccupied ^= Bitboard(Square(rooks.lsb()));
                 currAttackers |= Attacks::rook(to, currOccupied) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN));
             } else if (queens) {
                 score = pieceTypeValue(PieceType::QUEEN) - score;
                 if (score < favorable) {
                     break;
                 }
-                currOccupied ^= Bitboard(queens.lsb());
+                currOccupied ^= Bitboard(Square(queens.lsb()));
                 currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
                 currAttackers |= Attacks::rook(to, currOccupied) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN));
             } else if (king) {
                 return (bool(currAttackers & enemy(color))) ? bool(favorable ^ 1) : bool(favorable);
             } else {
                 assert(false);
+                break;
             }
         }
 
