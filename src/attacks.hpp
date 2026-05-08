@@ -5,6 +5,7 @@
 #if defined(USE_PEXT)
 #include <immintrin.h>
 #endif
+#include <tuple>
 
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -60,7 +61,7 @@ public:
             initSliders(Square(i), ROOK_TABLE, ROOK_MAGICS[i], sliderSlow<PieceType::ROOK>);
         }
 
-        SQUARES_BETWEEN_BITBOARDS = initSquaresBetween();
+        std::tie(SQUARES_BETWEEN_BITBOARDS, SQUARES_ALIGNED_BITBOARDS) = initSquarePaths();
     }
 
     template<Color::ColorEnum COLOR_ENUM>
@@ -125,7 +126,12 @@ public:
 
     static Bitboard between(Square from, Square to) noexcept {
         assert(from != Square::NONE && to != Square::NONE);
-        return SQUARES_BETWEEN_BITBOARDS[static_cast<std::size_t>(from.index())][static_cast<std::size_t>(to.index())];
+        return SQUARES_BETWEEN_BITBOARDS[static_cast<USize>(from.index())][static_cast<USize>(to.index())];
+    }
+
+    static Bitboard aligned(Square from, Square to) noexcept {
+        assert(from != Square::NONE && to != Square::NONE);
+        return SQUARES_ALIGNED_BITBOARDS[static_cast<USize>(from.index())][static_cast<USize>(to.index())];
     }
 
 private:
@@ -257,6 +263,9 @@ private:
     static inline Magic ROOK_TABLE[64] = {};
     static inline Magic BISHOP_TABLE[64] = {};
 
+    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_BETWEEN_BITBOARDS = {};
+    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_ALIGNED_BITBOARDS = {};
+
     static void initSliders(Square square, Magic table[], [[maybe_unused]] UInt64 magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
         assert(square != Square::NONE);
         const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) | ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
@@ -308,10 +317,9 @@ private:
         return attacks;
     }
 
-    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_BETWEEN_BITBOARDS = {};
-
-    static std::array<std::array<Bitboard, 64>, 64> initSquaresBetween() noexcept {
+    static std::pair<std::array<std::array<Bitboard, 64>, 64>, std::array<std::array<Bitboard, 64>, 64>> initSquarePaths() noexcept {
         std::array<std::array<Bitboard, 64>, 64> betweenBitboards = {};
+        std::array<std::array<Bitboard, 64>, 64> alignedBitboards = {};
 
         auto path = [](PieceType pieceType, Square square, Bitboard occupied) {
             if (pieceType == PieceType::BISHOP) {
@@ -323,20 +331,26 @@ private:
 
         for (UInt8 from = 0; from < 64; from++) {
             for (UInt8 to = 0; to < 64; to++) {
-                for (PieceType pieceType : {PieceType::BISHOP, PieceType::ROOK}) {
-                    Square square1 = Square(from);
-                    Square square2 = Square(to);
-                    const USize index1 = static_cast<USize>(square1.index());
-                    const USize index2 = static_cast<USize>(square2.index());
-                    if (path(pieceType, square1, 0ULL).get(square2.index())) {
-                        betweenBitboards[index1][index2] = path(pieceType, square1, Bitboard(square2)) & path(pieceType, square2, Bitboard(square1));
+                Square square1 = Square(from);
+                Square square2 = Square(to);
+                const USize index1 = static_cast<USize>(square1.index());
+                const USize index2 = static_cast<USize>(square2.index());
+
+                if (from == to) {
+                    betweenBitboards[index1][index2] = Bitboard(square1);
+                    alignedBitboards[index1][index2] = Bitboard(square1);
+                } else {
+                    for (PieceType pieceType : {PieceType::BISHOP, PieceType::ROOK}) {
+                        if (path(pieceType, square1, 0ULL).get(square2.index())) {
+                            betweenBitboards[index1][index2] = (path(pieceType, square1, Bitboard(square2)) & path(pieceType, square2, Bitboard(square1))) | Bitboard(square2);
+                            alignedBitboards[index1][index2] = (path(pieceType, square1, Bitboard()) & path(pieceType, square2, Bitboard())) | Bitboard(square1) | Bitboard(square2);
+                        }
                     }
-                    betweenBitboards[index1][index2].set(square2.index());
                 }
             }
         }
 
-        return betweenBitboards;
+        return {betweenBitboards, alignedBitboards};
     }
 };
 

@@ -7,7 +7,7 @@ namespace Syft {
 namespace ID {
 
 constexpr std::string_view NAME = "Syft";
-constexpr std::string_view VERSION = "dev5-corrhist";
+constexpr std::string_view VERSION = "dev6-moveorder";
 constexpr std::string_view AUTHOR = "andrewharabor";
 constexpr std::string_view GITHUB_URL = "https://github.com/andrewharabor/Syft";
 

@@ -538,7 +538,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, hashMove, stack.killerMoves);
+        MoveOrder moveOrder = MoveOrder(position, history, hashMove, stack.killerMoves, rootPly);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -801,7 +801,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, hashMove, stack.killerMoves) : MoveOrder(position, hashMove);
+        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, hashMove, stack.killerMoves, rootPly) : MoveOrder(position, history, hashMove);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {

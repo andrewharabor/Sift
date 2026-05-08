@@ -42,7 +42,6 @@ class MoveGen {
 public:
     template<MoveGenType MOVE_GEN_TYPE = MoveGenType::ALL>
     static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
-        moveList.clear();
         if (position.sideToMove() == Color::WHITE) {
             legal<Color::WHITE, MOVE_GEN_TYPE>(position, moveList, pieces);
         } else {

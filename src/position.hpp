@@ -247,7 +247,6 @@ public:
         updateRepetitions();
         updateChecks();
         updatePins();
-        updateBlocks();
         updateThreats();
 
         return true;
@@ -334,9 +333,35 @@ public:
 
     constexpr UInt8 checks() const noexcept { return state().checks; }
     constexpr Bitboard checkMask() const noexcept { return state().checkMask; }
-    constexpr Bitboard diagonalPinMask() const noexcept { return state().diagonalPinMask; }
-    constexpr Bitboard orthogonalPinMask() const noexcept { return state().orthogonalPinMask; }
-    constexpr Bitboard blockMask() const noexcept { return state().blockMask; }
+
+    constexpr Bitboard diagonalPinMask() const noexcept { return state().diagonalPinMask[static_cast<USize>(sideToMove_)]; }
+
+    constexpr Bitboard diagonalPinMask(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return state().diagonalPinMask[static_cast<USize>(color)];
+    }
+
+    constexpr Bitboard orthogonalPinMask() const noexcept { return state().orthogonalPinMask[static_cast<USize>(sideToMove_)]; }
+
+    constexpr Bitboard orthogonalPinMask(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return state().orthogonalPinMask[static_cast<USize>(color)];
+    }
+
+    constexpr Bitboard pinners() const noexcept { return state().pinners[static_cast<USize>(sideToMove_)]; }
+
+    constexpr Bitboard pinners(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return state().pinners[static_cast<USize>(color)];
+    }
+
+    constexpr Bitboard pinned() const noexcept { return (orthogonalPinMask() | diagonalPinMask()) & friendly(sideToMove_); }
+
+    constexpr Bitboard pinned(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return (orthogonalPinMask(color) | diagonalPinMask(color)) & friendly(color);
+    }
+
     constexpr Bitboard threats() const noexcept { return state().threats; }
     constexpr Bitboard winningThreats() const noexcept { return state().winningThreats; }
 
@@ -453,7 +478,6 @@ public:
         updateRepetitions();
         updateChecks();
         updatePins();
-        updateBlocks();
         updateThreats();
     }
 
@@ -478,7 +502,6 @@ public:
 
         updateChecks();
         updatePins();
-        updateBlocks();
         updateThreats();
     }
 
@@ -708,15 +731,17 @@ public:
         return false;
     }
 
-    constexpr Bitboard attackers(Square square, Color color) const noexcept {
+    constexpr Bitboard attackers(Square square, Color color, Bitboard occ) const noexcept {
         assert(square != Square::NONE && color != Color::NONE);
         Bitboard attacks = Attacks::pawn(square, ~color) & pieces(PieceType::PAWN, color);
         attacks |= Attacks::knight(square) & pieces(PieceType::KNIGHT, color);
-        attacks |= Attacks::bishop(square, occupied()) & (pieces(PieceType::BISHOP, color) | pieces(PieceType::QUEEN, color));
-        attacks |= Attacks::rook(square, occupied()) & (pieces(PieceType::ROOK, color) | pieces(PieceType::QUEEN, color));
+        attacks |= Attacks::bishop(square, occ) & (pieces(PieceType::BISHOP, color) | pieces(PieceType::QUEEN, color));
+        attacks |= Attacks::rook(square, occ) & (pieces(PieceType::ROOK, color) | pieces(PieceType::QUEEN, color));
         attacks |= Attacks::king(square) & pieces(PieceType::KING, color);
-        return attacks & occupied();
+        return attacks & occ;
     }
+
+    constexpr Bitboard attackers(Square square, Color color) const noexcept { return attackers(square, color, occupied()); }
 
     constexpr bool inCheck() const noexcept { return state().checks > 0; }
 
@@ -900,7 +925,7 @@ public:
                 return false;
             }
 
-            if (state().orthogonalPinMask.get(fromIndex) || (state().diagonalPinMask.get(fromIndex) && !state().diagonalPinMask.get(toIndex))) {
+            if (orthogonalPinMask().get(fromIndex) || (diagonalPinMask().get(fromIndex) && !diagonalPinMask().get(toIndex))) {
                 return false;
             }
 
@@ -930,14 +955,14 @@ public:
             }
 
             if (capturedPiece != Piece::NONE) {
-                if (state().orthogonalPinMask.get(fromIndex) || (state().diagonalPinMask.get(fromIndex) && !state().diagonalPinMask.get(toIndex))) {
+                if (orthogonalPinMask().get(fromIndex) || (diagonalPinMask().get(fromIndex) && !diagonalPinMask().get(toIndex))) {
                     return false;
                 }
 
                 return Attacks::pawn(from, sideToMove_).get(toIndex);
             }
 
-            if (state().diagonalPinMask.get(fromIndex) || (state().orthogonalPinMask.get(fromIndex) && !state().orthogonalPinMask.get(toIndex))) {
+            if (diagonalPinMask().get(fromIndex) || (orthogonalPinMask().get(fromIndex) && !orthogonalPinMask().get(toIndex))) {
                 return false;
             }
 
@@ -954,27 +979,27 @@ public:
 
             return false;
         } else if (piece.type() == PieceType::KNIGHT) {
-            if (state().orthogonalPinMask.get(fromIndex) || state().diagonalPinMask.get(fromIndex)) {
+            if (orthogonalPinMask().get(fromIndex) || diagonalPinMask().get(fromIndex)) {
                 return false;
             }
             return Attacks::knight(from).get(toIndex);
         } else if (piece.type() == PieceType::BISHOP) {
-            if (state().orthogonalPinMask.get(fromIndex) || (state().diagonalPinMask.get(fromIndex) && !state().diagonalPinMask.get(toIndex))) {
+            if (orthogonalPinMask().get(fromIndex) || (diagonalPinMask().get(fromIndex) && !diagonalPinMask().get(toIndex))) {
                 return false;
             }
             return Attacks::bishop(from, occ).get(toIndex);
         } else if (piece.type() == PieceType::ROOK) {
-            if (state().diagonalPinMask.get(fromIndex) || (state().orthogonalPinMask.get(fromIndex) && !state().orthogonalPinMask.get(toIndex))) {
+            if (diagonalPinMask().get(fromIndex) || (orthogonalPinMask().get(fromIndex) && !orthogonalPinMask().get(toIndex))) {
                 return false;
             }
             return Attacks::rook(from, occ).get(toIndex);
         } else if (piece.type() == PieceType::QUEEN) {
-            if (state().diagonalPinMask.get(fromIndex)) {
-                return (Attacks::bishop(from, occ) & state().diagonalPinMask).get(toIndex);
+            if (diagonalPinMask().get(fromIndex)) {
+                return (Attacks::bishop(from, occ) & diagonalPinMask()).get(toIndex);
             }
 
-            if (state().orthogonalPinMask.get(fromIndex)) {
-                return (Attacks::rook(from, occ) & state().orthogonalPinMask).get(toIndex);
+            if (orthogonalPinMask().get(fromIndex)) {
+                return (Attacks::rook(from, occ) & orthogonalPinMask()).get(toIndex);
             }
 
             return Attacks::queen(from, occ).get(toIndex);
@@ -1086,6 +1111,141 @@ public:
         return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(searchPly);
     }
 
+    bool see(const Move move, Int32 threshold) const noexcept {
+        assert(move != Move::NULL_MOVE);
+
+        if (move.type() != MoveType::NORMAL) {
+            return threshold <= 0;
+        }
+
+        assert(capture(move));
+
+        const auto pieceTypeValue = [](PieceType pieceType) {
+            assert(pieceType != PieceType::NONE);
+            return SEE_PIECE_VALUES[static_cast<USize>(pieceType)];
+        };
+
+        const Square from = move.from();
+        const Square to = move.to();
+
+        Int32 score = pieceTypeValue(pieceAt(to).type()) - threshold;
+        if (score < 0) {
+            return false;
+        }
+
+        score = pieceTypeValue(pieceAt(from).type()) - score;
+        if (score <= 0) {
+            return true;
+        }
+
+        const Bitboard whitePinned = pinned(Color::WHITE);
+        const Bitboard blackPinned = pinned(Color::BLACK);
+
+        const Bitboard whiteAligned = Attacks::aligned(to, kingSquare(Color::WHITE));
+        const Bitboard blackAligned = Attacks::aligned(to, kingSquare(Color::BLACK));
+
+        const Bitboard whitePinnedAligned = whitePinned & whiteAligned;
+        const Bitboard blackPinnedAligned = blackPinned & blackAligned;
+
+        const Bitboard allPinned = whitePinned | blackPinned;
+        const Bitboard allPinnedAligned = whitePinnedAligned | blackPinnedAligned;
+
+        Bitboard currOccupied = occupied() ^ Bitboard(from) ^ Bitboard(to);
+        Bitboard currAttackers = attackers(to, sideToMove_, currOccupied) | attackers(to, ~sideToMove_, currOccupied);
+
+        Color color = sideToMove_;
+        Int32 favorable = 1;
+
+        while (true) {
+            color = ~color;
+            currAttackers &= currOccupied;
+
+            Bitboard friendlyAttackers = currAttackers & friendly(color);
+            if (bool(pinners(color) & currOccupied)) {
+                friendlyAttackers &= ~allPinned | allPinnedAligned;
+            }
+
+            if (friendlyAttackers.empty()) {
+                break;
+            }
+
+            favorable ^= 1;
+
+            const Bitboard pawns = friendlyAttackers & pieces(PieceType::PAWN);
+            const Bitboard knights = friendlyAttackers & pieces(PieceType::KNIGHT);
+            const Bitboard bishops = friendlyAttackers & pieces(PieceType::BISHOP);
+            const Bitboard rooks = friendlyAttackers & pieces(PieceType::ROOK);
+            const Bitboard queens = friendlyAttackers & pieces(PieceType::QUEEN);
+            const Bitboard king = friendlyAttackers & pieces(PieceType::KING);
+
+            if (pawns) {
+                score = pieceTypeValue(PieceType::PAWN) - score;
+                if (score < favorable) {
+                    break;
+                }
+                currOccupied ^= Bitboard(pawns.lsb());
+                currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
+            } else if (knights) {
+                score = pieceTypeValue(PieceType::KNIGHT) - score;
+                if (score < favorable) {
+                    break;
+                }
+                currOccupied ^= Bitboard(knights.lsb());
+            } else if (bishops) {
+                score = pieceTypeValue(PieceType::BISHOP) - score;
+                if (score < favorable) {
+                    break;
+                }
+                currOccupied ^= Bitboard(bishops.lsb());
+                currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
+            } else if (rooks) {
+                score = pieceTypeValue(PieceType::ROOK) - score;
+                if (score < favorable) {
+                    break;
+                }
+                currOccupied ^= Bitboard(rooks.lsb());
+                currAttackers |= Attacks::rook(to, currOccupied) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN));
+            } else if (queens) {
+                score = pieceTypeValue(PieceType::QUEEN) - score;
+                if (score < favorable) {
+                    break;
+                }
+                currOccupied ^= Bitboard(queens.lsb());
+                currAttackers |= Attacks::bishop(to, currOccupied) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN));
+                currAttackers |= Attacks::rook(to, currOccupied) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN));
+            } else if (king) {
+                return (bool(currAttackers & enemy(color))) ? bool(favorable ^ 1) : bool(favorable);
+            } else {
+                assert(false);
+            }
+        }
+
+        return bool(favorable);
+    }
+
+    Int32 mvv(const Move move) const noexcept {
+        assert(move != Move::NULL_MOVE);
+        assert(capture(move));
+
+        PieceType capturedType = (move.type() == MoveType::EN_PASSANT) ? PieceType::PAWN : pieceAt(move.to()).type();
+        if (capturedType == PieceType::PAWN) {
+            return MVV_PAWN_VALUE;
+        } else if (capturedType == PieceType::KNIGHT) {
+            return MVV_KNIGHT_VALUE;
+        } else if (capturedType == PieceType::BISHOP) {
+            return MVV_BISHOP_VALUE;
+        } else if (capturedType == PieceType::ROOK) {
+            return MVV_ROOK_VALUE;
+        } else if (capturedType == PieceType::QUEEN) {
+            return MVV_QUEEN_VALUE;
+        } else {
+            assert(false);
+            return 0;
+        }
+
+        return 0;
+    }
+
 private:
     static constexpr USize MAX_STATES = 2048;
 
@@ -1095,6 +1255,14 @@ private:
         Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
         Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
     };
+
+    static constexpr std::array<Int32, 6> SEE_PIECE_VALUES = {100, 450, 450, 675, 1300, 0};
+
+    static constexpr Int32 MVV_PAWN_VALUE = 964;
+    static constexpr Int32 MVV_KNIGHT_VALUE = 2465;
+    static constexpr Int32 MVV_BISHOP_VALUE = 2360;
+    static constexpr Int32 MVV_ROOK_VALUE = 4725;
+    static constexpr Int32 MVV_QUEEN_VALUE = 7181;
 
     struct State {
         Move lastMove;
@@ -1116,9 +1284,10 @@ private:
 
         UInt8 checks;
         Bitboard checkMask;
-        Bitboard diagonalPinMask;
-        Bitboard orthogonalPinMask;
-        Bitboard blockMask;
+
+        std::array<Bitboard, 2> diagonalPinMask;
+        std::array<Bitboard, 2> orthogonalPinMask;
+        std::array<Bitboard, 2> pinners;
 
         Bitboard threats;
         Bitboard winningThreats;
@@ -1253,29 +1422,17 @@ private:
     }
 
     void updatePins() noexcept {
-        state().diagonalPinMask = pinMask<PieceType::BISHOP>();
-        state().orthogonalPinMask = pinMask<PieceType::ROOK>();
-    }
+        const auto [whiteDiagonalPins, blackDiagonalPinners] = pins<Color::WHITE, PieceType::BISHOP>();
+        const auto [whiteOrthogonalPins, blackOrthogonalPinners] = pins<Color::WHITE, PieceType::ROOK>();
+        const auto [blackDiagonalPins, whiteDiagonalPinners] = pins<Color::BLACK, PieceType::BISHOP>();
+        const auto [blackOrthogonalPins, whiteOrthogonalPinners] = pins<Color::BLACK, PieceType::ROOK>();
 
-    void updateBlocks() noexcept {
-
-        const Square enemyKingSq = kingSquare(~sideToMove_);
-        const Bitboard friendlyOcc = friendly(sideToMove_);
-        const Bitboard enemyOcc = enemy(sideToMove_);
-
-        const Bitboard bishops = Attacks::bishop(enemyKingSq, enemyOcc) & (pieces(PieceType::BISHOP) | pieces(PieceType::QUEEN)) & friendlyOcc;
-        const Bitboard rooks = Attacks::rook(enemyKingSq, enemyOcc) & (pieces(PieceType::ROOK) | pieces(PieceType::QUEEN)) & friendlyOcc;
-        Bitboard snipers = bishops | rooks;
-        Bitboard mask = Bitboard();
-        while (snipers) {
-            const Square sniperSquare = snipers.pop();
-            const Bitboard possibleBlock = Attacks::between(enemyKingSq, sniperSquare) ^ Bitboard(sniperSquare);
-            if ((possibleBlock & friendlyOcc).count() == 1) {
-                mask |= possibleBlock;
-            }
-        }
-
-        state().blockMask = mask;
+        state().diagonalPinMask[static_cast<USize>(Color::WHITE)] = whiteDiagonalPins;
+        state().orthogonalPinMask[static_cast<USize>(Color::WHITE)] = whiteOrthogonalPins;
+        state().pinners[static_cast<USize>(Color::WHITE)] = blackDiagonalPinners | blackOrthogonalPinners;
+        state().diagonalPinMask[static_cast<USize>(Color::BLACK)] = blackDiagonalPins;
+        state().orthogonalPinMask[static_cast<USize>(Color::BLACK)] = blackOrthogonalPins;
+        state().pinners[static_cast<USize>(Color::BLACK)] = whiteDiagonalPinners | whiteOrthogonalPinners;
     }
 
     void updateThreats() noexcept {
@@ -1327,23 +1484,29 @@ private:
         state().winningThreats = winningThreats;
     }
 
-    template<PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
-    Bitboard pinMask() const noexcept {
+    template<Color::ColorEnum COLOR_ENUM, PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
+    std::pair<Bitboard, Bitboard> pins() const noexcept {
+        static_assert(COLOR_ENUM != Color::NONE);
         static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK);
 
-        const Square kingSq = kingSquare(sideToMove_);
-        const Bitboard friendlyOcc = friendly(sideToMove_);
-        const Bitboard enemyOcc = enemy(sideToMove_);
+        constexpr Color COLOR = static_cast<Color>(COLOR_ENUM);
+
+        const Square kingSq = kingSquare(COLOR);
+        const Bitboard friendlyOcc = friendly(COLOR);
+        const Bitboard enemyOcc = enemy(COLOR);
 
         Bitboard sliders = Attacks::slider<PIECE_TYPE_ENUM>(kingSq, enemyOcc) & (pieces(PIECE_TYPE_ENUM) | pieces(PieceType::QUEEN)) & enemyOcc;
-        Bitboard mask = Bitboard();
+        Bitboard pinMask = Bitboard();
+        Bitboard pinnersMask = Bitboard();
         while (sliders) {
-            const Bitboard possiblePin = Attacks::between(kingSq, sliders.pop());
+            const Square possiblePinner = sliders.pop();
+            const Bitboard possiblePin = Attacks::between(kingSq, possiblePinner);
             if ((possiblePin & friendlyOcc).count() == 1) {
-                mask |= possiblePin;
+                pinMask |= possiblePin;
+                pinnersMask |= Bitboard(possiblePinner);
             }
         }
-        return mask;
+        return {pinMask, pinnersMask};
     }
 };
 
