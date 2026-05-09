@@ -304,9 +304,21 @@ private:
     static constexpr Int32 WINDOW_WIDENING_COEFF = 58;
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
-    static constexpr Int32 HIST_PRUNING_MAX_DEPTH = 7;
-    static constexpr Int32 HIST_PRUNING_MARGIN = -1743;
-    static constexpr Int32 HIST_BETA_MARGIN = 39;
+    static constexpr Int32 RFP_MAX_DEPTH = 8;
+    static constexpr Int32 RFP_IMPROVING_MARGIN = 27;
+    static constexpr Int32 RFP_NON_IMPROVING_MARGIN = 78;
+    static constexpr Int32 RFP_WINNING_THREATS = 21;
+    static constexpr Int32 RFP_OPPONENT_WORSENING = 14;
+    static constexpr Int32 RFP_HISTORY_DIVISOR = 410;
+    static constexpr Int32 RFP_MIN_MARGIN = 20;
+
+    static constexpr Int32 RAZORING_MAX_DEPTH = 3;
+    static constexpr Int32 RAZORING_MARGIN = 456;
+    static constexpr Int32 RAZORING_MAX_ALPHA = 2000;
+
+    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
+    static constexpr Int32 HISTORY_PRUNING_MARGIN = 1743;
+    static constexpr Int32 HISTORY_BETA_MARGIN = 39;
 
     TTable tTable_;
 
@@ -525,7 +537,46 @@ private:
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
 
-        // TODO: more pruning
+        // const Bitboard threats = position.threats(); // FIXME
+        const bool winningThreats = bool(position.winningThreats());
+
+        bool improving = [&]() {
+            if (inCheck) {
+                return false;
+            }
+            if (rootPly > 1 && thread.stack[rootPly - 2].staticEval != Score::NONE) {
+                return stack.staticEval > thread.stack[rootPly - 2].staticEval;
+            }
+            if (rootPly > 3 && thread.stack[rootPly - 4].staticEval != Score::NONE) {
+                return stack.staticEval > thread.stack[rootPly - 4].staticEval;
+            }
+            return true;
+        }();
+
+        bool opponentWorsening = !inCheck && rootPly > 0 && (thread.stack[rootPly - 1].staticEval != Score::NONE) && (stack.staticEval > -thread.stack[rootPly - 1].staticEval + 1);
+
+        if constexpr (!PV_NODE) {
+            if (!inCheck && !excludedMove) {
+                Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (thread.history.stack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
+                if (depth <= RFP_MAX_DEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
+                    return stack.eval;
+                }
+            }
+
+            if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
+                Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
+                if (score <= alpha) {
+                    return score;
+                }
+            }
+
+            // TODO:
+            // NMP
+        }
+
+        // TODO
+        // probcut
+        // IIR
 
         nextStack.failHighCount = 0;
 
@@ -565,7 +616,7 @@ private:
             //     if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
             //         // TODO: more pruning
 
-            //         if (quiet && depth <= HIST_PRUNING_MAX_DEPTH && historyScore < HIST_PRUNING_MARGIN * depth) {
+            //         if (quiet && depth <= HISTORY_PRUNING_MAX_DEPTH && historyScore < -HISTORY_PRUNING_MARGIN * depth) {
             //             break;
             //         }
             //     }
@@ -663,7 +714,7 @@ private:
                         stack.killerMoves[0] = move;
                     }
 
-                    Int32 historyDepth = depth + ((bestScore > beta) + HIST_BETA_MARGIN);
+                    Int32 historyDepth = depth + ((bestScore > beta) + HISTORY_BETA_MARGIN);
                     Int32 bonus = history.bonus(historyDepth);
                     Int32 penalty = history.penalty(historyDepth);
 
