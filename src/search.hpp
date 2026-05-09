@@ -95,6 +95,7 @@ struct SearchThread {
     SearchLimits limits;
 
     USize rootPly;
+    USize nmpMinPly;
     Int32 rootDepth;
     Int32 selDepth;
 
@@ -117,6 +118,7 @@ struct SearchThread {
         rootPly = 0;
         rootDepth = 0;
         selDepth = 0;
+        nmpMinPly = 0;
 
         pvIndex = 0;
 
@@ -315,6 +317,19 @@ private:
     static constexpr Int32 RAZORING_MAX_DEPTH = 3;
     static constexpr Int32 RAZORING_MARGIN = 456;
     static constexpr Int32 RAZORING_MAX_ALPHA = 2000;
+
+    static constexpr Int32 NMP_MIN_DEPTH = 2;
+    static constexpr Int32 NMP_EVAL_MARGIN = 30;
+    static constexpr Int32 NMP_STATIC_EVAL_BASE_MARGIN = 184;
+    static constexpr Int32 NMP_STATIC_EVAL_DEPTH_MARGIN = 19;
+    static constexpr Int32 NMP_BASE_REDUCTION = 1320;
+    static constexpr Int32 NMP_DEPTH_REDUCTION_SCALE = 74;
+    static constexpr Int32 NMP_REDUCTION_DIVISOR = 256;
+    static constexpr Int32 NMP_EVAL_REDUCTION_SCALE = 215;
+    static constexpr Int32 NMP_MAX_EVAL_REDUCTION = 4;
+    static constexpr Int32 NMP_NO_VERIFICATION_MAX_DEPTH = 15;
+    static constexpr USize NMP_MIN_PLY_DEPTH_SCALE = 3;
+    static constexpr USize NMP_MIN_PLY_DEPTH_DIVISOR = 4;
 
     static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
     static constexpr Int32 HISTORY_PRUNING_MARGIN = 1743;
@@ -570,8 +585,27 @@ private:
                 }
             }
 
-            // TODO:
-            // NMP
+            if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && depth >= NMP_MIN_DEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * depth && position.nonPawnMaterial(position.sideToMove())) {
+                Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
+
+                makeNullMove(thread);
+                Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
+                unmakeNullMove(thread);
+
+                if (nullMoveScore >= beta) {
+                    if ((depth <= NMP_NO_VERIFICATION_MAX_DEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
+                        return Score::mate(nullMoveScore) ? beta : nullMoveScore;
+                    }
+
+                    thread.nmpMinPly = rootPly + static_cast<USize>(depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR;
+                    Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
+                    thread.nmpMinPly = 0;
+
+                    if (verificationScore >= beta) {
+                        return verificationScore;
+                    }
+                }
+            }
         }
 
         // TODO
