@@ -331,9 +331,51 @@ private:
     static constexpr USize NMP_MIN_PLY_DEPTH_SCALE = 3;
     static constexpr USize NMP_MIN_PLY_DEPTH_DIVISOR = 4;
 
+    static constexpr Int32 HIGH_COMPLEXITY_MARGIN = 87;
+
     static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
     static constexpr Int32 HISTORY_PRUNING_MARGIN = 1743;
     static constexpr Int32 HISTORY_BETA_MARGIN = 39;
+
+    static constexpr Int32 LMR_BASE = 775;
+    static constexpr Int32 LMR_SCALE = 427;
+    static constexpr Int32 LMR_HISTORY_SCALE = 1024;
+    static constexpr Int32 LMR_QUIET_HISTORY_DIVISOR = 9043;
+    static constexpr Int32 LMR_NOISY_HISTORY_DIVISOR = 6598;
+    static constexpr Int32 LMR_MIN_DEPTH = 3;
+    static constexpr Int32 LMR_MIN_MOVES_PV = 4;
+    static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
+    static constexpr Int32 LMR_NON_IMPROVING_SCALE = 1478;
+    static constexpr Int32 LMR_NOISY_HASH_MOVE_SCALE = 1082;
+    static constexpr Int32 LMR_TABLE_PV_SCALE = 954;
+    static constexpr Int32 LMR_TABLE_PV_NON_FAIL_LOW_SCALE = 484;
+    static constexpr Int32 LMR_GIVES_CHECK_SCALE = 573;
+    static constexpr Int32 LMR_IN_CHECK_SCALE = 592;
+    static constexpr Int32 LMR_HIGH_COMPLEXITY_SCALE = 593;
+    static constexpr Int32 LMR_CUTNODE_SCALE = 1612;
+    static constexpr Int32 LMR_FAIL_HIGH_COUNT_SCALE = 1042;
+    static constexpr UInt32 LMR_FAIL_HIGH_COUNT_MARGIN = 2;
+    static constexpr Int32 LMR_REDUCTION_DIVISOR = 1024;
+
+    static constexpr USize LMR_TABLE_SIZE_DEPTH = 64;
+    static constexpr USize LMR_TABLE_SIZE_MOVES = 64;
+
+    static inline MultiArray<Int32, LMR_TABLE_SIZE_DEPTH, LMR_TABLE_SIZE_MOVES> LMR_TABLE = []() {
+        MultiArray<Int32, LMR_TABLE_SIZE_DEPTH, LMR_TABLE_SIZE_MOVES> table = {};
+        for (USize depth = 1; depth < LMR_TABLE_SIZE_DEPTH; depth++) {
+            for (USize moves = 1; moves < LMR_TABLE_SIZE_MOVES; moves++) {
+                Float64 base = static_cast<Float64>(LMR_BASE);
+                Float64 scale = static_cast<Float64>(LMR_SCALE);
+                table[depth][moves] = static_cast<Int32>(base + scale * std::log(static_cast<Float64>(depth)) * std::log(static_cast<Float64>(moves)));
+            }
+        }
+        return table;
+    }();
+
+    static constexpr Int32 DEEPER_SEARCH_MARGIN_BASE = 38;
+    static constexpr Int32 DEEPER_SEARCH_MARGIN_DEPTH_SCALE = 143;
+    static constexpr Int32 DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR = 64;
+    static constexpr Int32 SHALLOWER_SEARCH_MARGIN = 8;
 
     TTable tTable_;
 
@@ -520,7 +562,7 @@ private:
         bool tableHit = false;
 
         Int32 rawStaticEval = Score::NONE;
-        // Int32 complexity = 0; // FIXME
+        Int32 complexity = 0;
 
         if (!excludedMove) {
             std::tie(tableEntry, tableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -537,7 +579,7 @@ private:
             } else {
                 rawStaticEval = (tableHit) ? tableEntry.staticEval : Eval::evaluate(position);
                 stack.staticEval = history.correct(position, rawStaticEval, rootPly);
-                // complexity = std::abs(stack.staticEval - rawStaticEval); // FIXME
+                complexity = std::abs(stack.staticEval - rawStaticEval);
 
                 stack.eval = stack.staticEval;
                 if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= stack.eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= stack.eval))) {
@@ -547,7 +589,7 @@ private:
         }
 
         const Move hashMove = ROOT_NODE ? thread.rootMoves[thread.pvIndex].move : tableEntry.move;
-
+        const bool noisyHashMove = hashMove != Move::NULL_MOVE && position.noisy(hashMove);
         const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
@@ -644,17 +686,25 @@ private:
 
             const bool quiet = position.quiet(move);
             Int32 historyScore = (quiet) ? history.quietStats(position, move, rootPly) : history.noisyStats(position, move);
+            Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)];
+            baseLMR -= LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR);
 
-            // TODO: try history pruning
+            //TODO:
+            // FP
+            // noisy FP
+            // LMP
+            // SEE pruning
+            // Try history pruning:
             // if constexpr (!ROOT_NODE) {
             //     if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
-            //         // TODO: more pruning
-
             //         if (quiet && depth <= HISTORY_PRUNING_MAX_DEPTH && historyScore < -HISTORY_PRUNING_MARGIN * depth) {
             //             break;
             //         }
             //     }
             // }
+
+            // TODO:
+            // SE
 
             tTable_.prefetch(position.zobristAfter(move));
 
@@ -669,10 +719,41 @@ private:
                 noisiesTried.add(move);
             }
 
-            const Int32 newDepth = depth - 1;
+            const bool givesCheck = position.givesCheck();
+
+            // TODO:
+            // check extensions
+
+            Int32 newDepth = depth - 1;
             Int32 score = 0;
 
-            if (!PV_NODE || movesTried > 1) {
+            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tablePV || moveScore <= MoveScore::KILLER1)) {
+                Int32 reduction = baseLMR;
+                reduction += LMR_NON_IMPROVING_SCALE * !improving;
+                reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyHashMove;
+                if (tablePV) {
+                    reduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tableHit && tableEntry.score > alpha);
+                }
+                reduction -= LMR_GIVES_CHECK_SCALE * givesCheck;
+                reduction -= LMR_IN_CHECK_SCALE * inCheck;
+                reduction -= LMR_HIGH_COMPLEXITY_SCALE * (complexity > HIGH_COMPLEXITY_MARGIN);
+                reduction += LMR_CUTNODE_SCALE * cutNode;
+                reduction += LMR_FAIL_HIGH_COUNT_SCALE * (nextStack.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN);
+
+                Int32 reducedDepth = std::min(std::max(newDepth - reduction / LMR_REDUCTION_DIVISOR, 1), newDepth);
+                score = -search<false, false>(thread, reducedDepth, -alpha - 1, -alpha, true);
+                if (score > alpha && reducedDepth < newDepth) {
+                    bool deeperSearch = score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * depth) / DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR;
+                    bool shallowerSearch = score < bestScore + SHALLOWER_SEARCH_MARGIN;
+                    newDepth += deeperSearch - shallowerSearch;
+                    score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
+
+                    if (quiet && (score <= alpha || score >= beta)) {
+                        Int32 bonus = (score >= beta) ? history.bonus(depth) : history.penalty(depth);
+                        history.updateCont(position, move, rootPly, bonus);
+                    }
+                }
+            } else if (!PV_NODE || movesTried > 1) {
                 score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
             }
 
@@ -897,7 +978,9 @@ private:
 
             const auto [move, moveScore] = scoredMove;
 
-            // TODO: SEE and futility pruning
+            // TODO
+            // SEE pruning
+            // FP
 
             tTable_.prefetch(position.zobristAfter(move));
 
@@ -932,7 +1015,7 @@ private:
                 }
             }
 
-            // TODO: try this
+            // TODO: try whatever this is
             // if (position.quiet(move) && inCheck && bestScore > Score::LOSS) {
             //     break;
             // }

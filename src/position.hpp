@@ -744,6 +744,7 @@ public:
     constexpr Bitboard attackers(Square square, Color color) const noexcept { return attackers(square, color, occupied()); }
 
     constexpr bool inCheck() const noexcept { return state().checks > 0; }
+    constexpr bool givesCheck() const noexcept { return attacked(kingSquare(~sideToMove_), sideToMove_); }
 
     constexpr bool capture(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
