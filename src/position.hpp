@@ -1032,6 +1032,10 @@ public:
         return bool(friendly(color) ^ (pieces(PieceType::PAWN, color) | pieces(PieceType::KING, color)));
     }
 
+    constexpr Int32 materialScore() const noexcept {
+        return pieces(PieceType::PAWN).count() + (3 * pieces(PieceType::KNIGHT).count()) + (3 * pieces(PieceType::BISHOP).count()) + (5 * pieces(PieceType::ROOK).count()) + (9 * pieces(PieceType::QUEEN).count());
+    }
+
     bool repetition3Fold(USize searchPly) const noexcept { return state().repetitions > 1 || (state().repetitions == 1 && static_cast<USize>(state().repetitionPly) < searchPly); }
 
     bool upcomingRepetition(USize searchPly) const noexcept {

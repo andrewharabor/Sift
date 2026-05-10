@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -22,6 +23,7 @@
 #include "syft.hpp"
 #include "time.hpp"
 #include "types.hpp"
+#include "wdl.hpp"
 
 namespace Syft {
 
@@ -137,6 +139,7 @@ private:
 class UCI {
 public:
     UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, Option::DEFAULT_MULTI_PV, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
+        options_["ShowWDL"] = Option("ShowWDL", CheckOption{true}, []([[maybe_unused]] const Option &option) {});
         options_["MoveOverhead"] = Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {});
         options_["MultiPV"] = Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); });
         options_["ClearHash"] = Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); });
@@ -397,7 +400,7 @@ private:
         }
     }
 
-    void searchInfo(const SearchInfo &info) const {
+    void searchInfo(const SearchInfo &info) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
         std::cout << "info depth " << info.depth;
@@ -421,6 +424,24 @@ private:
         }
         if (info.upperBound) {
             std::cout << " upperbound";
+        }
+
+        if (options_["ShowWDL"].checkValue()) {
+            std::cout << " wdl ";
+
+            if (Score::mate(info.score)) {
+                if (info.score > 0) {
+                    std::cout << "1000 0 0";
+                } else {
+                    std::cout << "0 0 1000";
+                }
+            } else {
+                const auto [winProb, lossProb] = WDL::winLoss(position_.materialScore(), info.score);
+                const Int32 win = static_cast<Int32>(std::round(winProb * 1000.0));
+                const Int32 loss = static_cast<Int32>(std::round(lossProb * 1000.0));
+                const Int32 draw = 1000 - win - loss;
+                std::cout << win << " " << draw << " " << loss;
+            }
         }
 
         std::cout << " time " << info.time.count();
