@@ -9,9 +9,9 @@
 #include <mutex>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "color.hpp"
 #include "eval.hpp"
@@ -70,6 +70,8 @@ public:
     static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 20;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
+
+    static constexpr bool DEFAULT_SHOW_WDL = true;
 
     Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
     Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
@@ -139,12 +141,12 @@ private:
 class UCI {
 public:
     UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, Option::DEFAULT_MULTI_PV, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
-        options_["ShowWDL"] = Option("ShowWDL", CheckOption{true}, []([[maybe_unused]] const Option &option) {});
-        options_["MoveOverhead"] = Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {});
-        options_["MultiPV"] = Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); });
-        options_["ClearHash"] = Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); });
-        options_["Hash"] = Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); });
-        options_["Threads"] = Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); });
+        options_.push_back(Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); }));
+        options_.push_back(Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); }));
+        options_.push_back(Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); }));
+        options_.push_back(Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); }));
+        options_.push_back(Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("ShowWDL", CheckOption{Option::DEFAULT_SHOW_WDL}, []([[maybe_unused]] const Option &option) {}));
 
         legalMoves();
     }
@@ -180,7 +182,7 @@ private:
     MoveList legalMoves_;
     Search search_;
 
-    std::unordered_map<std::string, Option> options_;
+    std::vector<Option> options_;
 
     mutable std::mutex stdoutMutex_;
 
@@ -266,7 +268,7 @@ private:
         std::cout << "id name " << ID::NAME << " " << ID::VERSION << std::endl;
         std::cout << "id author " << ID::AUTHOR << std::endl;
 
-        for (const auto &[name, option] : options_) {
+        for (const auto &option : options_) {
             std::cout << "option name " << option.name() << " type ";
             if (option.type() == OptionType::CHECK) {
                 std::cout << "check default " << std::boolalpha << option.checkValue() << std::noboolalpha << std::endl;
@@ -336,7 +338,7 @@ private:
     void go(std::istringstream &stream) {
         std::string token;
         SearchLimits limits = SearchLimits();
-        limits.overhead = MS(options_["MoveOverhead"].spinValue());
+        limits.overhead = MS(options_[optionIndex("MoveOverhead")].spinValue());
 
         while (stream >> token) {
             if (token == "wtime") {
@@ -426,7 +428,7 @@ private:
             std::cout << " upperbound";
         }
 
-        if (options_["ShowWDL"].checkValue()) {
+        if (options_[optionIndex("ShowWDL")].checkValue()) {
             std::cout << " wdl ";
 
             if (Score::mate(info.score)) {
@@ -477,11 +479,12 @@ private:
         }
 
         stream >> name;
-        if (options_.find(name) == options_.end()) {
+
+        if (optionIndex(name) >= options_.size()) {
             return;
         }
 
-        Option &option = options_[name];
+        Option &option = options_[optionIndex(name)];
 
         stream >> token;
         if (option.type() != OptionType::BUTTON && token != "value") {
@@ -546,6 +549,14 @@ private:
     void legalMoves() noexcept {
         legalMoves_.clear();
         MoveGen::legal(position_, legalMoves_);
+    }
+
+    USize optionIndex(const std::string &name) const noexcept {
+        auto it = std::find_if(options_.begin(), options_.end(), [&name](const Option &option) { return option.name() == name; });
+        if (it != options_.end()) {
+            return static_cast<USize>(it - options_.begin());
+        }
+        return options_.size();
     }
 };
 
