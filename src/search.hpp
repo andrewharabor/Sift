@@ -743,9 +743,12 @@ private:
                 Int32 reducedDepth = std::min(std::max(newDepth - reduction / LMR_REDUCTION_DIVISOR, 1), newDepth);
                 score = -search<false, false>(thread, reducedDepth, -alpha - 1, -alpha, true);
                 if (score > alpha && reducedDepth < newDepth) {
-                    bool deeperSearch = score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * depth) / DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR;
-                    bool shallowerSearch = score < bestScore + SHALLOWER_SEARCH_MARGIN;
-                    newDepth += deeperSearch - shallowerSearch;
+                    if (score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * depth) / DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR) {
+                        newDepth++;
+                    }
+                    if (score < bestScore + SHALLOWER_SEARCH_MARGIN) {
+                        newDepth--;
+                    }
                     score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
 
                     if (quiet && (score <= alpha || score >= beta)) {
