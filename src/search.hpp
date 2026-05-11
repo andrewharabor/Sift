@@ -389,10 +389,11 @@ private:
     static constexpr Int32 NOISY_FP_HIST_DIVISOR = 253;
     static constexpr Int32 NOISY_FP_MARGIN_MIN = 20;
 
-    // SEARCH_PARAM(noisyFpMaxDepth, 5, 2, 9, 1);
-    // SEARCH_PARAM(noisyFPBaseMargin, 4, -100, 200, 10);
-    // SEARCH_PARAM(noisyFpDepthMargin, 113, 10, 360, 12);
-    // SEARCH_PARAM(noisyFpHistDivisor, 253, 100, 512, 16);
+    static constexpr Int32 LMP_MARGIN_IMPROVING_BASE = 553;
+    static constexpr Int32 LMP_MARGIN_IMPROVING_DEPTH_SCALE = 333;
+    static constexpr Int32 LMP_MARGIN_NON_IMPROVING_BASE = 566;
+    static constexpr Int32 LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE = 103;
+    static constexpr Int32 LMP_MARGIN_DIVISOR = 256;
 
     TTable tTable_;
 
@@ -719,8 +720,12 @@ private:
                         break;
                     }
 
+                    Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * depth * depth) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * depth * depth)) / LMP_MARGIN_DIVISOR;
+                    if (!inCheck && movesTried >= lmpMargin) {
+                        break;
+                    }
+
                     // TODO:
-                    // LMP
                     // SEE pruning
                     // history pruning:
                 }
