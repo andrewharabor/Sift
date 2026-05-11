@@ -1116,11 +1116,11 @@ public:
         return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(searchPly);
     }
 
-    bool see(const Move move, Int32 threshold) const noexcept {
+    bool see(const Move move, Int32 margin) const noexcept {
         assert(move != Move::NULL_MOVE);
 
         if (move.type() == MoveType::CASTLING) {
-            return threshold <= 0;
+            return margin <= 0;
         }
 
         const auto pieceTypeValue = [](PieceType pieceType) { return SEE_PIECE_VALUES[static_cast<USize>(pieceType)]; };
@@ -1138,7 +1138,7 @@ public:
             capturedType = PieceType::PAWN;
         }
 
-        score += pieceTypeValue(capturedType) - threshold;
+        score += pieceTypeValue(capturedType) - margin;
         if (score < 0) {
             return false;
         }

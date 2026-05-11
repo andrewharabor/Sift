@@ -393,7 +393,7 @@ private:
 
     static constexpr Int32 SEE_PRUNING_MARGIN_NOISY = -96;
     static constexpr Int32 SEE_PRUNING_MARGIN_QUIET = -67;
-    static constexpr Int32 SEE_CAPT_HISTORY_MAX = 103;
+    static constexpr Int32 SEE_CAPT_HISTORY_DEPTH_SCALE = 103;
     static constexpr Int32 SEE_CAPT_HISTORY_DIVISOR = 30;
 
     static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
@@ -637,24 +637,24 @@ private:
 
         if constexpr (!PV_NODE) {
             if (!inCheck && !excludedMove) {
-                Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (thread.history.stack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
+                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (thread.history.stack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
                 if (depth <= RFP_MAX_DEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
                     return stack.eval;
                 }
             }
 
             if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
-                Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
+                const Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
                 if (score <= alpha) {
                     return score;
                 }
             }
 
             if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && depth >= NMP_MIN_DEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * depth && position.nonPawnMaterial(position.sideToMove())) {
-                Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
+                const Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
 
                 makeNullMove(thread);
-                Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
+                const Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
                 unmakeNullMove(thread);
 
                 if (nullMoveScore >= beta) {
@@ -663,7 +663,7 @@ private:
                     }
 
                     thread.nmpMinPly = rootPly + static_cast<USize>(depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR;
-                    Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
+                    const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
                     thread.nmpMinPly = 0;
 
                     if (verificationScore >= beta) {
@@ -693,9 +693,6 @@ private:
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
             const auto [move, moveScore] = scoredMove;
-            if (move == stack.excludedMove) {
-                continue;
-            }
 
             if constexpr (ROOT_NODE) {
                 if (thread.findRootMove(move) >= thread.rootMoves.size()) {
@@ -707,30 +704,37 @@ private:
                 }
             }
 
+            if (move == stack.excludedMove) {
+                continue;
+            }
+
             const bool quiet = position.quiet(move);
-            Int32 historyScore = (quiet) ? history.quietStats(position, move, rootPly) : history.noisyStats(position, move);
-            Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)];
-            baseLMR -= LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR);
+            const Int32 historyScore = (quiet) ? history.quietStats(position, move, rootPly) : history.noisyStats(position, move);
+            const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
                 if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
-                    Int32 lmrDepth = std::max(depth - baseLMR / LMR_REDUCTION_DIVISOR, 0);
-                    Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
+                    const Int32 lmrDepth = std::max(depth - baseLMR / LMR_REDUCTION_DIVISOR, 0);
+                    const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
                         break;
                     }
 
-                    Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HIST_DIVISOR, NOISY_FP_MARGIN_MIN);
+                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HIST_DIVISOR, NOISY_FP_MARGIN_MIN);
                     if (depth <= NOISY_FP_MAX_DEPTH && !quiet && !inCheck && alpha < Score::WIN && stack.staticEval + noisyFPMargin <= alpha) {
                         break;
                     }
 
-                    Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * depth * depth) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * depth * depth)) / LMP_MARGIN_DIVISOR;
+                    const Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * depth * depth) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * depth * depth)) / LMP_MARGIN_DIVISOR;
                     if (!inCheck && movesTried >= lmpMargin) {
                         break;
                     }
 
-                    // Int32 seeMargin = (quiet ? SEE_PRUNING_MARGIN_QUIET : SEE_PRUNING_MARGIN_NOISY) * depth;
+                    const Int32 seeCaptHistoryMax = SEE_CAPT_HISTORY_DEPTH_SCALE * depth;
+                    const Int32 seeMargin = quiet ? (SEE_PRUNING_MARGIN_QUIET * depth) : (SEE_PRUNING_MARGIN_NOISY * depth - std::clamp(historyScore / SEE_CAPT_HISTORY_DIVISOR, -seeCaptHistoryMax, seeCaptHistoryMax));
+                    if (!position.see(move, seeMargin)) {
+                        continue;
+                    }
 
                     // TODO:
                     // SEE pruning
@@ -776,7 +780,7 @@ private:
                 reduction += LMR_CUTNODE_SCALE * cutNode;
                 reduction += LMR_FAIL_HIGH_COUNT_SCALE * (nextStack.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN);
 
-                Int32 reducedDepth = std::min(std::max(newDepth - reduction / LMR_REDUCTION_DIVISOR, 1), newDepth);
+                const Int32 reducedDepth = std::min(std::max(newDepth - reduction / LMR_REDUCTION_DIVISOR, 1), newDepth);
                 score = -search<false, false>(thread, reducedDepth, -alpha - 1, -alpha, true);
                 if (score > alpha && reducedDepth < newDepth) {
                     if (score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * depth) / DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR) {
@@ -809,7 +813,7 @@ private:
             }
 
             if constexpr (ROOT_NODE) {
-                USize rootMoveIndex = thread.findRootMove(move);
+                const USize rootMoveIndex = thread.findRootMove(move);
                 if (rootMoveIndex >= thread.rootMoves.size()) {
                     continue;
                 }
