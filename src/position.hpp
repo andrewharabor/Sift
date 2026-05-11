@@ -1119,26 +1119,31 @@ public:
     bool see(const Move move, Int32 threshold) const noexcept {
         assert(move != Move::NULL_MOVE);
 
-        if (move.type() != MoveType::NORMAL) {
+        if (move.type() == MoveType::CASTLING) {
             return threshold <= 0;
         }
 
-        assert(capture(move));
-
-        const auto pieceTypeValue = [](PieceType pieceType) {
-            assert(pieceType != PieceType::NONE);
-            return SEE_PIECE_VALUES[static_cast<USize>(pieceType)];
-        };
+        const auto pieceTypeValue = [](PieceType pieceType) { return SEE_PIECE_VALUES[static_cast<USize>(pieceType)]; };
 
         const Square from = move.from();
         const Square to = move.to();
 
-        Int32 score = pieceTypeValue(pieceAt(to).type()) - threshold;
+        Int32 score = 0;
+        PieceType movedType = pieceAt(from).type();
+        PieceType capturedType = pieceAt(to).type();
+        if (move.type() == MoveType::PROMOTION) {
+            movedType = move.promotion();
+            score = pieceTypeValue(movedType) - pieceTypeValue(PieceType::PAWN);
+        } else if (move.type() == MoveType::EN_PASSANT) {
+            capturedType = PieceType::PAWN;
+        }
+
+        score += pieceTypeValue(capturedType) - threshold;
         if (score < 0) {
             return false;
         }
 
-        score = pieceTypeValue(pieceAt(from).type()) - score;
+        score = pieceTypeValue(movedType) - score;
         if (score <= 0) {
             return true;
         }
@@ -1262,7 +1267,7 @@ private:
         Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
     };
 
-    static constexpr std::array<Int32, 6> SEE_PIECE_VALUES = {100, 450, 450, 675, 1300, 0};
+    static constexpr std::array<Int32, 7> SEE_PIECE_VALUES = {100, 450, 450, 675, 1300, 0, 0};
 
     static constexpr Int32 MVV_PAWN_VALUE = 964;
     static constexpr Int32 MVV_KNIGHT_VALUE = 2465;

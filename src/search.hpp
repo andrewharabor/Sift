@@ -333,10 +333,6 @@ private:
 
     static constexpr Int32 HIGH_COMPLEXITY_MARGIN = 87;
 
-    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
-    static constexpr Int32 HISTORY_PRUNING_MARGIN = 1743;
-    static constexpr Int32 HISTORY_BETA_MARGIN = 39;
-
     static constexpr Int32 LMR_BASE = 775;
     static constexpr Int32 LMR_SCALE = 427;
     static constexpr Int32 LMR_HISTORY_SCALE = 1024;
@@ -394,6 +390,15 @@ private:
     static constexpr Int32 LMP_MARGIN_NON_IMPROVING_BASE = 566;
     static constexpr Int32 LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE = 103;
     static constexpr Int32 LMP_MARGIN_DIVISOR = 256;
+
+    static constexpr Int32 SEE_PRUNING_MARGIN_NOISY = -96;
+    static constexpr Int32 SEE_PRUNING_MARGIN_QUIET = -67;
+    static constexpr Int32 SEE_CAPT_HISTORY_MAX = 103;
+    static constexpr Int32 SEE_CAPT_HISTORY_DIVISOR = 30;
+
+    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
+    static constexpr Int32 HISTORY_PRUNING_MARGIN = -1743;
+    static constexpr Int32 HISTORY_BETA_MARGIN = 39;
 
     TTable tTable_;
 
@@ -725,9 +730,12 @@ private:
                         break;
                     }
 
+                    // Int32 seeMargin = (quiet ? SEE_PRUNING_MARGIN_QUIET : SEE_PRUNING_MARGIN_NOISY) * depth;
+
                     // TODO:
                     // SEE pruning
                     // history pruning:
+                    // histScore < histPruningMargin * depth
                 }
             }
 
