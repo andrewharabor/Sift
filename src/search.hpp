@@ -380,8 +380,19 @@ private:
     static constexpr Int32 FP_MAX_DEPTH = 8;
     static constexpr Int32 FP_BASE_MARGIN = 146;
     static constexpr Int32 FP_DEPTH_SCALE = 128;
-    static constexpr Int32 FP_MARGIN_MIN = 20;
     static constexpr Int32 FP_HISTORY_DIVISOR = 393;
+    static constexpr Int32 FP_MARGIN_MIN = 20;
+
+    static constexpr Int32 NOISY_FP_MAX_DEPTH = 5;
+    static constexpr Int32 NOISY_FP_BASE_MARGIN = 4;
+    static constexpr Int32 NOISY_FP_DEPTH_SCALE = 113;
+    static constexpr Int32 NOISY_FP_HIST_DIVISOR = 253;
+    static constexpr Int32 NOISY_FP_MARGIN_MIN = 20;
+
+    // SEARCH_PARAM(noisyFpMaxDepth, 5, 2, 9, 1);
+    // SEARCH_PARAM(noisyFPBaseMargin, 4, -100, 200, 10);
+    // SEARCH_PARAM(noisyFpDepthMargin, 113, 10, 360, 12);
+    // SEARCH_PARAM(noisyFpHistDivisor, 253, 100, 512, 16);
 
     TTable tTable_;
 
@@ -702,13 +713,17 @@ private:
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
                         break;
                     }
-                }
 
-                //TODO:
-                // noisy FP
-                // LMP
-                // SEE pruning
-                // history pruning:
+                    Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HIST_DIVISOR, NOISY_FP_MARGIN_MIN);
+                    if (depth <= NOISY_FP_MAX_DEPTH && !quiet && !inCheck && alpha < Score::WIN && stack.staticEval + noisyFPMargin <= alpha) {
+                        break;
+                    }
+
+                    // TODO:
+                    // LMP
+                    // SEE pruning
+                    // history pruning:
+                }
             }
 
             // TODO:
