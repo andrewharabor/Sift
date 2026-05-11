@@ -377,6 +377,12 @@ private:
     static constexpr Int32 DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR = 64;
     static constexpr Int32 SHALLOWER_SEARCH_MARGIN = 8;
 
+    static constexpr Int32 FP_MAX_DEPTH = 8;
+    static constexpr Int32 FP_BASE_MARGIN = 146;
+    static constexpr Int32 FP_DEPTH_SCALE = 128;
+    static constexpr Int32 FP_MARGIN_MIN = 20;
+    static constexpr Int32 FP_HISTORY_DIVISOR = 393;
+
     TTable tTable_;
 
     USize multiPV_;
@@ -689,19 +695,21 @@ private:
             Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)];
             baseLMR -= LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR);
 
-            //TODO:
-            // FP
-            // noisy FP
-            // LMP
-            // SEE pruning
-            // Try history pruning:
-            // if constexpr (!ROOT_NODE) {
-            //     if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
-            //         if (quiet && depth <= HISTORY_PRUNING_MAX_DEPTH && historyScore < -HISTORY_PRUNING_MARGIN * depth) {
-            //             break;
-            //         }
-            //     }
-            // }
+            if constexpr (!ROOT_NODE) {
+                if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
+                    Int32 lmrDepth = std::max(depth - baseLMR / LMR_REDUCTION_DIVISOR, 0);
+                    Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
+                    if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
+                        break;
+                    }
+                }
+
+                //TODO:
+                // noisy FP
+                // LMP
+                // SEE pruning
+                // history pruning:
+            }
 
             // TODO:
             // SE
