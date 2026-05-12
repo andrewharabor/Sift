@@ -736,10 +736,9 @@ private:
                         continue;
                     }
 
-                    // TODO:
-                    // SEE pruning
-                    // history pruning:
-                    // histScore < histPruningMargin * depth
+                    if (quiet && depth <= HISTORY_PRUNING_MAX_DEPTH && historyScore < HISTORY_PRUNING_MARGIN * depth) {
+                        break;
+                    }
                 }
             }
 

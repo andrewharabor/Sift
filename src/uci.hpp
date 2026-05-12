@@ -152,8 +152,6 @@ public:
     }
 
     void run() {
-        info();
-
         std::string line;
         while (true) {
             std::getline(std::cin, line);
@@ -254,12 +252,6 @@ private:
         }
 
         return Command::NONE;
-    }
-
-    void info() const {
-        std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << ID::NAME << " " << ID::VERSION << " by " << ID::AUTHOR << std::endl;
-        std::cout << ID::GITHUB_URL << std::endl;
     }
 
     void uci() const {
