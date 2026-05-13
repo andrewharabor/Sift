@@ -20,6 +20,7 @@ struct SearchLimits {
     Int32 depth = std::numeric_limits<Int32>::max();
     UInt64 nodes = std::numeric_limits<UInt64>::max();
     MS time = MS::max();
+    bool infinite = false;
     MoveList moves;
 
     struct {
@@ -28,7 +29,6 @@ struct SearchLimits {
         Int32 movesToGo = 0;
         bool enabled = false;
     } clock;
-
     MS overhead = MS(0);
 };
 

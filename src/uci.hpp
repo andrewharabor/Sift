@@ -381,7 +381,7 @@ private:
                     limits.moves.add(legalMoves_[index]);
                 }
             } else if (token == "infinite") {
-                continue;
+                limits.infinite = true;
             }
         }
 

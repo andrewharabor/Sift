@@ -503,16 +503,22 @@ private:
                 }
             }
 
+            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, thread.rootMoves[0].score, thread.rootMoves[0].nodes, thread.nodes.load(std::memory_order_relaxed))) {
+                stop_.store(true, std::memory_order_relaxed);
+            }
+
             if (stop_.load(std::memory_order_relaxed)) {
                 break;
             }
 
-            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, thread.rootMoves[0].score, thread.rootMoves[0].nodes, thread.nodes.load(std::memory_order_relaxed))) {
-                break;
-            }
         }
 
         if (thread.main()) {
+            if (thread.limits.infinite) {
+                while (!stop_.load(std::memory_order_relaxed)) {
+                    std::this_thread::yield();
+                }
+            }
             stop_.store(true, std::memory_order_relaxed);
             uciBestMove_(thread.rootMoves[0].move);
         }
