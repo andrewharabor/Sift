@@ -722,7 +722,7 @@ private:
             }
         }
 
-        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tableHit || (tableEntry.move != Move::NULL_MOVE && tableEntry.depth <= IIR_TABLE_DEPTH_MARGIN + depth))) {
+        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tableHit || (tableEntry.move != Move::NULL_MOVE && tableEntry.depth <= depth - IIR_TABLE_DEPTH_MARGIN))) {
             depth--;
         }
 
