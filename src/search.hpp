@@ -338,6 +338,9 @@ private:
     static constexpr Int32 PROBCUT_TABLE_DEPTH_MARGIN = 3;
     static constexpr Int32 PROBCUT_REDUCTION = 4;
 
+    static constexpr Int32 IIR_MIN_DEPTH = 4;
+    static constexpr Int32 IIR_TABLE_DEPTH_MARGIN = 5;
+
     static constexpr Int32 LMR_BASE = 775;
     static constexpr Int32 LMR_SCALE = 427;
     static constexpr Int32 LMR_HISTORY_SCALE = 1024;
@@ -719,8 +722,9 @@ private:
             }
         }
 
-        // TODO
-        // IIR
+        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tableHit || (tableEntry.move != Move::NULL_MOVE && tableEntry.depth <= IIR_TABLE_DEPTH_MARGIN + depth))) {
+            depth--;
+        }
 
         nextStack.failHighCount = 0;
 
