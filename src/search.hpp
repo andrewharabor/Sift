@@ -306,6 +306,8 @@ private:
     static constexpr Int32 WINDOW_WIDENING_COEFF = 58;
     static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
 
+    static constexpr Int32 HIGH_COMPLEXITY_MARGIN = 87;
+
     static constexpr Int32 RFP_MAX_DEPTH = 8;
     static constexpr Int32 RFP_IMPROVING_MARGIN = 27;
     static constexpr Int32 RFP_NON_IMPROVING_MARGIN = 78;
@@ -331,7 +333,10 @@ private:
     static constexpr USize NMP_MIN_PLY_DEPTH_SCALE = 3;
     static constexpr USize NMP_MIN_PLY_DEPTH_DIVISOR = 4;
 
-    static constexpr Int32 HIGH_COMPLEXITY_MARGIN = 87;
+    static constexpr Int32 PROBCUT_MIN_DEPTH = 5;
+    static constexpr Int32 PROBCUT_BETA_MARGIN = 190;
+    static constexpr Int32 PROBCUT_TABLE_DEPTH_MARGIN = 3;
+    static constexpr Int32 PROBCUT_REDUCTION = 4;
 
     static constexpr Int32 LMR_BASE = 775;
     static constexpr Int32 LMR_SCALE = 427;
@@ -679,8 +684,42 @@ private:
             }
         }
 
+        Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
+        if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tableHit || tableEntry.score >= probcutBeta || tableEntry.depth + PROBCUT_TABLE_DEPTH_MARGIN < depth)) {
+            MoveOrder moveOrder = MoveOrder(position, history, hashMove);
+            ScoredMove scoredMove;
+            Int32 seeMargin = probcutBeta - stack.staticEval;
+            Int32 probcutDepth = depth - PROBCUT_REDUCTION;
+            while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
+                auto [move, moveScore] = scoredMove;
+
+                if (!position.see(move, seeMargin)) {
+                    continue;
+                }
+
+                tTable_.prefetch(position.hashAfter(move));
+
+                makeMove(thread, move, history.noisyStats(position, move));
+
+                Int32 score = -quiescenceSearch<false>(thread, -probcutBeta, -probcutBeta + 1);
+                if (score >= probcutBeta && probcutDepth >= 0) {
+                    score = -search<false, false>(thread, probcutDepth, -probcutBeta, -probcutBeta + 1, !cutNode);
+                }
+
+                unmakeMove(thread);
+
+                if (stop_.load(std::memory_order_relaxed)) {
+                    return alpha;
+                }
+
+                if (score >= probcutBeta) {
+                    tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tablePV, TTableEntry::Bound::LOWER);
+                    return score;
+                }
+            }
+        }
+
         // TODO
-        // probcut
         // IIR
 
         nextStack.failHighCount = 0;
@@ -751,7 +790,7 @@ private:
             // TODO:
             // SE
 
-            tTable_.prefetch(position.zobristAfter(move));
+            tTable_.prefetch(position.hashAfter(move));
 
             const UInt64 nodesBefore = thread.nodes.load(std::memory_order_relaxed);
 
@@ -1030,7 +1069,7 @@ private:
             // SEE pruning
             // FP
 
-            tTable_.prefetch(position.zobristAfter(move));
+            tTable_.prefetch(position.hashAfter(move));
 
             makeMove(thread, move, 0);
             movesTried++;

@@ -7,7 +7,7 @@ namespace Syft {
 namespace ID {
 
 constexpr std::string_view NAME = "Syft";
-constexpr std::string_view VERSION = "dev19-goinf";
+constexpr std::string_view VERSION = "dev20-probcut";
 constexpr std::string_view AUTHOR = "andrewharabor";
 
 }

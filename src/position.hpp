@@ -242,7 +242,7 @@ public:
         state().halfmoveClock = static_cast<UInt16>(std::stoi(std::string(halfmoves)));
         ply_ = static_cast<UInt16>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
-        assert(state().hash == zobrist());
+        assert(state().hash == zobristHash());
 
         updateRepetitions();
         updateChecks();
@@ -570,7 +570,7 @@ public:
         }
     }
 
-    constexpr UInt64 zobrist() const noexcept {
+    constexpr UInt64 zobristHash() const noexcept {
         UInt64 key = 0ULL;
 
         Bitboard pieces = occupied();
@@ -592,7 +592,7 @@ public:
         return key;
     }
 
-    UInt64 zobristAfter(const Move move) const noexcept {
+    UInt64 hashAfter(const Move move) const noexcept {
         UInt64 key = state().hash;
 
         key ^= Zobrist::sideToMove();
