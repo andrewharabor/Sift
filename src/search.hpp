@@ -408,6 +408,10 @@ private:
     static constexpr Int32 HISTORY_PRUNING_MARGIN = -1743;
     static constexpr Int32 HISTORY_BETA_MARGIN = 39;
 
+    static constexpr Int32 QSEARCH_FP_MARGIN = 78;
+
+    // TODO: params here
+
     TTable tTable_;
 
     USize multiPV_;
@@ -1049,7 +1053,7 @@ private:
 
         SearchStack &nextStack = thread.stack[rootPly + 1];
 
-        // TODO: futility =
+        const Int32 fpMargin = (inCheck) ? Score::MIN : stack.eval + QSEARCH_FP_MARGIN;
 
         TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
 
@@ -1069,9 +1073,14 @@ private:
 
             const auto [move, moveScore] = scoredMove;
 
-            // TODO
-            // SEE pruning
-            // FP
+            if (bestScore > Score::LOSS && !position.see(move, 0)) {
+                continue;
+            }
+
+            if (!inCheck && fpMargin <= alpha && !position.see(move, 1)) {
+                bestScore = std::max(bestScore, fpMargin);
+                continue;
+            }
 
             tTable_.prefetch(position.hashAfter(move));
 

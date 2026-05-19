@@ -314,6 +314,27 @@ public:
         return str;
     }
 
+    constexpr explicit operator std::string() const noexcept {
+        std::string str;
+        for (UInt8 rank = 0; rank < 8; rank++) {
+            str += "+---+---+---+---+---+---+---+---+\n";
+            for (UInt8 file = 0; file < 8; file++) {
+                const Piece piece = pieceAt(Square(File(file), Rank(7 - rank)));
+                str += "| ";
+                if (piece != Piece::NONE) {
+                    str += std::string(piece);
+                } else {
+                    str += ' ';
+                }
+                str += ' ';
+            }
+            str += "| " + std::to_string(8 - rank) + '\n';
+        }
+        str += "+---+---+---+---+---+---+---+---+\n";
+        str += "  a   b   c   d   e   f   g   h";
+        return str;
+    }
+
     constexpr Color sideToMove() const noexcept { return sideToMove_; }
     constexpr USize ply() const noexcept { return ply_; }
     constexpr UInt32 fullMoveNumber() const noexcept { return ply_ / 2 + 1; }

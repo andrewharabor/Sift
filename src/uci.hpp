@@ -23,6 +23,7 @@
 #include "syft.hpp"
 #include "time.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 #include "wdl.hpp"
 
 namespace Syft {
@@ -172,7 +173,11 @@ private:
         SET_OPTION,
         QUIT,
         PERFT,
+        BOARD,
+        MOVES,
         EVAL,
+        FEN,
+        HASH,
         NONE
     };
 
@@ -222,9 +227,18 @@ private:
             return true;
         } else if (cmd == Command::PERFT) {
             perft(stream);
+        } else if (cmd == Command::BOARD) {
+            board();
+        } else if (cmd == Command::MOVES) {
+            moves();
         } else if (cmd == Command::EVAL) {
             eval();
+        } else if (cmd == Command::FEN) {
+            fen();
+        } else if (cmd == Command::HASH) {
+            hash();
         }
+
         return false;
     }
 
@@ -247,8 +261,16 @@ private:
             return Command::QUIT;
         } else if (token == "perft") {
             return Command::PERFT;
+        } else if (token == "board") {
+            return Command::BOARD;
+        } else if (token == "moves") {
+            return Command::MOVES;
         } else if (token == "eval") {
             return Command::EVAL;
+        } else if (token == "fen") {
+            return Command::FEN;
+        } else if (token == "hash") {
+            return Command::HASH;
         }
 
         return Command::NONE;
@@ -521,6 +543,26 @@ private:
         std::cout << std::endl;
     }
 
+    void board() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        const std::string positionString = std::string(position_);
+        const std::vector<std::string_view> lines = Utils::splitStringView(positionString, '\n');
+        for (const std::string_view &line : lines) {
+            std::cout << "info board " << line << std::endl;
+        }
+    }
+
+    void moves() {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
+        legalMoves();
+        std::cout << "info moves ";
+        for (const Move move : legalMoves_) {
+            std::cout << std::string(move) << " ";
+        }
+        std::cout << std::endl;
+    }
+
     void eval() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
@@ -531,6 +573,16 @@ private:
             std::cout << Eval::evaluate(position_) << " cp";
         }
         std::cout << std::endl;
+    }
+
+    void fen() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        std::cout << "info fen " << position_.fen() << std::endl;
+    }
+
+    void hash() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        std::cout << "info hash " << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase << std::endl;
     }
 
     void infoString(const std::string &info) const {
