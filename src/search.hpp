@@ -408,6 +408,8 @@ private:
     static constexpr Int32 HISTORY_PRUNING_MARGIN = -1743;
     static constexpr Int32 HISTORY_BETA_MARGIN = 39;
 
+    static constexpr Int32 QSEARCH_MAX_MOVES = 2;
+
     static constexpr Int32 QSEARCH_FP_MARGIN = 78;
 
     // TODO: params here
@@ -1066,10 +1068,9 @@ private:
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
-            // TODO: try this:
-            // if (!inCheck && movesTried >= 2) {
-            //     break;
-            // }
+            if (!inCheck && movesTried >= QSEARCH_MAX_MOVES) {
+                break;
+            }
 
             const auto [move, moveScore] = scoredMove;
 
@@ -1115,10 +1116,9 @@ private:
                 }
             }
 
-            // TODO: try whatever this is
-            // if (position.quiet(move) && inCheck && bestScore > Score::LOSS) {
-            //     break;
-            // }
+            if (position.quiet(move) && inCheck && bestScore > Score::LOSS) {
+                break;
+            }
         }
 
         if (inCheck && movesTried == 0) {
