@@ -843,10 +843,9 @@ private:
             }
 
             const bool givesCheck = position.givesCheck();
-            // if (!doSE && givesCheck) {
-            //     extension = 1;
-            // }
-            // TODO: sprt ^
+            if (!doSE && givesCheck) {
+                extension = 1;
+            }
 
             Int32 newDepth = depth - 1 + extension;
             Int32 score = 0;
