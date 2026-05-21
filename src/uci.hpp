@@ -68,11 +68,13 @@ public:
     static constexpr Int64 MIN_MULTI_PV = 1;
     static constexpr Int64 MAX_MULTI_PV = 256;
 
-    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 20;
+    static constexpr bool DEFAULT_SHOW_WDL = true;
+
+    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
     static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
 
-    static constexpr bool DEFAULT_SHOW_WDL = true;
+    static constexpr bool DEFAULT_SOFT_NODES = false;
 
     Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
     Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
@@ -146,8 +148,9 @@ public:
         options_.push_back(Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); }));
         options_.push_back(Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); }));
         options_.push_back(Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); }));
-        options_.push_back(Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {}));
         options_.push_back(Option("ShowWDL", CheckOption{Option::DEFAULT_SHOW_WDL}, []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("SoftNodes", CheckOption{Option::DEFAULT_SOFT_NODES}, []([[maybe_unused]] const Option &option) {}));
 
         legalMoves();
     }
@@ -353,6 +356,7 @@ private:
         std::string token;
         SearchLimits limits = SearchLimits();
         limits.overhead = MS(options_[optionIndex("MoveOverhead")].spinValue());
+        limits.softNodes = options_[optionIndex("SoftNodes")].checkValue();
 
         while (stream >> token) {
             if (token == "wtime") {

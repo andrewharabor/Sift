@@ -19,6 +19,7 @@ using MS = std::chrono::milliseconds;
 struct SearchLimits {
     Int32 depth = std::numeric_limits<Int32>::max();
     UInt64 nodes = std::numeric_limits<UInt64>::max();
+    bool softNodes = false;
     MS time = MS::max();
     bool infinite = false;
     MoveList moves;
@@ -64,8 +65,11 @@ public:
     }
 
     bool stopSoft(const SearchLimits &limits, Int32 depth, Move bestMove, Int32 score, UInt64 bestMoveNodes, UInt64 nodes) noexcept {
-        const Float64 scale = softBoundScale(depth, bestMove, score, bestMoveNodes, nodes);
-        if (limits.clock.enabled && elapsed() > std::chrono::duration_cast<MS>(softBound_ * scale)) {
+        if (limits.clock.enabled && elapsed() > std::chrono::duration_cast<MS>(softBound_ * softBoundScale(depth, bestMove, score, bestMoveNodes, nodes))) {
+            return true;
+        }
+
+        if (limits.softNodes && nodes >= limits.nodes) {
             return true;
         }
 
@@ -73,7 +77,7 @@ public:
     }
 
     bool stopHard(const SearchLimits &limits, UInt64 nodes, Int32 numThreads) noexcept {
-        if (nodes * static_cast<UInt64>(numThreads) >= limits.nodes) {
+        if (!limits.softNodes && nodes * static_cast<UInt64>(numThreads) >= limits.nodes) {
             return true;
         }
 
