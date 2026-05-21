@@ -408,6 +408,17 @@ private:
     static constexpr Int32 HISTORY_PRUNING_MARGIN = -1743;
     static constexpr Int32 HISTORY_BETA_MARGIN = 39;
 
+    static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
+    static constexpr Int32 SE_MIN_DEPTH = 5;
+    static constexpr Int32 SE_TABLE_DEPTH_MARGIN = 3;
+    static constexpr Int32 SE_BETA_SCALE = 52;
+    static constexpr Int32 SE_BETA_SCALE_PV = 21;
+    static constexpr Int32 SE_BETA_DEPTH_DIVISOR = 64;
+    static constexpr Int32 SE_DEPTH_OFFSET = -1;
+    static constexpr Int32 SE_DEPTH_DIVISOR = 2;
+    static constexpr Int32 SE_DOUBLE_EXT_MARGIN = 10;
+    static constexpr Int32 SE_TRIPLE_EXT_MARGIN = 124;
+
     static constexpr Int32 QSEARCH_MAX_MOVES = 2;
 
     static constexpr Int32 QSEARCH_FP_MARGIN = 78;
@@ -637,7 +648,6 @@ private:
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
 
-        // const Bitboard threats = position.threats(); // FIXME
         const bool winningThreats = bool(position.winningThreats());
 
         bool improving = [&]() {
@@ -797,8 +807,27 @@ private:
                 }
             }
 
-            // TODO:
-            // SE
+            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && depth >= SE_MIN_DEPTH + tablePV && hashMove == move && tableEntry.depth >= depth - SE_TABLE_DEPTH_MARGIN && tableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tableEntry.score) < Score::KNOWN_WIN;
+            Int32 extension = 0;
+
+            if (doSE) {
+                const Int32 seBeta = std::max(Score::MATED, tableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tablePV && !PV_NODE)) * depth / SE_BETA_DEPTH_DIVISOR);
+                const Int32 seDepth = (depth + SE_DEPTH_OFFSET) / SE_DEPTH_DIVISOR;
+
+                stack.excludedMove = move;
+                const Int32 score = search<false, false>(thread, seDepth, seBeta - 1, seBeta, cutNode);
+                stack.excludedMove = Move::NULL_MOVE;
+
+                if (score < seBeta) {
+                    extension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (2 + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN)) : 1;
+                } else if (seBeta >= beta) {
+                    return seBeta;
+                } else if (tableEntry.score >= beta) {
+                    extension = -2 + PV_NODE;
+                } else if (tableEntry.score <= alpha && cutNode) {
+                    extension = -1;
+                }
+            }
 
             tTable_.prefetch(position.hashAfter(move));
 
@@ -814,11 +843,12 @@ private:
             }
 
             const bool givesCheck = position.givesCheck();
+            // if (!doSE && givesCheck) {
+            //     extension = 1;
+            // }
+            // TODO: sprt ^
 
-            // TODO:
-            // check extensions
-
-            Int32 newDepth = depth - 1;
+            Int32 newDepth = depth - 1 + extension;
             Int32 score = 0;
 
             if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tablePV || moveScore <= MoveScore::KILLER1)) {
