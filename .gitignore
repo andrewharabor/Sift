@@ -1,7 +1,6 @@
 
 Syft
 build/
-test/
 
 *.d
 
