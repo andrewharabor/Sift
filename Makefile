@@ -2,7 +2,6 @@ ARCH  ?= auto
 BUILD ?= engine
 MODE  ?= release
 
-
 ifeq ($(OS),Windows_NT)
     HOST_OS := windows
 else
@@ -47,19 +46,9 @@ else
     SEP = /
 endif
 
-
-CPPFLAGS := -MMD -MP
+SRCS := src/main.cpp
+CPPFLAGS := -MMD -MP -Isrc
 CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
-
-ifeq ($(BUILD),engine)
-    SRCS := src/main.cpp
-    CPPFLAGS += -Isrc
-else ifeq ($(BUILD),benchmark)
-    SRCS:= benchmark/main.cpp
-    CPPFLAGS += -Ibenchmark
-else
-    $(error Invalid BUILD '$(BUILD)'. Use BUILD=engine or BUILD=benchmark)
-endif
 
 ifeq ($(ARCH),x86-64-avx2)
     CPPFLAGS += -DUSE_AVX2 -DUSE_PEXT
@@ -75,8 +64,6 @@ else ifeq ($(ARCH),generic)
     CPPFLAGS += -DUSE_GENERIC
     CXXFLAGS += -m64
     LDFLAGS += -m64
-else
-    $(error Invalid ARCH '$(ARCH)'. Use ARCH=auto|generic|x86-64-modern|x86-64-avx2|aarch64)
 endif
 
 ifneq ($(HOST_OS),windows)
@@ -90,13 +77,17 @@ ifeq ($(MODE),release)
         CXXFLAGS += -flto
         LDFLAGS  += -flto
     endif
+else ifeq ($(MODE),tune)
+    CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
+	CPPFLAGS += -DEXTERNAL_TUNE
+    ifneq ($(HOST_OS),windows)
+        CXXFLAGS += -flto
+        LDFLAGS  += -flto
+    endif
 else ifeq ($(MODE),debug)
     CXXFLAGS += -O0 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
     LDFLAGS  += -fsanitize=undefined,address
-else
-    $(error Invalid MODE '$(MODE)'. Use MODE=release or MODE=debug)
 endif
-
 
 BUILD_DIR := build
 OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
@@ -120,12 +111,11 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make [TARGET] [ARCH=...] [BUILD=...] [MODE=...]"
+	@echo "Usage: make [TARGET] [ARCH=...] [MODE=...]"
 	@echo "Targets:"
 	@echo "  $(TARGET_EXEC)"
 	@echo "  clean"
 	@echo "  help"
 	@echo "Options:"
 	@echo "  ARCH=[auto|generic|x86-64-modern|x86-64-avx2|aarch64]"
-	@echo "  BUILD=[engine|benchmark]"
-	@echo "  MODE=[release|debug]"
+	@echo "  MODE=[release|tune|debug]"
