@@ -568,7 +568,7 @@ private:
                         return Score::mate(nullMoveScore) ? beta : nullMoveScore;
                     }
 
-                    thread.nmpMinPly = rootPly + static_cast<USize>(depth - reduction * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
+                    thread.nmpMinPly = rootPly + static_cast<USize>((depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
                     const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
                     thread.nmpMinPly = 0;
 
