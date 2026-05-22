@@ -22,7 +22,7 @@ public:
     constexpr explicit operator std::string() const { return name_ + ", int, " + std::to_string(value_) + ", " + std::to_string(min_) + ", " + std::to_string(max_) + ", " + std::to_string(step_) + ", " + LEARNING_RATE; }
 
     const std::string &name() const noexcept { return name_; }
-    constexpr Int32 value() const noexcept { return value_; }
+    constexpr Int32 &value() noexcept { return value_; }
     constexpr Int32 min() const noexcept { return min_; }
     constexpr Int32 max() const noexcept { return max_; }
     constexpr Int32 step() const noexcept { return step_; }
@@ -89,7 +89,7 @@ inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 m
 
 #define TUNABLE_CALLBACK(name, val, min, max, step, callback) \
     inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, step, callback); \
-    inline const Int32 &name = name##_TUNABLE.value();
+    inline Int32 &name = name##_TUNABLE.value();
 
 #else
 
