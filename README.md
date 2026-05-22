@@ -1,4 +1,4 @@
-<p align="center"> <img src="resources/logo.png" alt="Syft Logo" width="140"/> </p>
+<p align="center"> <img src="assets/logo.png" alt="Syft Logo" width="140"/> </p>
 
 <h1 align="center"> Syft </h1>
 
