@@ -22,6 +22,7 @@
 #include "search.hpp"
 #include "syft.hpp"
 #include "time.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 #include "utils.hpp"
 #include "wdl.hpp"
@@ -151,6 +152,12 @@ public:
         options_.push_back(Option("ShowWDL", CheckOption{Option::DEFAULT_SHOW_WDL}, []([[maybe_unused]] const Option &option) {}));
         options_.push_back(Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {}));
         options_.push_back(Option("SoftNodes", CheckOption{Option::DEFAULT_SOFT_NODES}, []([[maybe_unused]] const Option &option) {}));
+
+#if defined(OPEN_BENCH_TUNE)
+        for (Tunable &tunable : TUNABLES) {
+            options_.push_back(Option(tunable.name(), SpinOption{tunable.value(), tunable.value(), tunable.min(), tunable.max()}, [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
+        }
+#endif
 
         legalMoves();
     }

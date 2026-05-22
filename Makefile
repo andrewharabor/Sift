@@ -79,7 +79,7 @@ ifeq ($(MODE),release)
     endif
 else ifeq ($(MODE),tune)
     CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
-	CPPFLAGS += -DEXTERNAL_TUNE
+	CPPFLAGS += -DOPEN_BENCH_TUNE
     ifneq ($(HOST_OS),windows)
         CXXFLAGS += -flto
         LDFLAGS  += -flto

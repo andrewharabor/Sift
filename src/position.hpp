@@ -13,6 +13,7 @@
 #include "cuckoo.hpp"
 #include "move.hpp"
 #include "piece.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 #include "utils.hpp"
 #include "zobrist.hpp"
@@ -1260,22 +1261,7 @@ public:
         assert(capture(move));
 
         PieceType capturedType = (move.type() == MoveType::EN_PASSANT) ? PieceType::PAWN : pieceAt(move.to()).type();
-        if (capturedType == PieceType::PAWN) {
-            return MVV_PAWN_VALUE;
-        } else if (capturedType == PieceType::KNIGHT) {
-            return MVV_KNIGHT_VALUE;
-        } else if (capturedType == PieceType::BISHOP) {
-            return MVV_BISHOP_VALUE;
-        } else if (capturedType == PieceType::ROOK) {
-            return MVV_ROOK_VALUE;
-        } else if (capturedType == PieceType::QUEEN) {
-            return MVV_QUEEN_VALUE;
-        } else {
-            assert(false);
-            return 0;
-        }
-
-        return 0;
+        return MVV_PIECE_VALUES[static_cast<USize>(capturedType)];
     }
 
 private:
@@ -1287,14 +1273,6 @@ private:
         Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
         Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
     };
-
-    static constexpr std::array<Int32, 7> SEE_PIECE_VALUES = {100, 450, 450, 675, 1300, 0, 0};
-
-    static constexpr Int32 MVV_PAWN_VALUE = 964;
-    static constexpr Int32 MVV_KNIGHT_VALUE = 2465;
-    static constexpr Int32 MVV_BISHOP_VALUE = 2360;
-    static constexpr Int32 MVV_ROOK_VALUE = 4725;
-    static constexpr Int32 MVV_QUEEN_VALUE = 7181;
 
     struct State {
         Move lastMove;

@@ -20,6 +20,7 @@
 #include "score.hpp"
 #include "time.hpp"
 #include "ttable.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 
 
@@ -35,7 +36,7 @@ struct SearchStack {
     Int32 staticEval;
     Int32 eval;
 
-    UInt32 failHighCount;
+    Int32 failHighCount;
 };
 
 struct SearchInfo {
@@ -300,131 +301,6 @@ public:
     void multiPV(USize multiPV) noexcept { multiPV_ = multiPV; }
 
 private:
-    static constexpr Int32 WINDOW_INIT_DELTA = 10;
-    static constexpr Int32 WINDOW_MIN_DEPTH = 6;
-    static constexpr Int32 WINDOW_MAX_DEPTH_REDUCTION = 5;
-    static constexpr Int32 WINDOW_WIDENING_COEFF = 58;
-    static constexpr Int32 WINDOW_WIDENING_SCALE = 256;
-
-    static constexpr Int32 HIGH_COMPLEXITY_MARGIN = 87;
-
-    static constexpr Int32 RFP_MAX_DEPTH = 8;
-    static constexpr Int32 RFP_IMPROVING_MARGIN = 27;
-    static constexpr Int32 RFP_NON_IMPROVING_MARGIN = 78;
-    static constexpr Int32 RFP_WINNING_THREATS = 21;
-    static constexpr Int32 RFP_OPPONENT_WORSENING = 14;
-    static constexpr Int32 RFP_HISTORY_DIVISOR = 410;
-    static constexpr Int32 RFP_MIN_MARGIN = 20;
-
-    static constexpr Int32 RAZORING_MAX_DEPTH = 3;
-    static constexpr Int32 RAZORING_MARGIN = 456;
-    static constexpr Int32 RAZORING_MAX_ALPHA = 2000;
-
-    static constexpr Int32 NMP_MIN_DEPTH = 2;
-    static constexpr Int32 NMP_EVAL_MARGIN = 30;
-    static constexpr Int32 NMP_STATIC_EVAL_BASE_MARGIN = 184;
-    static constexpr Int32 NMP_STATIC_EVAL_DEPTH_MARGIN = 19;
-    static constexpr Int32 NMP_BASE_REDUCTION = 1320;
-    static constexpr Int32 NMP_DEPTH_REDUCTION_SCALE = 74;
-    static constexpr Int32 NMP_REDUCTION_DIVISOR = 256;
-    static constexpr Int32 NMP_EVAL_REDUCTION_SCALE = 215;
-    static constexpr Int32 NMP_MAX_EVAL_REDUCTION = 4;
-    static constexpr Int32 NMP_NO_VERIFICATION_MAX_DEPTH = 15;
-    static constexpr USize NMP_MIN_PLY_DEPTH_SCALE = 3;
-    static constexpr USize NMP_MIN_PLY_DEPTH_DIVISOR = 4;
-
-    static constexpr Int32 PROBCUT_MIN_DEPTH = 5;
-    static constexpr Int32 PROBCUT_BETA_MARGIN = 190;
-    static constexpr Int32 PROBCUT_TABLE_DEPTH_MARGIN = 3;
-    static constexpr Int32 PROBCUT_REDUCTION = 4;
-
-    static constexpr Int32 IIR_MIN_DEPTH = 4;
-    static constexpr Int32 IIR_TABLE_DEPTH_MARGIN = 5;
-
-    static constexpr Int32 LMR_BASE = 775;
-    static constexpr Int32 LMR_SCALE = 427;
-    static constexpr Int32 LMR_HISTORY_SCALE = 1024;
-    static constexpr Int32 LMR_QUIET_HISTORY_DIVISOR = 9043;
-    static constexpr Int32 LMR_NOISY_HISTORY_DIVISOR = 6598;
-    static constexpr Int32 LMR_MIN_DEPTH = 3;
-    static constexpr Int32 LMR_MIN_MOVES_PV = 4;
-    static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
-    static constexpr Int32 LMR_NON_IMPROVING_SCALE = 1478;
-    static constexpr Int32 LMR_NOISY_HASH_MOVE_SCALE = 1082;
-    static constexpr Int32 LMR_TABLE_PV_SCALE = 954;
-    static constexpr Int32 LMR_TABLE_PV_NON_FAIL_LOW_SCALE = 484;
-    static constexpr Int32 LMR_GIVES_CHECK_SCALE = 573;
-    static constexpr Int32 LMR_IN_CHECK_SCALE = 592;
-    static constexpr Int32 LMR_HIGH_COMPLEXITY_SCALE = 593;
-    static constexpr Int32 LMR_CUTNODE_SCALE = 1612;
-    static constexpr Int32 LMR_FAIL_HIGH_COUNT_SCALE = 1042;
-    static constexpr UInt32 LMR_FAIL_HIGH_COUNT_MARGIN = 2;
-    static constexpr Int32 LMR_REDUCTION_DIVISOR = 1024;
-
-    static constexpr USize LMR_TABLE_SIZE_DEPTH = 64;
-    static constexpr USize LMR_TABLE_SIZE_MOVES = 64;
-
-    static inline MultiArray<Int32, LMR_TABLE_SIZE_DEPTH, LMR_TABLE_SIZE_MOVES> LMR_TABLE = []() {
-        MultiArray<Int32, LMR_TABLE_SIZE_DEPTH, LMR_TABLE_SIZE_MOVES> table = {};
-        for (USize depth = 1; depth < LMR_TABLE_SIZE_DEPTH; depth++) {
-            for (USize moves = 1; moves < LMR_TABLE_SIZE_MOVES; moves++) {
-                Float64 base = static_cast<Float64>(LMR_BASE);
-                Float64 scale = static_cast<Float64>(LMR_SCALE);
-                table[depth][moves] = static_cast<Int32>(base + scale * std::log(static_cast<Float64>(depth)) * std::log(static_cast<Float64>(moves)));
-            }
-        }
-        return table;
-    }();
-
-    static constexpr Int32 DEEPER_SEARCH_MARGIN_BASE = 38;
-    static constexpr Int32 DEEPER_SEARCH_MARGIN_DEPTH_SCALE = 143;
-    static constexpr Int32 DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR = 64;
-    static constexpr Int32 SHALLOWER_SEARCH_MARGIN = 8;
-
-    static constexpr Int32 FP_MAX_DEPTH = 8;
-    static constexpr Int32 FP_BASE_MARGIN = 146;
-    static constexpr Int32 FP_DEPTH_SCALE = 128;
-    static constexpr Int32 FP_HISTORY_DIVISOR = 393;
-    static constexpr Int32 FP_MARGIN_MIN = 20;
-
-    static constexpr Int32 NOISY_FP_MAX_DEPTH = 5;
-    static constexpr Int32 NOISY_FP_BASE_MARGIN = 4;
-    static constexpr Int32 NOISY_FP_DEPTH_SCALE = 113;
-    static constexpr Int32 NOISY_FP_HIST_DIVISOR = 253;
-    static constexpr Int32 NOISY_FP_MARGIN_MIN = 20;
-
-    static constexpr Int32 LMP_MARGIN_IMPROVING_BASE = 553;
-    static constexpr Int32 LMP_MARGIN_IMPROVING_DEPTH_SCALE = 333;
-    static constexpr Int32 LMP_MARGIN_NON_IMPROVING_BASE = 566;
-    static constexpr Int32 LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE = 103;
-    static constexpr Int32 LMP_MARGIN_DIVISOR = 256;
-
-    static constexpr Int32 SEE_PRUNING_MARGIN_NOISY = -96;
-    static constexpr Int32 SEE_PRUNING_MARGIN_QUIET = -67;
-    static constexpr Int32 SEE_CAPT_HISTORY_DEPTH_SCALE = 103;
-    static constexpr Int32 SEE_CAPT_HISTORY_DIVISOR = 30;
-
-    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
-    static constexpr Int32 HISTORY_PRUNING_MARGIN = -1743;
-    static constexpr Int32 HISTORY_BETA_MARGIN = 39;
-
-    static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
-    static constexpr Int32 SE_MIN_DEPTH = 5;
-    static constexpr Int32 SE_TABLE_DEPTH_MARGIN = 3;
-    static constexpr Int32 SE_BETA_SCALE = 52;
-    static constexpr Int32 SE_BETA_SCALE_PV = 21;
-    static constexpr Int32 SE_BETA_DEPTH_DIVISOR = 64;
-    static constexpr Int32 SE_DEPTH_OFFSET = -1;
-    static constexpr Int32 SE_DEPTH_DIVISOR = 2;
-    static constexpr Int32 SE_DOUBLE_EXT_MARGIN = 10;
-    static constexpr Int32 SE_TRIPLE_EXT_MARGIN = 124;
-
-    static constexpr Int32 QSEARCH_MAX_MOVES = 2;
-
-    static constexpr Int32 QSEARCH_FP_MARGIN = 78;
-
-    // TODO: params here
-
     TTable tTable_;
 
     USize multiPV_;
@@ -692,7 +568,7 @@ private:
                         return Score::mate(nullMoveScore) ? beta : nullMoveScore;
                     }
 
-                    thread.nmpMinPly = rootPly + static_cast<USize>(depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR;
+                    thread.nmpMinPly = rootPly + static_cast<USize>(depth - reduction * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
                     const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
                     thread.nmpMinPly = 0;
 

@@ -10,6 +10,7 @@
 
 #include "move.hpp"
 #include "score.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 
 
@@ -119,7 +120,7 @@ public:
             replace.move = move;
         }
 
-        if (bound == TTableEntry::Bound::EXACT || replace.key16 != key16 || depth >= replace.depth - REPLACE_DEPTH_MARGIN - (REPLACE_DEPTH_PV_SCALE * pv) || replace.gen() != age_) {
+        if (bound == TTableEntry::Bound::EXACT || replace.key16 != key16 || depth >= replace.depth - static_cast<UInt8>(TTABLE_REPLACE_DEPTH_MARGIN) - (static_cast<UInt8>(TTABLE_REPLACE_DEPTH_PV_SCALE) * pv) || replace.gen() != age_) {
             replace.key16 = key16;
             replace.score = store(score, ply);
             replace.staticEval = static_cast<Int16>(staticEval);
@@ -149,9 +150,6 @@ public:
 private:
     static constexpr USize ENTRIES = 3;
     static constexpr Int32 GENERATIONS = 8;
-
-    static constexpr UInt8 REPLACE_DEPTH_MARGIN = 2;
-    static constexpr UInt8 REPLACE_DEPTH_PV_SCALE = 2;
 
     struct RawEntry {
         UInt16 key16;

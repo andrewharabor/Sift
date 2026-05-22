@@ -9,6 +9,7 @@
 #include "move-gen.hpp"
 #include "move.hpp"
 #include "score.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 
 
@@ -150,8 +151,6 @@ public:
     }
 
 private:
-    static constexpr Int32 SEE_THRESHOLD_SCALE = 32;
-
     const Position &position_;
     const History &history_;
 
@@ -200,7 +199,7 @@ private:
             score += position_.mvv(move);
         }
 
-        if (promotion || position_.see(move, -score / SEE_THRESHOLD_SCALE)) {
+        if (promotion || position_.see(move, -score / NOISY_MOVE_SEE_THRESHOLD_SCALE)) {
             score += MoveScore::GOOD_NOISY;
         }
 

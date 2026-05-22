@@ -10,6 +10,7 @@
 #include "piece.hpp"
 #include "position.hpp"
 #include "score.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 #include "utils.hpp"
 
@@ -50,10 +51,10 @@ public:
     CorrHistoryEntry() noexcept : value_(0) {}
     CorrHistoryEntry(Int32 value) noexcept : value_(value) {}
 
-    constexpr void update(Int32 target, Int32 weight) noexcept {
+    void update(Int32 target, Int32 weight) noexcept {
         Int32 newValue = (value_ * (SCALE - weight) + target * weight) / SCALE;
-        newValue = std::clamp(newValue, value_ - MAX_UPDATE, value_ + MAX_UPDATE);
-        value_ = std::clamp(newValue, MIN, MAX);
+        newValue = std::clamp(newValue, value_ - CORR_HISTORY_UPDATE_MAX, value_ + CORR_HISTORY_UPDATE_MAX);
+        value_ = std::clamp(newValue, -CORR_HISTORY_MAX, CORR_HISTORY_MAX);
     }
 
     constexpr Int32 value() const noexcept {
@@ -61,10 +62,6 @@ public:
     }
 
 private:
-    static constexpr Int32 MAX = 8091;
-    static constexpr Int32 MIN = -MAX;
-    static constexpr Int32 MAX_UPDATE = 2009;
-
     Int32 value_;
 };
 
@@ -155,12 +152,12 @@ public:
         const Int32 majorPieceEntry = majorPieceCorr_.entry(color, position.majorPieceHash()).value();
 
         Int32 correction = 0;
-        correction += PAWN_CORR_WEIGHT * pawnEntry;
-        correction += FRIENDLY_NONPAWN_CORR_WEIGHT * friendlyNonPawnEntry;
-        correction += ENEMY_NONPAWN_CORR_WEIGHT * enemyNonPawnEntry;
-        correction += THREATS_CORR_WEIGHT * threatsEntry;
-        correction += MINOR_PIECE_CORR_WEIGHT * minorPieceEntry;
-        correction += MAJOR_PIECE_CORR_WEIGHT * majorPieceEntry;
+        correction += PAWN_CORR_HISTORY_WEIGHT * pawnEntry;
+        correction += FRIENDLY_NONPAWN_CORR_HISTORY_WEIGHT * friendlyNonPawnEntry;
+        correction += ENEMY_NONPAWN_CORR_HISTORY_WEIGHT * enemyNonPawnEntry;
+        correction += THREATS_CORR_HISTORY_WEIGHT * threatsEntry;
+        correction += MINOR_PIECE_CORR_HISTORY_WEIGHT * minorPieceEntry;
+        correction += MAJOR_PIECE_CORR_HISTORY_WEIGHT * majorPieceEntry;
 
         const Move prevMove = (rootPly > 0) ? stack[rootPly - 1].playedMove : Move::NULL_MOVE;
         Piece prevPiece = (rootPly > 0) ? stack[rootPly - 1].movedPiece : Piece::NONE;
@@ -168,10 +165,10 @@ public:
             prevPiece = Piece(PieceType::PAWN, ~color);
         }
 
-        for (USize ply = MIN_CONT_CORR_PLY; ply <= MAX_CONT_CORR_PLY; ply++) {
+        for (USize ply = MIN_CONT_CORR_HISTORY_PLY; ply <= MAX_CONT_CORR_HISTORY_PLY; ply++) {
             if (rootPly >= ply && stack[rootPly - ply].contCorrEntry != nullptr) {
                 Int32 contCorrEntry = (*stack[rootPly - ply].contCorrEntry)[static_cast<USize>(prevPiece)][prevMove.to().index()].value();
-                correction += CONT_CORR_WEIGHTS[ply] * contCorrEntry;
+                correction += CONT_CORR_HISTORY_WEIGHTS[ply] * contCorrEntry;
             }
         }
 
@@ -183,7 +180,7 @@ public:
         const Color color = position.sideToMove();
         const UInt64 threatsHash = Utils::murmurHash3((position.threats() & position.friendly(color)).bits());
         const Int32 scaledBonus = bonus * CorrHistoryEntry::SCALE;
-        const Int32 weight = CORR_DEPTH_WEIGHT_SCALE * std::min(1 + depth, CORR_DEPTH_WEIGHT_MAX);
+        const Int32 weight = CORR_HISTORY_DEPTH_WEIGHT_SCALE * std::min(1 + depth, CORR_HISTORY_DEPTH_WEIGHT_MAX);
 
         pawnCorr_.entry(color, position.pawnHash()).update(scaledBonus, weight);
         nonPawnCorr_[static_cast<USize>(color)].entry(color, position.nonPawnHash(color)).update(scaledBonus, weight);
@@ -198,7 +195,7 @@ public:
             prevPiece = Piece(PieceType::PAWN, ~color);
         }
 
-        for (USize ply = MIN_CONT_CORR_PLY; ply <= MAX_CONT_CORR_PLY; ply++) {
+        for (USize ply = MIN_CONT_CORR_HISTORY_PLY; ply <= MAX_CONT_CORR_HISTORY_PLY; ply++) {
             if (rootPly >= ply && stack[rootPly - ply].contCorrEntry != nullptr) {
                 (*stack[rootPly - ply].contCorrEntry)[static_cast<USize>(prevPiece)][prevMove.to().index()].update(scaledBonus, weight);
             }
@@ -287,43 +284,17 @@ public:
         return contCorr_[static_cast<USize>(movedPiece)][static_cast<USize>(move.to())];
     }
 
-    static constexpr Int32 bonus(Int32 depth) noexcept {
-        Int32 result = (BONUS_QUADRATIC * depth * depth / BONUS_SCALE) + (BONUS_LINEAR * depth) - BONUS_OFFSET;
-        return std::min(result, BONUS_MAX);
+    static Int32 bonus(Int32 depth) noexcept {
+        Int32 result = (HISTORY_BONUS_QUADRATIC * depth * depth / HISTORY_BONUS_SCALE) + (HISTORY_BONUS_LINEAR * depth) - HISTORY_BONUS_OFFSET;
+        return std::min(result, HISTORY_BONUS_MAX);
     }
 
-    static constexpr Int32 penalty(Int32 depth) noexcept {
-        Int32 result = (PENALTY_QUADRATIC * depth * depth / PENALTY_SCALE) + (PENALTY_LINEAR * depth) - PENALTY_OFFSET;
-        return -std::min(result, PENALTY_MAX);
+    static Int32 penalty(Int32 depth) noexcept {
+        Int32 result = (HISTORY_PENALTY_QUADRATIC * depth * depth / HISTORY_PENALTY_SCALE) + (HISTORY_PENALTY_LINEAR * depth) - HISTORY_PENALTY_OFFSET;
+        return -std::min(result, HISTORY_PENALTY_MAX);
     }
 
 private:
-    static constexpr Int32 CORR_DEPTH_WEIGHT_SCALE = 2;
-    static constexpr Int32 CORR_DEPTH_WEIGHT_MAX = 16;
-
-    static constexpr Int32 PAWN_CORR_WEIGHT = 418;
-    static constexpr Int32 FRIENDLY_NONPAWN_CORR_WEIGHT = 387;
-    static constexpr Int32 ENEMY_NONPAWN_CORR_WEIGHT = 273;
-    static constexpr Int32 THREATS_CORR_WEIGHT = 228;
-    static constexpr Int32 MINOR_PIECE_CORR_WEIGHT = 266;
-    static constexpr Int32 MAJOR_PIECE_CORR_WEIGHT = 404;
-
-    static constexpr Int32 MIN_CONT_CORR_PLY = 2;
-    static constexpr Int32 MAX_CONT_CORR_PLY = 7;
-    static constexpr Int32 CONT_CORR_WEIGHTS[MAX_CONT_CORR_PLY + 1] = {0, 0, 349, 175, 230, 219, 163, 142};
-
-
-    static constexpr Int32 BONUS_MAX = 2036;
-    static constexpr Int32 BONUS_SCALE = 64;
-    static constexpr Int32 BONUS_QUADRATIC = 441;
-    static constexpr Int32 BONUS_LINEAR = 219;
-    static constexpr Int32 BONUS_OFFSET = 98;
-
-    static constexpr Int32 PENALTY_MAX = 1093;
-    static constexpr Int32 PENALTY_SCALE = 64;
-    static constexpr Int32 PENALTY_QUADRATIC = 292;
-    static constexpr Int32 PENALTY_LINEAR = 302;
-    static constexpr Int32 PENALTY_OFFSET = 27;
 
     MainHistory main_;
     PawnHistory pawn_;
