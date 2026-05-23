@@ -183,6 +183,7 @@ private:
         SET_OPTION,
         QUIT,
         PERFT,
+        PERFT_TESTS,
         BOARD,
         MOVES,
         EVAL,
@@ -237,6 +238,8 @@ private:
             return true;
         } else if (cmd == Command::PERFT) {
             perft(stream);
+        } else if (cmd == Command::PERFT_TESTS) {
+            perftTests();
         } else if (cmd == Command::BOARD) {
             board();
         } else if (cmd == Command::MOVES) {
@@ -271,6 +274,8 @@ private:
             return Command::QUIT;
         } else if (token == "perft") {
             return Command::PERFT;
+        } else if (token == "perfttests") {
+            return Command::PERFT_TESTS;
         } else if (token == "board") {
             return Command::BOARD;
         } else if (token == "moves") {
@@ -552,6 +557,27 @@ private:
         std::cout << " time " << time;
         std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
         std::cout << std::endl;
+    }
+
+    void perftTests() {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        for (const PerftTest &testCase : Perft::TEST_CASES) {
+            Position position = Position(testCase.fen);
+
+            const auto start = std::chrono::high_resolution_clock::now();
+            const UInt64 nodes = Perft::run(position, testCase.depth);
+            const auto end = std::chrono::high_resolution_clock::now();
+            const UInt64 time = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+
+            std::cout << "info fen " << testCase.fen;
+            std::cout << " depth " << testCase.depth;
+            std::cout << " expected " << testCase.expectedNodes;
+            std::cout << " nodes " << nodes;
+            std::cout << " time " << time;
+            std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
+            std::cout << " result " << (nodes == testCase.expectedNodes ? "pass" : "fail");
+            std::cout << std::endl;
+        }
     }
 
     void board() const {
