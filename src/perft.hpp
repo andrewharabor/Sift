@@ -41,8 +41,11 @@ public:
 
     template<MoveGenType MOVE_GEN_TYPE = MoveGenType::ALL>
     static UInt64 run(Position &position, UInt32 depth) {
-        MoveList moveList;
+        if (depth <= 0) {
+            return 1;
+        }
 
+        MoveList moveList;
         if (depth == 1) {
             MoveGen::legal<MOVE_GEN_TYPE>(position, moveList);
             return static_cast<UInt64>(moveList.size());
