@@ -463,11 +463,11 @@ private:
         const bool inCheck = position.inCheck();
         const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
 
-        const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
+        const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
         if constexpr (!ROOT_NODE) {
             if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
-                alpha = draw;
+                alpha = drawScore;
                 if (alpha >= beta) {
                     return alpha;
                 }
@@ -475,7 +475,7 @@ private:
         }
 
         if (positionDraw(thread)) {
-            return draw;
+            return drawScore;
         }
 
         if (rootPly >= MAX_PLY) {
@@ -905,17 +905,17 @@ private:
 
         const bool inCheck = position.inCheck();
 
-        const Int32 draw = Score::draw(thread.nodes.load(std::memory_order_relaxed));
+        const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
         if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
-            alpha = draw;
+            alpha = drawScore;
             if (alpha >= beta) {
                 return alpha;
             }
         }
 
         if (positionDraw(thread)) {
-            return draw;
+            return drawScore;
         }
 
         if (rootPly >= MAX_PLY) {
