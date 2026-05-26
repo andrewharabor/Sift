@@ -2,7 +2,7 @@
 
 #include <array>
 #include <functional>
-#if defined(USE_PEXT)
+#if defined(PEXT)
 #include <immintrin.h>
 #endif
 #include <tuple>
@@ -135,7 +135,7 @@ public:
     }
 
 private:
-#ifdef USE_PEXT
+#if defined(PEXT)
     struct Magic {
         UInt64 mask;
         Bitboard *attacks;
@@ -272,7 +272,7 @@ private:
         UInt64 occupied = 0ULL;
         Magic &entry = table[static_cast<USize>(square.index())];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
-#if !defined(USE_PEXT)
+#if !defined(PEXT)
         entry.magic = magic;
         entry.shift = 64 - static_cast<UInt64>(Bitboard(entry.mask).count());
 #endif

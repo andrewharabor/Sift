@@ -51,17 +51,17 @@ CPPFLAGS := -MMD -MP -Isrc
 CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
 
 ifeq ($(ARCH),x86-64-avx2)
-    CPPFLAGS += -DUSE_AVX2 -DUSE_PEXT
+    CPPFLAGS += -DSIMD_AVX2 -DPEXT
     CXXFLAGS += -m64 -mavx2 -mbmi2 -mpopcnt
     LDFLAGS += -m64
 else ifeq ($(ARCH),x86-64-modern)
-    CPPFLAGS += -DUSE_SSE
+    CPPFLAGS += -DSIMD_SSE
     CXXFLAGS += -m64 -msse4.1 -mpopcnt
     LDFLAGS += -m64
 else ifeq ($(ARCH),aarch64)
-    CPPFLAGS += -DUSE_NEON
+    CPPFLAGS += -DSIMD_NEON
 else ifeq ($(ARCH),generic)
-    CPPFLAGS += -DUSE_GENERIC
+    CPPFLAGS += -DSIMD_GENERIC
     CXXFLAGS += -m64
     LDFLAGS += -m64
 endif
