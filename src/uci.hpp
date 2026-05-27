@@ -561,7 +561,10 @@ private:
 
     void perftTests() {
         std::unique_lock<std::mutex> lock = lockStdout();
-        for (const PerftTest &testCase : Perft::TEST_CASES) {
+
+        USize testsPassed = 0;
+        for (USize i = 0; i < Perft::TEST_COUNT; i++) {
+            const PerftTest &testCase = Perft::TEST_CASES[i];
             Position position = Position(testCase.fen);
 
             const auto start = std::chrono::high_resolution_clock::now();
@@ -569,7 +572,12 @@ private:
             const auto end = std::chrono::high_resolution_clock::now();
             const UInt64 time = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
 
-            std::cout << "info fen " << testCase.fen;
+            if (nodes == testCase.expectedNodes) {
+                testsPassed++;
+            }
+
+            std::cout << "info testnumber " << (i + 1);
+            std::cout << " fen " << testCase.fen;
             std::cout << " depth " << testCase.depth;
             std::cout << " expected " << testCase.expectedNodes;
             std::cout << " nodes " << nodes;
@@ -578,6 +586,7 @@ private:
             std::cout << " result " << (nodes == testCase.expectedNodes ? "pass" : "fail");
             std::cout << std::endl;
         }
+        std::cout << "info passed " << testsPassed << " failed " << (Perft::TEST_COUNT - testsPassed) << std::endl;
     }
 
     void board() const {
