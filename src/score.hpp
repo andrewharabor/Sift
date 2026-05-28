@@ -6,6 +6,7 @@
 namespace Syft {
 
 namespace Score {
+
 static constexpr Int32 MAX_PLY = 251;
 
 static constexpr Int32 ZERO = 0;
@@ -33,9 +34,11 @@ static constexpr Int32 mateIn(Int32 ply) noexcept { return MATE - ply; }
 static constexpr Int32 matedIn(Int32 ply) noexcept { return MATED + ply; }
 
 static constexpr Int32 draw(UInt64 seed) noexcept { return 2 - static_cast<Int32>(seed % 4); }
+
 };
 
 namespace MoveScore {
+
 static constexpr Int32 HASH = 10000000;
 
 static constexpr Int32 GOOD_NOISY = 400000;
@@ -48,6 +51,7 @@ static constexpr Int32 KILLER1 = 300001;
 static constexpr Int32 KILLER2 = 300000;
 
 static constexpr Int32 NONE = -8000000;
+
 };
 
 }
