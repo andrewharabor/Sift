@@ -267,10 +267,15 @@ public:
         return *this + (-direction);
     }
 
-    constexpr Square &mirror() noexcept {
+    constexpr Square &flip() noexcept {
         assert(square_ != SquareEnum::NONE);
         square_ = static_cast<SquareEnum>(index() ^ 56);
         return *this;
+    }
+
+    constexpr Square flipped() const noexcept {
+        assert(square_ != SquareEnum::NONE);
+        return Square(static_cast<SquareEnum>(index() ^ 56));
     }
 
     constexpr File file() const noexcept {
