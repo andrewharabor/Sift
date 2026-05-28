@@ -34,7 +34,7 @@ public:
 
     static constexpr USize ITERATIONS = NNUEArch::LAYER_SIZE / REGISTERS;
 
-#if defined(USE_AVX2)
+#if defined(SIMD_AVX2)
     using Register = __m256i;
 
     static Int32 horizontalSum(Register value) noexcept {
@@ -110,7 +110,7 @@ public:
         }
     }
 
-#elif defined(USE_SSE)
+#elif defined(SIMD_SSE)
     using Register = __m128i;
 
     static Int32 horizontalSum(Register value) noexcept {
@@ -186,7 +186,7 @@ public:
         }
     }
 
-#elif defined(USE_NEON)
+#elif defined(SIMD_NEON)
 
     static Int32 horizontalSum(int32x4_t value) noexcept {
         return vaddvq_s32(value);
