@@ -2,100 +2,112 @@ ARCH  ?= auto
 BUILD ?= engine
 MODE  ?= release
 
-ifeq ($(OS),Windows_NT)
+SRCS := src/main.cpp
+CPPFLAGS := -MMD -MP -Isrc
+CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
+LDFLAGS :=
+
+BUILD_DIR := build
+OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
+DEPS := $(OBJS:%.o=%.d)
+
+ifeq ($(OS), Windows_NT)
     HOST_OS := windows
 else
     HOST_OS := $(shell uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]')
-    ifeq ($(HOST_OS),darwin)
+    ifeq ($(HOST_OS), darwin)
         HOST_OS := macos
     endif
 endif
 
-ifeq ($(ARCH),auto)
-    ifeq ($(OS),Windows_NT)
+ifeq ($(ARCH), auto)
+    ifeq ($(OS), Windows_NT)
         _RAW_ARCH := $(PROCESSOR_ARCHITECTURE)
     else
         _RAW_ARCH := $(shell uname -m 2>/dev/null)
     endif
-    ifeq ($(_RAW_ARCH),x86_64)
+    ifeq ($(_RAW_ARCH), x86_64)
         ARCH := x86-64-modern
     else ifeq ($(_RAW_ARCH),amd64)
         ARCH := x86-64-modern
-    else ifeq ($(_RAW_ARCH),aarch64)
+    else ifeq ($(_RAW_ARCH), aarch64)
         ARCH := aarch64
-    else ifeq ($(_RAW_ARCH),arm64)
+    else ifeq ($(_RAW_ARCH), arm64)
         ARCH := aarch64
     else
         ARCH := generic
     endif
 endif
 
-ifeq ($(OS),Windows_NT)
+ifeq ($(OS), Windows_NT)
+	VERSION := $(shell type version.txt)
+else
+	VERSION := $(shell cat version.txt)
+endif
+
+ifneq (,$(findstring dev,$(VERSION)))
+	COMMIT_HASH := $(shell git rev-parse --short HEAD)
+    VERSION := $(strip $(VERSION))-$(COMMIT_HASH)
+endif
+
+CPPFLAGS += -DBUILD_VERSION=\"$(VERSION)\"
+
+ifeq ($(OS), Windows_NT)
     CXX ?= g++
-    TARGET_EXEC := Syft.exe
+    TARGET_EXEC := Syft$(VERSION).exe
     MKDIR = mkdir
     RM_FILE = del /f /q
     RM_DIR = rmdir /s /q
     SEP = \\
 else
     CXX ?= c++
-    TARGET_EXEC := Syft
+    TARGET_EXEC := Syft$(VERSION)
     MKDIR = mkdir -p
     RM_FILE = rm -f
     RM_DIR = rm -rf
     SEP = /
 endif
 
-SRCS := src/main.cpp
-CPPFLAGS := -MMD -MP -Isrc
-CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wfloat-equal -Wconversion -fdiagnostics-color=always
-
-ifeq ($(ARCH),x86-64-avx2)
+ifeq ($(ARCH), x86-64-avx2)
     CPPFLAGS += -DSIMD_AVX2 -DPEXT
     CXXFLAGS += -m64 -mavx2 -mbmi2 -mpopcnt
     LDFLAGS += -m64
-else ifeq ($(ARCH),x86-64-modern)
+else ifeq ($(ARCH), x86-64-modern)
     CPPFLAGS += -DSIMD_SSE
     CXXFLAGS += -m64 -msse4.1 -mpopcnt
     LDFLAGS += -m64
-else ifeq ($(ARCH),aarch64)
+else ifeq ($(ARCH), aarch64)
     CPPFLAGS += -DSIMD_NEON
-else ifeq ($(ARCH),generic)
+else ifeq ($(ARCH), generic)
     CPPFLAGS += -DSIMD_GENERIC
     CXXFLAGS += -m64
     LDFLAGS += -m64
 endif
 
-ifneq ($(HOST_OS),windows)
+ifneq ($(HOST_OS), windows)
     CXXFLAGS += -pthread
     LDFLAGS  += -pthread
 endif
 
-ifeq ($(MODE),release)
+ifeq ($(MODE), release)
     CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
-    ifneq ($(HOST_OS),windows)
+    ifneq ($(HOST_OS), windows)
         CXXFLAGS += -flto
         LDFLAGS  += -flto
     endif
-else ifeq ($(MODE),tune)
+else ifeq ($(MODE), tune)
     CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
 	CPPFLAGS += -DOPEN_BENCH_TUNE
-    ifneq ($(HOST_OS),windows)
+    ifneq ($(HOST_OS), windows)
         CXXFLAGS += -flto
         LDFLAGS  += -flto
     endif
-else ifeq ($(MODE),debug)
+else ifeq ($(MODE), debug)
     CXXFLAGS += -O0 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
     LDFLAGS  += -fsanitize=undefined,address
 endif
 
-BUILD_DIR := build
-OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
-DEPS := $(OBJS:%.o=%.d)
-
 -include $(DEPS)
-
-.DEFAULT_GOAL := $(TARGET_EXEC)
 
 $(TARGET_EXEC): $(OBJS)
 	$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(LDFLAGS)
@@ -103,6 +115,11 @@ $(TARGET_EXEC): $(OBJS)
 $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+.DEFAULT_GOAL := all
+
+.PHONY: all
+all: $(TARGET_EXEC)
 
 .PHONY: clean
 clean:
@@ -114,6 +131,7 @@ help:
 	@echo "Usage: make [TARGET] [ARCH=...] [MODE=...]"
 	@echo "Targets:"
 	@echo "  $(TARGET_EXEC)"
+	@echo "  all"
 	@echo "  clean"
 	@echo "  help"
 	@echo "Options:"
