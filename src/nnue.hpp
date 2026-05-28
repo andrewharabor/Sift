@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 
 #include "arch.hpp"
@@ -90,8 +91,8 @@ public:
 
 private:
     VecInt16 data_;
-    InputFeature add_[2];
-    InputFeature sub_[2];
+    std::array<InputFeature, 2> add_;
+    std::array<InputFeature, 2> sub_;
     USize addSize_;
     USize subSize_;
     bool refresh_;

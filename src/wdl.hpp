@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <utility>
 
@@ -22,8 +23,8 @@ public:
     }
 
 private:
-    static constexpr Float64 A[4] = {-420.12493420, 1155.97899531, -1074.82879152, 441.44515956};
-    static constexpr Float64 B[4] = {-106.59407292, 300.77010455, -267.28444080, 114.30281819};
+    static constexpr std::array<Float64, 4> A = {-420.12493420, 1155.97899531, -1074.82879152, 441.44515956};
+    static constexpr std::array<Float64, 4> B = {-106.59407292, 300.77010455, -267.28444080, 114.30281819};
 
     static constexpr Int32 MATERIAL_MIN = 17;
     static constexpr Int32 MATERIAL_MAX = 78;

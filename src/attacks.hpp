@@ -257,14 +257,14 @@ private:
         0x28000010020204ULL,   0x6000020202d0240ULL,  0x8918844842082200ULL, 0x4010011029020020ULL
     };
 
-    static inline Bitboard ROOK_ATTACKS[0x19000] = {};
-    static inline Bitboard BISHOP_ATTACKS[0x1480] = {};
+    static inline Bitboard ROOK_ATTACKS[102400] = {};
+    static inline Bitboard BISHOP_ATTACKS[5248] = {};
 
     static inline Magic ROOK_TABLE[64] = {};
     static inline Magic BISHOP_TABLE[64] = {};
 
-    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_BETWEEN_BITBOARDS = {};
-    static inline std::array<std::array<Bitboard, 64>, 64> SQUARES_ALIGNED_BITBOARDS = {};
+    static inline MultiArray<Bitboard, 64, 64> SQUARES_BETWEEN_BITBOARDS = {};
+    static inline MultiArray<Bitboard, 64, 64> SQUARES_ALIGNED_BITBOARDS = {};
 
     static void initSliders(Square square, Magic table[], [[maybe_unused]] UInt64 magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
         assert(square != Square::NONE);
@@ -317,9 +317,9 @@ private:
         return attacks;
     }
 
-    static std::pair<std::array<std::array<Bitboard, 64>, 64>, std::array<std::array<Bitboard, 64>, 64>> initSquarePaths() noexcept {
-        std::array<std::array<Bitboard, 64>, 64> betweenBitboards = {};
-        std::array<std::array<Bitboard, 64>, 64> alignedBitboards = {};
+    static std::pair<MultiArray<Bitboard, 64, 64>, MultiArray<Bitboard, 64, 64>> initSquarePaths() noexcept {
+        MultiArray<Bitboard, 64, 64> betweenBitboards = {};
+        MultiArray<Bitboard, 64, 64> alignedBitboards = {};
 
         auto path = [](PieceType pieceType, Square square, Bitboard occupied) {
             if (pieceType == PieceType::BISHOP) {
