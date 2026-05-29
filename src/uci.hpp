@@ -20,7 +20,6 @@
 #include "perft.hpp"
 #include "position.hpp"
 #include "search.hpp"
-#include "syft.hpp"
 #include "time.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
@@ -294,8 +293,8 @@ private:
     void uci() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::cout << "id name " << ID::NAME << " " << ID::VERSION << std::endl;
-        std::cout << "id author " << ID::AUTHOR << std::endl;
+        std::cout << "id name Syft " << BUILD_VERSION << std::endl;
+        std::cout << "id author andrewharabor" << std::endl;
 
         for (const auto &option : options_) {
             std::cout << "option name " << option.name() << " type ";
