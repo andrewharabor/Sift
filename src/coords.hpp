@@ -331,7 +331,7 @@ public:
         return rankDistance(square1, square2) + fileDistance(square1, square2);
     }
 
-    constexpr Square enPassantSquare() const noexcept {
+    constexpr Square enPassant() const noexcept {
         assert(rank() == Rank::RANK_3 || rank() == Rank::RANK_4 || rank() == Rank::RANK_5 || rank() == Rank::RANK_6);
         return Square(index() ^ 8);
     }

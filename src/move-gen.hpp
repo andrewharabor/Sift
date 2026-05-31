@@ -154,7 +154,7 @@ private:
         }
 
         if constexpr (MOVE_GEN_TYPE != MoveGenType::QUIET) {
-            const Square enPassantSquare = position.enPassantSquare();
+            const Square enPassantSquare = position.enPassant();
             if (enPassantSquare != Square::NONE) {
                 enPassant<COLOR_ENUM>(position, moveList, kingSquare, occupied, diagonalPins, checkMask, diagonalPawns, enPassantSquare);
             }

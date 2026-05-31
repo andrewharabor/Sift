@@ -446,10 +446,10 @@ public:
             state().halfmoveClock = 0;
 
             if (Square::indexDistance(move.from(), move.to()) == 16) {
-                Bitboard enPassantMask = Attacks::pawn(move.to().enPassantSquare(), sideToMove_);
+                Bitboard enPassantMask = Attacks::pawn(move.to().enPassant(), sideToMove_);
                 if (enPassantMask & pieces(PieceType::PAWN, ~sideToMove_)) {
-                    assert(pieceAt(move.to().enPassantSquare()) == Piece::NONE);
-                    state().enPassantSquare = move.to().enPassantSquare();
+                    assert(pieceAt(move.to().enPassant()) == Piece::NONE);
+                    state().enPassantSquare = move.to().enPassant();
                     state().hash ^= Zobrist::enPassant(state().enPassantSquare.file());
                 }
             }
@@ -489,9 +489,9 @@ public:
         }
 
         if (move.type() == MoveType::EN_PASSANT) {
-            assert(pieceAt(move.to().enPassantSquare()) == PieceType::PAWN);
+            assert(pieceAt(move.to().enPassant()) == PieceType::PAWN);
             Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
-            removePiece<true>(pawn, move.to().enPassantSquare());
+            removePiece<true>(pawn, move.to().enPassant());
         }
 
         sideToMove_ = ~sideToMove_;
@@ -656,10 +656,10 @@ public:
                 key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
             }
         } else if (pieceType == PieceType::PAWN && Square::indexDistance(move.from(), move.to()) == 16) {
-            Bitboard enPassantMask = Attacks::pawn(move.to().enPassantSquare(), sideToMove_);
+            Bitboard enPassantMask = Attacks::pawn(move.to().enPassant(), sideToMove_);
             if (enPassantMask & pieces(PieceType::PAWN, ~sideToMove_)) {
-                assert(pieceAt(move.to().enPassantSquare()) == Piece::NONE);
-                key ^= Zobrist::enPassant(move.to().enPassantSquare().file());
+                assert(pieceAt(move.to().enPassant()) == Piece::NONE);
+                key ^= Zobrist::enPassant(move.to().enPassant().file());
             }
         }
 
@@ -692,9 +692,9 @@ public:
         }
 
         if (move.type() == MoveType::EN_PASSANT) {
-            assert(pieceAt(move.to().enPassantSquare()) == PieceType::PAWN);
+            assert(pieceAt(move.to().enPassant()) == PieceType::PAWN);
             Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
-            key ^= Zobrist::piece(pawn, move.to().enPassantSquare());
+            key ^= Zobrist::piece(pawn, move.to().enPassant());
         }
 
         return key;
