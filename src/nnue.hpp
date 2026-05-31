@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 
 #include "arch.hpp"
 #include "coords.hpp"
 #include "piece.hpp"
+#include "position.hpp"
+#include "score.hpp"
 #include "simd.hpp"
 #include "types.hpp"
 
@@ -48,14 +51,18 @@ public:
 
     constexpr Accumulator() noexcept : data_(), states_(), add_(), sub_(), addSize_(0), subSize_(0) {}
 
-    constexpr void clear() noexcept {
-        states_ = {DIRTY, DIRTY};
-        addSize_ = 0;
-        subSize_ = 0;
+    constexpr const DualLayerVector &data() const noexcept { return data_; }
+    constexpr DualLayerVector &data() noexcept { return data_; }
+
+    constexpr const LayerVector &data(Color color) const noexcept {
+        assert(color != Color::NONE);
+        return data_[static_cast<USize>(color)];
     }
 
-    constexpr const LayerMultiArray &data() const noexcept { return data_; }
-    constexpr LayerMultiArray &data() noexcept { return data_; }
+    constexpr LayerVector &data(Color color) noexcept {
+        assert(color != Color::NONE);
+        return data_[static_cast<USize>(color)];
+    }
 
     constexpr FeatureState state(Color color) const noexcept {
         assert(color != Color::NONE);
@@ -65,6 +72,12 @@ public:
     constexpr void mark(Color color, FeatureState newState) noexcept {
         assert(color != Color::NONE);
         states_[static_cast<USize>(color)] = newState;
+    }
+
+    constexpr void clearFeatures() noexcept {
+        states_ = {DIRTY, DIRTY};
+        addSize_ = 0;
+        subSize_ = 0;
     }
 
     constexpr void addFeature(InputFeature feature) noexcept {
@@ -77,7 +90,7 @@ public:
         sub_[subSize_++] = feature;
     }
 
-    constexpr void update(const Accumulator &previous, const LayerMultiArray &weights, Color color) noexcept {
+    constexpr void update(const InputMatrix &weights, const Accumulator &previous, Color color) noexcept {
         assert(state(color) == DIRTY);
         assert(previous.state(color) == CLEAN);
         assert(addSize_ >= 1);
@@ -90,11 +103,11 @@ public:
         const USize sub2 = (subSize_ > 1) ? sub_[1].index(color) : 0;
 
         if (addSize_ == 1 && subSize_ == 1) {
-            add1sub1(weights[add1], weights[sub1], color);
+            add1Sub1(weights[add1], weights[sub1], color);
         } else if (addSize_ == 1 && subSize_ == 2) {
-            add1sub2(weights[add1], weights[sub1], weights[sub2], color);
+            add1Sub2(weights[add1], weights[sub1], weights[sub2], color);
         } else if (addSize_ == 2 && subSize_ == 2) {
-            add2sub2(weights[add1], weights[add2], weights[sub1], weights[sub2], color);
+            add2Sub2(weights[add1], weights[add2], weights[sub1], weights[sub2], color);
         } else {
             assert(false);
         }
@@ -102,23 +115,89 @@ public:
         mark(color, CLEAN);
     }
 
+    constexpr void refresh(const InputMatrix &weights, const LayerVector &biases, const Position &position, Color color) noexcept {
+        assert(state(color) == REFRESH);
+        assert(color != Color::NONE);
+
+        data(color) = biases;
+        Bitboard occupied = position.occupied();
+        while (occupied) {
+            const Square square = static_cast<Square>(occupied.pop());
+            const Piece piece = position.pieceAt(square);
+            const USize featureIndex = InputFeature(piece, square).index(color);
+            add1(weights[featureIndex], color);
+        }
+
+        mark(color, CLEAN);
+    }
+
 private:
-    alignas(64) LayerMultiArray data_;
+    alignas(64) DualLayerVector data_;
     std::array<FeatureState, 2> states_;
     std::array<InputFeature, 2> add_;
     std::array<InputFeature, 2> sub_;
     USize addSize_;
     USize subSize_;
 
-    constexpr void add1sub1(const LayerArray &add1, const LayerArray &sub1, Color color) noexcept {
-        LayerArray &dataVec = data_[static_cast<USize>(color)];
+    constexpr void add1(const LayerVector &add1, Color color) noexcept {
+        LayerVector &dataVector = data(color);
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
         for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
-            RegInt16 dataReg1 = SIMD::loadInt16(&dataVec[i]);
-            RegInt16 dataReg2 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH]);
-            RegInt16 dataReg3 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 2]);
-            RegInt16 dataReg4 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 3]);
+            RegInt16 dataReg1 = SIMD::loadInt16(&dataVector[i]);
+            RegInt16 dataReg2 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH]);
+            RegInt16 dataReg3 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 2]);
+            RegInt16 dataReg4 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 3]);
+            dataReg1 = SIMD::addInt16(dataReg1, SIMD::loadInt16(&add1[i]));
+            dataReg2 = SIMD::addInt16(dataReg2, SIMD::loadInt16(&add1[i + SIMD::WIDTH]));
+            dataReg3 = SIMD::addInt16(dataReg3, SIMD::loadInt16(&add1[i + SIMD::WIDTH * 2]));
+            dataReg4 = SIMD::addInt16(dataReg4, SIMD::loadInt16(&add1[i + SIMD::WIDTH * 3]));
+            SIMD::storeInt16(&dataVector[i], dataReg1);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            dataVector[i] += add1[i];
+        }
+#endif
+    }
+
+    constexpr void sub1(const LayerVector &sub1, Color color) noexcept {
+        LayerVector &dataVector = data(color);
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
+            RegInt16 dataReg1 = SIMD::loadInt16(&dataVector[i]);
+            RegInt16 dataReg2 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH]);
+            RegInt16 dataReg3 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 2]);
+            RegInt16 dataReg4 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 3]);
+            dataReg1 = SIMD::subInt16(dataReg1, SIMD::loadInt16(&sub1[i]));
+            dataReg2 = SIMD::subInt16(dataReg2, SIMD::loadInt16(&sub1[i + SIMD::WIDTH]));
+            dataReg3 = SIMD::subInt16(dataReg3, SIMD::loadInt16(&sub1[i + SIMD::WIDTH * 2]));
+            dataReg4 = SIMD::subInt16(dataReg4, SIMD::loadInt16(&sub1[i + SIMD::WIDTH * 3]));
+            SIMD::storeInt16(&dataVector[i], dataReg1);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            dataVector[i] -= sub1[i];
+        }
+#endif
+    }
+
+    constexpr void add1Sub1(const LayerVector &add1, const LayerVector &sub1, Color color) noexcept {
+        LayerVector &dataVector = data(color);
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
+            RegInt16 dataReg1 = SIMD::loadInt16(&dataVector[i]);
+            RegInt16 dataReg2 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH]);
+            RegInt16 dataReg3 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 2]);
+            RegInt16 dataReg4 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 3]);
             dataReg1 = SIMD::addInt16(dataReg1, SIMD::loadInt16(&add1[i]));
             dataReg2 = SIMD::addInt16(dataReg2, SIMD::loadInt16(&add1[i + SIMD::WIDTH]));
             dataReg3 = SIMD::addInt16(dataReg3, SIMD::loadInt16(&add1[i + SIMD::WIDTH * 2]));
@@ -127,27 +206,27 @@ private:
             dataReg2 = SIMD::subInt16(dataReg2, SIMD::loadInt16(&sub1[i + SIMD::WIDTH]));
             dataReg3 = SIMD::subInt16(dataReg3, SIMD::loadInt16(&sub1[i + SIMD::WIDTH * 2]));
             dataReg4 = SIMD::subInt16(dataReg4, SIMD::loadInt16(&sub1[i + SIMD::WIDTH * 3]));
-            SIMD::storeInt16(&dataVec[i], dataReg1);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH], dataReg2);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 2], dataReg3);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 3], dataReg4);
+            SIMD::storeInt16(&dataVector[i], dataReg1);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
         }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
-            dataVec[i] += add1[i] - sub1[i];
+            dataVector[i] += add1[i] - sub1[i];
         }
 #endif
     }
 
-    constexpr void add1sub2(const LayerArray &add1, const LayerArray &sub1, const LayerArray &sub2, Color color) noexcept {
-        LayerArray &dataVec = data_[static_cast<USize>(color)];
+    constexpr void add1Sub2(const LayerVector &add1, const LayerVector &sub1, const LayerVector &sub2, Color color) noexcept {
+        LayerVector &dataVector = data(color);
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
         for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
-            RegInt16 dataReg1 = SIMD::loadInt16(&dataVec[i]);
-            RegInt16 dataReg2 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH]);
-            RegInt16 dataReg3 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 2]);
-            RegInt16 dataReg4 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 3]);
+            RegInt16 dataReg1 = SIMD::loadInt16(&dataVector[i]);
+            RegInt16 dataReg2 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH]);
+            RegInt16 dataReg3 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 2]);
+            RegInt16 dataReg4 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 3]);
             dataReg1 = SIMD::addInt16(dataReg1, SIMD::loadInt16(&add1[i]));
             dataReg2 = SIMD::addInt16(dataReg2, SIMD::loadInt16(&add1[i + SIMD::WIDTH]));
             dataReg3 = SIMD::addInt16(dataReg3, SIMD::loadInt16(&add1[i + SIMD::WIDTH * 2]));
@@ -160,27 +239,27 @@ private:
             dataReg2 = SIMD::subInt16(dataReg2, SIMD::loadInt16(&sub2[i + SIMD::WIDTH]));
             dataReg3 = SIMD::subInt16(dataReg3, SIMD::loadInt16(&sub2[i + SIMD::WIDTH * 2]));
             dataReg4 = SIMD::subInt16(dataReg4, SIMD::loadInt16(&sub2[i + SIMD::WIDTH * 3]));
-            SIMD::storeInt16(&dataVec[i], dataReg1);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH], dataReg2);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 2], dataReg3);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 3], dataReg4);
+            SIMD::storeInt16(&dataVector[i], dataReg1);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
         }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
-            dataVec[i] += add1[i] - sub1[i] - sub2[i];
+            dataVector[i] += add1[i] - sub1[i] - sub2[i];
         }
 #endif
     }
 
-    constexpr void add2sub2(const LayerArray &add1, const LayerArray &add2, const LayerArray &sub1, const LayerArray &sub2, Color color) noexcept {
-        LayerArray &dataVec = data_[static_cast<USize>(color)];
+    constexpr void add2Sub2(const LayerVector &add1, const LayerVector &add2, const LayerVector &sub1, const LayerVector &sub2, Color color) noexcept {
+        LayerVector &dataVector = data(color);
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
         for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
-            RegInt16 dataReg1 = SIMD::loadInt16(&dataVec[i]);
-            RegInt16 dataReg2 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH]);
-            RegInt16 dataReg3 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 2]);
-            RegInt16 dataReg4 = SIMD::loadInt16(&dataVec[i + SIMD::WIDTH * 3]);
+            RegInt16 dataReg1 = SIMD::loadInt16(&dataVector[i]);
+            RegInt16 dataReg2 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH]);
+            RegInt16 dataReg3 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 2]);
+            RegInt16 dataReg4 = SIMD::loadInt16(&dataVector[i + SIMD::WIDTH * 3]);
             dataReg1 = SIMD::addInt16(dataReg1, SIMD::loadInt16(&add1[i]));
             dataReg2 = SIMD::addInt16(dataReg2, SIMD::loadInt16(&add1[i + SIMD::WIDTH]));
             dataReg3 = SIMD::addInt16(dataReg3, SIMD::loadInt16(&add1[i + SIMD::WIDTH * 2]));
@@ -197,17 +276,115 @@ private:
             dataReg2 = SIMD::subInt16(dataReg2, SIMD::loadInt16(&sub2[i + SIMD::WIDTH]));
             dataReg3 = SIMD::subInt16(dataReg3, SIMD::loadInt16(&sub2[i + SIMD::WIDTH * 2]));
             dataReg4 = SIMD::subInt16(dataReg4, SIMD::loadInt16(&sub2[i + SIMD::WIDTH * 3]));
-            SIMD::storeInt16(&dataVec[i], dataReg1);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH], dataReg2);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 2], dataReg3);
-            SIMD::storeInt16(&dataVec[i + SIMD::WIDTH * 3], dataReg4);
+            SIMD::storeInt16(&dataVector[i], dataReg1);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
+            SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
         }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
-            dataVec[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
+            dataVector[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
         }
 #endif
     }
+};
+
+class NNUE {
+public:
+    static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
+
+    NNUE() noexcept : inputWeights_(), inputBiases_(), layerWeights_(), layerBias_(), accumulators_(), ply_(0), lastClean_() {}
+
+    constexpr void reset(const Position &position) noexcept {
+        ply_ = 0;
+        lastClean_ = {0, 0};
+        accumulators_[ply_].refresh(inputWeights_, inputBiases_, position, Color::WHITE);
+        accumulators_[ply_].refresh(inputWeights_, inputBiases_, position, Color::BLACK);
+    }
+
+    constexpr void update(Color color) noexcept {
+        USize &cleanIdx = lastClean_[static_cast<USize>(color)];
+        while (cleanIdx < ply_) {
+            cleanIdx++;
+            accumulators_[cleanIdx].update(inputWeights_, accumulators_[cleanIdx - 1], color);
+        }
+    }
+
+    constexpr Int32 evaluate(const Position &position) const noexcept {
+        const LayerVector &friendlyAcc = accumulators_[ply_].data(position.sideToMove());
+        const LayerVector &enemyAcc = accumulators_[ply_].data(~position.sideToMove());
+        Int32 score = 0;
+#if defined(USE_SIMD)
+
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            const Int32 friendlyAct1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
+            const Int32 enemyAct1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
+            score += static_cast<Int32>(layerWeights_[0][i]) * friendlyAct1;
+            score += static_cast<Int32>(layerWeights_[1][i]) * enemyAct1;
+        }
+        score += Arch::QUANT_A * static_cast<Int32>(layerBias_);
+#endif
+        score *= Arch::SCALE;
+        score /= (Arch::QUANT_A * Arch::QUANT_A * Arch::QUANT_B);
+        return score;
+    }
+
+    constexpr void makeMove(const Position &position, Move move) noexcept {
+        assert(ply_ < MAX_PLY);
+        ply_++;
+
+        Accumulator &acc = accumulators_[ply_];
+        acc.clearFeatures();
+
+        const Color color = position.sideToMove();
+        const Piece capturedPiece = position.pieceAt(move.to());
+        const PieceType pieceType = position.pieceAt(move.from()).type();
+
+        acc.subFeature(InputFeature(position.pieceAt(move.from()), move.from()));
+
+        if (move.type() == MoveType::PROMOTION) {
+            const Piece promotion = Piece(move.promotion(), color);
+            acc.addFeature(InputFeature(promotion, move.to()));
+        } else if (move.type() == MoveType::CASTLING) {
+            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), color);
+            const Square rookTo = CastlingRights::rookTo(castlingSide);
+            const Square kingTo = CastlingRights::kingTo(castlingSide);
+            acc.addFeature(InputFeature(Piece(PieceType::ROOK, color), rookTo));
+            acc.addFeature(InputFeature(Piece(PieceType::KING, color), kingTo));
+        } else {
+            acc.addFeature(InputFeature(position.pieceAt(move.from()), move.to()));
+        }
+
+        if (capturedPiece != Piece::NONE) {
+            acc.subFeature(InputFeature(capturedPiece, move.to()));
+        } else if (move.type() == MoveType::EN_PASSANT) {
+            const Square enPassantSquare = move.to().enPassant();
+            acc.subFeature(InputFeature(Piece(PieceType::PAWN, ~color), enPassantSquare));
+        }
+
+        if (accumulators_[ply_ - 1].state(color) == Accumulator::REFRESH) {
+            acc.mark(color, Accumulator::REFRESH);
+        }
+    }
+
+    constexpr void unmakeMove() noexcept {
+        assert(ply_ > 0);
+        ply_--;
+    }
+
+private:
+    alignas(64) InputMatrix inputWeights_;
+    alignas(64) LayerVector inputBiases_;
+    alignas(64) DualLayerVector layerWeights_;
+    alignas(64) Int16 layerBias_;
+
+    Accumulator accumulators_[MAX_PLY + 1];
+    USize ply_;
+    std::array<USize, 2> lastClean_;
+
+private:
+
 };
 
 }
