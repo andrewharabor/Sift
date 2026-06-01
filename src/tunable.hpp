@@ -12,6 +12,8 @@
 
 namespace Syft {
 
+#if defined(OPEN_BENCH_TUNE)
+
 class Tunable {
 public:
     using Callback = std::function<void()>;
@@ -84,8 +86,6 @@ private:
 inline TunableList TUNABLES;
 
 inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Int32 step, Callback callback) : name_(name), value_(value), min_(min), max_(max), step_(step), callback_(std::move(callback)) { TUNABLES.add(*this); }
-
-#if defined(OPEN_BENCH_TUNE)
 
 #define TUNABLE_CALLBACK(name, val, min, max, step, callback) \
     inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, step, callback); \
@@ -353,11 +353,15 @@ TUNABLE(QSEARCH_MAX_MOVES, 2, 0, 0, 0);
 
 TUNABLE(QSEARCH_FP_MARGIN, 78, 0, 0, 0);
 
+#if defined(OPEN_BENCH_TUNE)
+
 inline void TunableList::init() noexcept {
     MVV::init();
     SEE::init();
     ContCorrHistoryWeights::init();
     LMR::init();
 }
+
+#endif
 
 }
