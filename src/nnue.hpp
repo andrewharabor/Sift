@@ -315,18 +315,57 @@ public:
         const LayerVector &enemyAcc = accumulators_[ply_].data(~position.sideToMove());
         Int32 score = 0;
 #if defined(USE_SIMD)
-
+        static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
+        const RegInt16 zero = SIMD::zeroInt16();
+        const RegInt16 quantA = SIMD::setInt16(static_cast<Int16>(Arch::QUANT_A));
+        RegInt32 sum = SIMD::zeroInt32();
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += SIMD::WIDTH * 4) {
+            const RegInt16 friendlyClampReg1 = SIMD::clampInt16(SIMD::loadInt16(&friendlyAcc[i]), zero, quantA);
+            const RegInt16 friendlyClampReg2 = SIMD::clampInt16(SIMD::loadInt16(&friendlyAcc[i + SIMD::WIDTH]), zero, quantA);
+            const RegInt16 friendlyClampReg3 = SIMD::clampInt16(SIMD::loadInt16(&friendlyAcc[i + SIMD::WIDTH * 2]), zero, quantA);
+            const RegInt16 friendlyClampReg4 = SIMD::clampInt16(SIMD::loadInt16(&friendlyAcc[i + SIMD::WIDTH * 3]), zero, quantA);
+            const RegInt16 enemyClampReg1 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i]), zero, quantA);
+            const RegInt16 enemyClampReg2 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH]), zero, quantA);
+            const RegInt16 enemyClampReg3 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 2]), zero, quantA);
+            const RegInt16 enemyClampReg4 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 3]), zero, quantA);
+            const RegInt16 friendlyWeightReg1 = SIMD::loadInt16(&layerWeights_[0][i]);
+            const RegInt16 friendlyWeightReg2 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH]);
+            const RegInt16 friendlyWeightReg3 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH * 2]);
+            const RegInt16 friendlyWeightReg4 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH * 3]);
+            const RegInt16 enemyWeightReg1 = SIMD::loadInt16(&layerWeights_[1][i]);
+            const RegInt16 enemyWeightReg2 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH]);
+            const RegInt16 enemyWeightReg3 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH * 2]);
+            const RegInt16 enemyWeightReg4 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH * 3]);
+            const RegInt32 friendlyProdReg1 = SIMD::mulAddInt16(friendlyClampReg1, SIMD::mulLoInt16(friendlyClampReg1, friendlyWeightReg1));
+            const RegInt32 friendlyProdReg2 = SIMD::mulAddInt16(friendlyClampReg2, SIMD::mulLoInt16(friendlyClampReg2, friendlyWeightReg2));
+            const RegInt32 friendlyProdReg3 = SIMD::mulAddInt16(friendlyClampReg3, SIMD::mulLoInt16(friendlyClampReg3, friendlyWeightReg3));
+            const RegInt32 friendlyProdReg4 = SIMD::mulAddInt16(friendlyClampReg4, SIMD::mulLoInt16(friendlyClampReg4, friendlyWeightReg4));
+            const RegInt32 enemyProdReg1 = SIMD::mulAddInt16(enemyClampReg1, SIMD::mulLoInt16(enemyClampReg1, enemyWeightReg1));
+            const RegInt32 enemyProdReg2 = SIMD::mulAddInt16(enemyClampReg2, SIMD::mulLoInt16(enemyClampReg2, enemyWeightReg2));
+            const RegInt32 enemyProdReg3 = SIMD::mulAddInt16(enemyClampReg3, SIMD::mulLoInt16(enemyClampReg3, enemyWeightReg3));
+            const RegInt32 enemyProdReg4 = SIMD::mulAddInt16(enemyClampReg4, SIMD::mulLoInt16(enemyClampReg4, enemyWeightReg4));
+            sum = SIMD::addInt32(sum, friendlyProdReg1);
+            sum = SIMD::addInt32(sum, friendlyProdReg2);
+            sum = SIMD::addInt32(sum, friendlyProdReg3);
+            sum = SIMD::addInt32(sum, friendlyProdReg4);
+            sum = SIMD::addInt32(sum, enemyProdReg1);
+            sum = SIMD::addInt32(sum, enemyProdReg2);
+            sum = SIMD::addInt32(sum, enemyProdReg3);
+            sum = SIMD::addInt32(sum, enemyProdReg4);
+        }
+        score += SIMD::horizAddInt32(sum);
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
-            const Int32 friendlyAct1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
-            const Int32 enemyAct1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
-            score += static_cast<Int32>(layerWeights_[0][i]) * friendlyAct1;
-            score += static_cast<Int32>(layerWeights_[1][i]) * enemyAct1;
+            const Int32 friendlyClamp1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
+            const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
+            score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(layerWeights_[0][i]);
+            score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(layerWeights_[1][i]);
         }
-        score += Arch::QUANT_A * static_cast<Int32>(layerBias_);
 #endif
+        score /= Arch::QUANT_A;
+        score += static_cast<Int32>(layerBias_);
         score *= Arch::SCALE;
-        score /= (Arch::QUANT_A * Arch::QUANT_A * Arch::QUANT_B);
+        score /= (Arch::QUANT_A * Arch::QUANT_B);
         return score;
     }
 

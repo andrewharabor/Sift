@@ -123,7 +123,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 set1Int16(Int16 val) noexcept {
+    static constexpr RegInt16 setInt16(Int16 val) noexcept {
 #if defined(USE_AVX512)
         return _mm512_set1_epi16(val);
 #elif defined(USE_AVX2)
@@ -135,7 +135,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 set1Int32(Int32 val) noexcept {
+    static constexpr RegInt32 setInt32(Int32 val) noexcept {
 #if defined(USE_AVX512)
         return _mm512_set1_epi32(val);
 #elif defined(USE_AVX2)
@@ -231,26 +231,6 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 mulHiInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
-#if defined(USE_AVX512)
-        return _mm512_mulhi_epi16(reg1, reg2);
-#elif defined(USE_AVX2)
-        return _mm256_mulhi_epi16(reg1, reg2);
-#elif defined(USE_SSE4)
-        return _mm_mulhi_epi16(reg1, reg2);
-#elif defined(USE_NEON)
-        int16x4_t reg1Lo = vget_low_s16(reg1);
-        int16x4_t reg1Hi = vget_high_s16(reg1);
-        int16x4_t reg2Lo = vget_low_s16(reg2);
-        int16x4_t reg2Hi = vget_high_s16(reg2);
-        int32x4_t mulLo = vmull_s16(reg1Lo, reg2Lo);
-        int32x4_t mulHi = vmull_s16(reg1Hi, reg2Hi);
-        int16x4_t resLo = vshrn_n_s32(mulLo, 16);
-        int16x4_t resHi = vshrn_n_s32(mulHi, 16);
-        return vcombine_s16(resLo, resHi);
-#endif
-    }
-
     static constexpr RegInt32 mulAddInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_madd_epi16(reg1, reg2);
@@ -259,15 +239,9 @@ public:
 #elif defined(USE_SSE4)
         return _mm_madd_epi16(reg1, reg2);
 #elif defined(USE_NEON)
-        int16x4_t reg1Lo = vget_low_s16(reg1);
-        int16x4_t reg1Hi = vget_high_s16(reg1);
-        int16x4_t reg2Lo = vget_low_s16(reg2);
-        int16x4_t reg2Hi = vget_high_s16(reg2);
-        int32x4_t mulLo = vmull_s16(reg1Lo, reg2Lo);
-        int32x4_t mulHi = vmull_s16(reg1Hi, reg2Hi);
-        int32x2_t pairLo = vpadd_s32(vget_low_s32(mulLo), vget_high_s32(mulLo));
-        int32x2_t pairHi = vpadd_s32(vget_low_s32(mulHi), vget_high_s32(mulHi));
-        return vcombine_s32(pairLo, pairHi);
+        int32x4_t lo = vmull_s16(vget_low_s16(reg1), vget_low_s16(reg2));
+        int32x4_t hi = vmull_s16(vget_high_s16(reg1), vget_high_s16(reg2));
+        return vpaddq_s32(lo, hi);
 #endif
     }
 
