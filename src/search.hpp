@@ -554,69 +554,71 @@ private:
                 if (depth <= RFP_MAX_DEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
                     return stack.eval;
                 }
-            }
 
-            if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
-                const Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
-                if (score <= alpha) {
-                    return score;
-                }
-            }
 
-            if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && depth >= NMP_MIN_DEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * depth && position.nonPawnMaterial(position.sideToMove())) {
-                const Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
-
-                makeNullMove(thread);
-                const Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
-                unmakeNullMove(thread);
-
-                if (nullMoveScore >= beta) {
-                    if ((depth <= NMP_NO_VERIFICATION_MAX_DEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
-                        return Score::mate(nullMoveScore) ? beta : nullMoveScore;
-                    }
-
-                    thread.nmpMinPly = rootPly + static_cast<USize>((depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
-                    const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
-                    thread.nmpMinPly = 0;
-
-                    if (verificationScore >= beta) {
-                        return verificationScore;
+                if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
+                    const Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
+                    if (score <= alpha) {
+                        return score;
                     }
                 }
-            }
-        }
 
-        Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
-        if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tableHit || tableEntry.score >= probcutBeta || tableEntry.depth + PROBCUT_TABLE_DEPTH_MARGIN < depth)) {
-            MoveOrder moveOrder = MoveOrder(position, history, hashMove);
-            ScoredMove scoredMove;
-            Int32 seeMargin = probcutBeta - stack.staticEval;
-            Int32 probcutDepth = depth - PROBCUT_REDUCTION;
-            while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
-                auto [move, moveScore] = scoredMove;
+                if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && depth >= NMP_MIN_DEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * depth && position.nonPawnMaterial(position.sideToMove())) {
+                    const Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
 
-                if (!position.see(move, seeMargin)) {
-                    continue;
+                    makeNullMove(thread);
+                    const Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
+                    unmakeNullMove(thread);
+
+                    if (nullMoveScore >= beta) {
+                        if ((depth <= NMP_NO_VERIFICATION_MAX_DEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
+                            return Score::mate(nullMoveScore) ? beta : nullMoveScore;
+                        }
+
+                        thread.nmpMinPly = rootPly + static_cast<USize>((depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
+                        const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
+                        thread.nmpMinPly = 0;
+
+                        if (verificationScore >= beta) {
+                            return verificationScore;
+                        }
+                    }
                 }
 
-                tTable_.prefetch(position.hashAfter(move));
 
-                makeMove(thread, move, history.noisyStats(position, move));
+                Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
+                if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tableHit || tableEntry.score >= probcutBeta || tableEntry.depth + PROBCUT_TABLE_DEPTH_MARGIN < depth)) {
+                    MoveOrder moveOrder = MoveOrder(position, history, hashMove);
+                    ScoredMove scoredMove;
+                    Int32 seeMargin = probcutBeta - stack.staticEval;
+                    Int32 probcutDepth = depth - PROBCUT_REDUCTION;
+                    while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
+                        auto [move, moveScore] = scoredMove;
 
-                Int32 score = -quiescenceSearch<false>(thread, -probcutBeta, -probcutBeta + 1);
-                if (score >= probcutBeta && probcutDepth >= 0) {
-                    score = -search<false, false>(thread, probcutDepth, -probcutBeta, -probcutBeta + 1, !cutNode);
-                }
+                        if (!position.see(move, seeMargin)) {
+                            continue;
+                        }
 
-                unmakeMove(thread);
+                        tTable_.prefetch(position.hashAfter(move));
 
-                if (stop_.load(std::memory_order_relaxed)) {
-                    return alpha;
-                }
+                        makeMove(thread, move, history.noisyStats(position, move));
 
-                if (score >= probcutBeta) {
-                    tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tablePV, TTableEntry::Bound::LOWER);
-                    return score;
+                        Int32 score = -quiescenceSearch<false>(thread, -probcutBeta, -probcutBeta + 1);
+                        if (score >= probcutBeta && probcutDepth >= 0) {
+                            score = -search<false, false>(thread, probcutDepth, -probcutBeta, -probcutBeta + 1, !cutNode);
+                        }
+
+                        unmakeMove(thread);
+
+                        if (stop_.load(std::memory_order_relaxed)) {
+                            return alpha;
+                        }
+
+                        if (score >= probcutBeta) {
+                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tablePV, TTableEntry::Bound::LOWER);
+                            return score;
+                        }
+                    }
                 }
             }
         }
