@@ -173,13 +173,13 @@ private:
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             dataVector[i] += add1[i];
         }
 #endif
-}
+    }
 
     constexpr void sub1(const LayerVector &sub1, Color color) noexcept {
         LayerVector &dataVector = data(color);
@@ -198,13 +198,13 @@ private:
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             dataVector[i] -= sub1[i];
         }
 #endif
-}
+    }
 
     constexpr void add1Sub1(const LayerVector &add1, const LayerVector &sub1, Color color) noexcept {
         LayerVector &dataVector = data(color);
@@ -227,7 +227,7 @@ private:
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             dataVector[i] += add1[i] - sub1[i];
@@ -260,7 +260,7 @@ private:
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             dataVector[i] += add1[i] - sub1[i] - sub2[i];
@@ -297,7 +297,7 @@ private:
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH], dataReg2);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 2], dataReg3);
             SIMD::storeInt16(&dataVector[i + SIMD::WIDTH * 3], dataReg4);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             dataVector[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
@@ -335,7 +335,7 @@ public:
         params_ = &loadedParams_;
     }
 
-    constexpr void reset(const Position &position) noexcept {
+    constexpr void set(const Position &position) noexcept {
         ply_ = 0;
         lastClean_ = {0, 0};
         accumulators_[ply_].mark(Color::WHITE, Accumulator::REFRESH);
