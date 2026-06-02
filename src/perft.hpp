@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string_view>
+
 #include "move.hpp"
 #include "move-gen.hpp"
 #include "position.hpp"
@@ -9,7 +11,7 @@
 namespace Syft {
 
 struct PerftTest {
-    std::string fen;
+    std::string_view fen;
     UInt32 depth;
     UInt64 expectedNodes;
 };
@@ -18,7 +20,7 @@ class Perft {
 public:
     static constexpr USize TEST_COUNT = 128;
 
-    static inline std::array<PerftTest, TEST_COUNT> TEST_CASES = {
+    static constexpr std::array<PerftTest, TEST_COUNT> TEST_CASES = {
         PerftTest("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, 119060324),
         PerftTest("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 5, 193690690),
         PerftTest("4k3/8/8/8/8/8/8/4K2R w K - 0 1", 6, 764643),
