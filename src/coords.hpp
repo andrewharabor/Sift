@@ -12,38 +12,38 @@
 namespace Syft {
 
 #define SQUARE_DECLARE_RANK(X)                                         \
-    static constexpr SquareEnum SQUARE_A##X = SquareEnum::SQUARE_A##X; \
-    static constexpr SquareEnum SQUARE_B##X = SquareEnum::SQUARE_B##X; \
-    static constexpr SquareEnum SQUARE_C##X = SquareEnum::SQUARE_C##X; \
-    static constexpr SquareEnum SQUARE_D##X = SquareEnum::SQUARE_D##X; \
-    static constexpr SquareEnum SQUARE_E##X = SquareEnum::SQUARE_E##X; \
-    static constexpr SquareEnum SQUARE_F##X = SquareEnum::SQUARE_F##X; \
-    static constexpr SquareEnum SQUARE_G##X = SquareEnum::SQUARE_G##X; \
-    static constexpr SquareEnum SQUARE_H##X = SquareEnum::SQUARE_H##X
+    static constexpr SquareEnum A##X = SquareEnum::A##X; \
+    static constexpr SquareEnum B##X = SquareEnum::B##X; \
+    static constexpr SquareEnum C##X = SquareEnum::C##X; \
+    static constexpr SquareEnum D##X = SquareEnum::D##X; \
+    static constexpr SquareEnum E##X = SquareEnum::E##X; \
+    static constexpr SquareEnum F##X = SquareEnum::F##X; \
+    static constexpr SquareEnum G##X = SquareEnum::G##X; \
+    static constexpr SquareEnum H##X = SquareEnum::H##X
 
 
 class File {
 public:
     enum class FileEnum : UInt8 {
-        FILE_A,
-        FILE_B,
-        FILE_C,
-        FILE_D,
-        FILE_E,
-        FILE_F,
-        FILE_G,
-        FILE_H,
+        A,
+        B,
+        C,
+        D,
+        E,
+        F,
+        G,
+        H,
         NONE
     };
 
-    static constexpr FileEnum FILE_A = FileEnum::FILE_A;
-    static constexpr FileEnum FILE_B = FileEnum::FILE_B;
-    static constexpr FileEnum FILE_C = FileEnum::FILE_C;
-    static constexpr FileEnum FILE_D = FileEnum::FILE_D;
-    static constexpr FileEnum FILE_E = FileEnum::FILE_E;
-    static constexpr FileEnum FILE_F = FileEnum::FILE_F;
-    static constexpr FileEnum FILE_G = FileEnum::FILE_G;
-    static constexpr FileEnum FILE_H = FileEnum::FILE_H;
+    static constexpr FileEnum A = FileEnum::A;
+    static constexpr FileEnum B = FileEnum::B;
+    static constexpr FileEnum C = FileEnum::C;
+    static constexpr FileEnum D = FileEnum::D;
+    static constexpr FileEnum E = FileEnum::E;
+    static constexpr FileEnum F = FileEnum::F;
+    static constexpr FileEnum G = FileEnum::G;
+    static constexpr FileEnum H = FileEnum::H;
     static constexpr FileEnum NONE = FileEnum::NONE;
 
     constexpr File() noexcept : file_(FileEnum::NONE) {}
@@ -74,25 +74,25 @@ private:
 class Rank {
 public:
     enum class RankEnum : UInt8 {
-        RANK_1,
-        RANK_2,
-        RANK_3,
-        RANK_4,
-        RANK_5,
-        RANK_6,
-        RANK_7,
-        RANK_8,
+        FIRST,
+        SECOND,
+        THIRD,
+        FOURTH,
+        FIFTH,
+        SIXTH,
+        SEVENTH,
+        EIGHTH,
         NONE
     };
 
-    static constexpr RankEnum RANK_1 = RankEnum::RANK_1;
-    static constexpr RankEnum RANK_2 = RankEnum::RANK_2;
-    static constexpr RankEnum RANK_3 = RankEnum::RANK_3;
-    static constexpr RankEnum RANK_4 = RankEnum::RANK_4;
-    static constexpr RankEnum RANK_5 = RankEnum::RANK_5;
-    static constexpr RankEnum RANK_6 = RankEnum::RANK_6;
-    static constexpr RankEnum RANK_7 = RankEnum::RANK_7;
-    static constexpr RankEnum RANK_8 = RankEnum::RANK_8;
+    static constexpr RankEnum FIRST = RankEnum::FIRST;
+    static constexpr RankEnum SECOND = RankEnum::SECOND;
+    static constexpr RankEnum THIRD = RankEnum::THIRD;
+    static constexpr RankEnum FOURTH = RankEnum::FOURTH;
+    static constexpr RankEnum FIFTH = RankEnum::FIFTH;
+    static constexpr RankEnum SIXTH = RankEnum::SIXTH;
+    static constexpr RankEnum SEVENTH = RankEnum::SEVENTH;
+    static constexpr RankEnum EIGHTH = RankEnum::EIGHTH;
     static constexpr RankEnum NONE = RankEnum::NONE;
 
     constexpr Rank() noexcept : rank_(RankEnum::NONE) {}
@@ -190,14 +190,14 @@ private:
 class Square {
 public:
     enum class SquareEnum : UInt8 {
-        SQUARE_A1, SQUARE_B1, SQUARE_C1, SQUARE_D1, SQUARE_E1, SQUARE_F1, SQUARE_G1, SQUARE_H1,
-        SQUARE_A2, SQUARE_B2, SQUARE_C2, SQUARE_D2, SQUARE_E2, SQUARE_F2, SQUARE_G2, SQUARE_H2,
-        SQUARE_A3, SQUARE_B3, SQUARE_C3, SQUARE_D3, SQUARE_E3, SQUARE_F3, SQUARE_G3, SQUARE_H3,
-        SQUARE_A4, SQUARE_B4, SQUARE_C4, SQUARE_D4, SQUARE_E4, SQUARE_F4, SQUARE_G4, SQUARE_H4,
-        SQUARE_A5, SQUARE_B5, SQUARE_C5, SQUARE_D5, SQUARE_E5, SQUARE_F5, SQUARE_G5, SQUARE_H5,
-        SQUARE_A6, SQUARE_B6, SQUARE_C6, SQUARE_D6, SQUARE_E6, SQUARE_F6, SQUARE_G6, SQUARE_H6,
-        SQUARE_A7, SQUARE_B7, SQUARE_C7, SQUARE_D7, SQUARE_E7, SQUARE_F7, SQUARE_G7, SQUARE_H7,
-        SQUARE_A8, SQUARE_B8, SQUARE_C8, SQUARE_D8, SQUARE_E8, SQUARE_F8, SQUARE_G8, SQUARE_H8,
+        A1, B1, C1, D1, E1, F1, G1, H1,
+        A2, B2, C2, D2, E2, F2, G2, H2,
+        A3, B3, C3, D3, E3, F3, G3, H3,
+        A4, B4, C4, D4, E4, F4, G4, H4,
+        A5, B5, C5, D5, E5, F5, G5, H5,
+        A6, B6, C6, D6, E6, F6, G6, H6,
+        A7, B7, C7, D7, E7, F7, G7, H7,
+        A8, B8, C8, D8, E8, F8, G8, H8,
         NONE
     };
 
@@ -290,7 +290,7 @@ public:
 
     constexpr bool backRank(Color color) const noexcept {
         assert(color != Color::NONE);
-        return (color == Color::WHITE) ? (rank() == Rank::RANK_1) : (rank() == Rank::RANK_8);
+        return (color == Color::WHITE) ? (rank() == Rank::FIRST) : (rank() == Rank::EIGHTH);
     }
 
     static constexpr bool sameColor(Square square1, Square square2) noexcept {
@@ -332,7 +332,7 @@ public:
     }
 
     constexpr Square enPassant() const noexcept {
-        assert(rank() == Rank::RANK_3 || rank() == Rank::RANK_4 || rank() == Rank::RANK_5 || rank() == Rank::RANK_6);
+        assert(rank() == Rank::THIRD || rank() == Rank::FOURTH || rank() == Rank::FIFTH || rank() == Rank::SIXTH);
         return Square(index() ^ 8);
     }
 

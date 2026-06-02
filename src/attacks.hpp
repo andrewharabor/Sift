@@ -268,7 +268,7 @@ private:
 
     static void initSliders(Square square, Magic table[], [[maybe_unused]] UInt64 magic, const std::function<Bitboard(Square, Bitboard)> &attacks) {
         assert(square != Square::NONE);
-        const Bitboard edges = ((Bitboard(Rank::RANK_1) | Bitboard(Rank::RANK_8)) & ~Bitboard(square.rank())) | ((Bitboard(File::FILE_A) | Bitboard(File::FILE_H)) & ~Bitboard(square.file()));
+        const Bitboard edges = ((Bitboard(Rank::FIRST) | Bitboard(Rank::EIGHTH)) & ~Bitboard(square.rank())) | ((Bitboard(File::A) | Bitboard(File::H)) & ~Bitboard(square.file()));
         UInt64 occupied = 0ULL;
         Magic &entry = table[static_cast<USize>(square.index())];
         entry.mask = (attacks(square, occupied) & ~edges).bits();

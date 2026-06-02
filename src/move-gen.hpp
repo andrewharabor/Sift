@@ -62,9 +62,9 @@ private:
         constexpr Direction UP_LEFT = Direction(Direction::NORTH_WEST, COLOR);
         constexpr Direction UP_RIGHT = Direction(Direction::NORTH_EAST, COLOR);
 
-        constexpr Bitboard PROMOTION_RANK = Rank(Rank::RANK_8, COLOR);
-        constexpr Bitboard BEFORE_PROMOTION_RANK = Rank(Rank::RANK_7, COLOR);
-        constexpr Bitboard FIRST_PUSH_RANK = Rank(Rank::RANK_3, COLOR);
+        constexpr Bitboard PROMOTION_RANK = Rank(Rank::EIGHTH, COLOR);
+        constexpr Bitboard BEFORE_PROMOTION_RANK = Rank(Rank::SEVENTH, COLOR);
+        constexpr Bitboard FIRST_PUSH_RANK = Rank(Rank::THIRD, COLOR);
 
         const Bitboard pawns = position.pieces(PieceType::PAWN, COLOR);
         const Bitboard diagonalPawns = pawns & ~orthogonalPins;
@@ -167,7 +167,7 @@ private:
         constexpr Color COLOR = Color(COLOR_ENUM);
 
         assert(enPassantSquare != Square::NONE);
-        assert((enPassantSquare.rank() == Rank::RANK_3 && COLOR == Color::BLACK) || (enPassantSquare.rank() == Rank::RANK_6 && COLOR == Color::WHITE));
+        assert((enPassantSquare.rank() == Rank::THIRD && COLOR == Color::BLACK) || (enPassantSquare.rank() == Rank::SIXTH && COLOR == Color::WHITE));
 
         constexpr Direction DOWN = Direction(Direction::SOUTH, COLOR);
         const Square enPassantTarget = enPassantSquare + DOWN;

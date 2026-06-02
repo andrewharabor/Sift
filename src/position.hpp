@@ -103,25 +103,25 @@ public:
 
     static constexpr Square rookFrom(Side side) noexcept {
         if (kingside(side)) {
-            return Square(Square::SQUARE_H1, color(side));
+            return Square(Square::H1, color(side));
         } else {
-            return Square(Square::SQUARE_A1, color(side));
+            return Square(Square::A1, color(side));
         }
     }
 
     static constexpr Square kingTo(Side side) noexcept {
         if (kingside(side)) {
-            return Square(Square::SQUARE_G1, color(side));
+            return Square(Square::G1, color(side));
         } else {
-            return Square(Square::SQUARE_C1, color(side));
+            return Square(Square::C1, color(side));
         }
     }
 
     static constexpr Square rookTo(Side side) noexcept {
         if (kingside(side)) {
-            return Square(Square::SQUARE_F1, color(side));
+            return Square(Square::F1, color(side));
         } else {
-            return Square(Square::SQUARE_D1, color(side));
+            return Square(Square::D1, color(side));
         }
     }
 
@@ -972,7 +972,7 @@ public:
         }
 
         if (piece.type() == PieceType::PAWN) {
-            const Rank promotionRank = Rank(Rank::RANK_8, sideToMove_);
+            const Rank promotionRank = Rank(Rank::EIGHTH, sideToMove_);
             if ((to.rank() == promotionRank) != (move.type() == MoveType::PROMOTION)) {
                 return false;
             }
@@ -990,7 +990,7 @@ public:
             }
 
             const Direction up = Direction(Direction::NORTH, sideToMove_);
-            const Rank startRank = Rank(Rank::RANK_2, sideToMove_);
+            const Rank startRank = Rank(Rank::SECOND, sideToMove_);
 
             if (to == from + up) {
                 return true;
@@ -1268,10 +1268,10 @@ private:
     static constexpr USize MAX_STATES = 2048;
 
     static constexpr std::array<Bitboard, 4> CASTLING_PATH_BITBOARDS = {
-        Bitboard(Square::SQUARE_F1) | Bitboard(Square::SQUARE_G1),
-        Bitboard(Square::SQUARE_B1) | Bitboard(Square::SQUARE_C1) | Bitboard(Square::SQUARE_D1),
-        Bitboard(Square::SQUARE_F8) | Bitboard(Square::SQUARE_G8),
-        Bitboard(Square::SQUARE_B8) | Bitboard(Square::SQUARE_C8) | Bitboard(Square::SQUARE_D8)
+        Bitboard(Square::F1) | Bitboard(Square::G1),
+        Bitboard(Square::B1) | Bitboard(Square::C1) | Bitboard(Square::D1),
+        Bitboard(Square::F8) | Bitboard(Square::G8),
+        Bitboard(Square::B8) | Bitboard(Square::C8) | Bitboard(Square::D8)
     };
 
     struct State {

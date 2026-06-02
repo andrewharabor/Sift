@@ -55,10 +55,10 @@ public:
         std::string fromString = std::string(from());
         Square toSquare = to();
         if (type() == MoveType::CASTLING) {
-            if (toSquare.file() == File::FILE_A) {
-                toSquare = Square(File::FILE_C, toSquare.rank());
-            } else if (toSquare.file() == File::FILE_H) {
-                toSquare = Square(File::FILE_G, toSquare.rank());
+            if (toSquare.file() == File::A) {
+                toSquare = Square(File::C, toSquare.rank());
+            } else if (toSquare.file() == File::H) {
+                toSquare = Square(File::G, toSquare.rank());
             }
         }
         std::string toString = std::string(toSquare);
