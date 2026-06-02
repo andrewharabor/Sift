@@ -51,7 +51,7 @@ public:
     static constexpr USize WIDTH = REG_SIZE / sizeof(Int16);
     static constexpr USize ITERATIONS = Arch::LAYER_SIZE / WIDTH;
 
-    static constexpr RegInt16 loadInt16(const Int16 *ptr) noexcept {
+    static inline RegInt16 loadInt16(const Int16 *ptr) noexcept {
 #if defined(USE_AVX512)
         return _mm512_load_si512(ptr);
 #elif defined(USE_AVX2)
@@ -63,7 +63,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 loadInt32(const Int32 *ptr) noexcept {
+    static inline RegInt32 loadInt32(const Int32 *ptr) noexcept {
 #if defined(USE_AVX512)
         return _mm512_load_si512(ptr);
 #elif defined(USE_AVX2)
@@ -75,7 +75,7 @@ public:
 #endif
     }
 
-    static constexpr void storeInt16(Int16 *ptr, RegInt16 reg) noexcept {
+    static inline void storeInt16(Int16 *ptr, RegInt16 reg) noexcept {
 #if defined(USE_AVX512)
         _mm512_store_si512(ptr, reg);
 #elif defined(USE_AVX2)
@@ -87,7 +87,7 @@ public:
 #endif
     }
 
-    static constexpr void storeInt32(Int32 *ptr, RegInt32 reg) noexcept {
+    static inline void storeInt32(Int32 *ptr, RegInt32 reg) noexcept {
 #if defined(USE_AVX512)
         _mm512_store_si512(ptr, reg);
 #elif defined(USE_AVX2)
@@ -99,7 +99,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 zeroInt16() noexcept {
+    static inline RegInt16 zeroInt16() noexcept {
 #if defined(USE_AVX512)
         return _mm512_setzero_si512();
 #elif defined(USE_AVX2)
@@ -111,7 +111,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 zeroInt32() noexcept {
+    static inline RegInt32 zeroInt32() noexcept {
 #if defined(USE_AVX512)
         return _mm512_setzero_si512();
 #elif defined(USE_AVX2)
@@ -123,7 +123,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 setInt16(Int16 val) noexcept {
+    static inline RegInt16 setInt16(Int16 val) noexcept {
 #if defined(USE_AVX512)
         return _mm512_set1_epi16(val);
 #elif defined(USE_AVX2)
@@ -135,7 +135,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 setInt32(Int32 val) noexcept {
+    static inline RegInt32 setInt32(Int32 val) noexcept {
 #if defined(USE_AVX512)
         return _mm512_set1_epi32(val);
 #elif defined(USE_AVX2)
@@ -147,7 +147,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 addInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
+    static inline RegInt16 addInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_add_epi16(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -159,7 +159,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 addInt32(RegInt32 reg1, RegInt32 reg2) noexcept {
+    static inline RegInt32 addInt32(RegInt32 reg1, RegInt32 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_add_epi32(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -171,7 +171,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 subInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
+    static inline RegInt16 subInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_sub_epi16(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -183,7 +183,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 subInt32(RegInt32 reg1, RegInt32 reg2) noexcept {
+    static inline RegInt32 subInt32(RegInt32 reg1, RegInt32 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_sub_epi32(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -195,7 +195,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 clampInt16(RegInt16 reg, RegInt16 regMin, RegInt16 regMax) noexcept {
+    static inline RegInt16 clampInt16(RegInt16 reg, RegInt16 regMin, RegInt16 regMax) noexcept {
 #if defined(USE_AVX512)
         return _mm512_min_epi16(_mm512_max_epi16(reg, regMin), regMax);
 #elif defined(USE_AVX2)
@@ -207,7 +207,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 clampInt32(RegInt32 reg, RegInt32 regMin, RegInt32 regMax) noexcept {
+    static inline RegInt32 clampInt32(RegInt32 reg, RegInt32 regMin, RegInt32 regMax) noexcept {
 #if defined(USE_AVX512)
         return _mm512_min_epi32(_mm512_max_epi32(reg, regMin), regMax);
 #elif defined(USE_AVX2)
@@ -219,7 +219,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt16 mulLoInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
+    static inline RegInt16 mulLoInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_mullo_epi16(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -231,7 +231,7 @@ public:
 #endif
     }
 
-    static constexpr RegInt32 mulAddInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
+    static inline RegInt32 mulAddInt16(RegInt16 reg1, RegInt16 reg2) noexcept {
 #if defined(USE_AVX512)
         return _mm512_madd_epi16(reg1, reg2);
 #elif defined(USE_AVX2)
@@ -245,7 +245,7 @@ public:
 #endif
     }
 
-    static constexpr Int32 horizAddInt32(RegInt32 reg) noexcept {
+    static inline Int32 horizAddInt32(RegInt32 reg) noexcept {
 #if defined(USE_AVX512)
         __m256i lo256 = _mm512_castsi512_si256(reg);
         __m256i hi256 = _mm512_extracti64x4_epi64(reg, 1);
