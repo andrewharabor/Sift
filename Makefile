@@ -32,19 +32,18 @@ endif
 
 ifneq (,$(findstring dev,$(VERSION)))
 	COMMIT_HASH := $(shell git rev-parse --short HEAD)
-# 	VERSION := $(strip $(VERSION))-$(COMMIT_HASH)
 	VERSION := $(VERSION)-$(COMMIT_HASH)
 endif
 
-CPP_FLAGS += -DBUILD_VERSION=\"$(VERSION)\"
+CPP_FLAGS += -DBUILD_VERSION=$(VERSION)
 
-# ifeq ($(DETECTED_OS),windows)
-# 	EVAL_FILE := $(shell type network.txt)
-# else
-# 	EVAL_FILE := $(shell cat network.txt)
-# endif
+ifeq ($(DETECTED_OS),windows)
+	EVAL_FILE := $(shell type network.txt)
+else
+	EVAL_FILE := $(shell cat network.txt)
+endif
 
-# CPP_FLAGS += -DEVAL_FILE=\"$(EVAL_FILE)\"
+CPP_FLAGS += -DEVAL_FILE=nets/$(EVAL_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
 	TARGET_EXEC := Syft$(VERSION).exe

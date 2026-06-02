@@ -5,6 +5,9 @@
 
 #include "types.hpp"
 
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
 
 namespace Syft {
 

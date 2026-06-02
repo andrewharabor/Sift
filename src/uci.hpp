@@ -293,7 +293,7 @@ private:
     void uci() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::cout << "id name Syft " << BUILD_VERSION << std::endl;
+        std::cout << "id name Syft " << TOSTRING(BUILD_VERSION) << std::endl;
         std::cout << "id author andrewharabor" << std::endl;
 
         for (const auto &option : options_) {
