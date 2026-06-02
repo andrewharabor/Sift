@@ -14,9 +14,9 @@
 #include <vector>
 
 #include "color.hpp"
-#include "eval.hpp"
 #include "move.hpp"
 #include "move-gen.hpp"
+#include "nnue.hpp"
 #include "perft.hpp"
 #include "position.hpp"
 #include "search.hpp"
@@ -75,6 +75,8 @@ public:
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
 
     static constexpr bool DEFAULT_SOFT_NODES = false;
+
+    static constexpr std::string_view DEFAULT_EVAL_FILE = "<internal>";
 
     Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
     Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
@@ -144,17 +146,27 @@ private:
 class UCI {
 public:
     UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, Option::DEFAULT_MULTI_PV, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
-        options_.push_back(Option("Hash", SpinOption{Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB}, [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); }));
+        options_.push_back(Option("Hash", SpinOption(Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB), [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); }));
         options_.push_back(Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); }));
-        options_.push_back(Option("Threads", SpinOption{Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS}, [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); }));
-        options_.push_back(Option("MultiPV", SpinOption{Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV}, [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); }));
-        options_.push_back(Option("ShowWDL", CheckOption{Option::DEFAULT_SHOW_WDL}, []([[maybe_unused]] const Option &option) {}));
-        options_.push_back(Option("MoveOverhead", SpinOption{Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS}, []([[maybe_unused]] const Option &option) {}));
-        options_.push_back(Option("SoftNodes", CheckOption{Option::DEFAULT_SOFT_NODES}, []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("Threads", SpinOption(Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS), [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); }));
+        options_.push_back(Option("MultiPV", SpinOption(Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV), [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); }));
+        options_.push_back(Option("ShowWDL", CheckOption(Option::DEFAULT_SHOW_WDL), []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("MoveOverhead", SpinOption(Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS), []([[maybe_unused]] const Option &option) {}));
+        options_.push_back(Option("SoftNodes", CheckOption(Option::DEFAULT_SOFT_NODES), []([[maybe_unused]] const Option &option) {}));
+
+        auto evalFileCallback = [this](const Option &option) {
+            if (option.stringValue() != Option::DEFAULT_EVAL_FILE) {
+                search_.loadEvalFile(option.stringValue());
+            } else {
+                search_.loadInternalEvalFile();
+            }
+        };
+
+        options_.push_back(Option("EvalFile", StringOption(std::string(Option::DEFAULT_EVAL_FILE), std::string(Option::DEFAULT_EVAL_FILE)), evalFileCallback));
 
 #if defined(OPEN_BENCH_TUNE)
         for (Tunable &tunable : TUNABLES) {
-            options_.push_back(Option(tunable.name(), SpinOption{tunable.value(), tunable.value(), tunable.min(), tunable.max()}, [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
+            options_.push_back(Option(tunable.name(), SpinOption(tunable.value(), tunable.value(), tunable.min(), tunable.max()), [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
         }
 #endif
 
@@ -615,7 +627,13 @@ private:
         if (position_.inCheck()) {
             std::cout << "(none)";
         } else {
-            std::cout << Eval::evaluate(position_) << " cp";
+            NNUE nnue;
+            std::string evalFilePath = options_[optionIndex("EvalFile")].stringValue();
+            if (evalFilePath != Option::DEFAULT_EVAL_FILE) {
+                nnue.load(evalFilePath);
+            }
+            nnue.set(position_);
+            std::cout << nnue.evaluate(position_.sideToMove()) << " cp";
         }
         std::cout << std::endl;
     }

@@ -503,7 +503,7 @@ public:
         updateThreats();
     }
 
-    void make() {
+    void makeNull() {
         states_.push_back(state());
         state().lastMove = Move::NULL_MOVE;
         state().capturedPiece = Piece::NONE;

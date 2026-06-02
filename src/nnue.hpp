@@ -25,7 +25,7 @@
 #include "utils.hpp"
 
 
-INCBIN(unsigned char, INTERNAL_NNUE_PARAMS, TOSTRING(EVAL_FILE));
+INCBIN(unsigned char, INTERNAL_EVAL_FILE, TOSTRING(EVAL_FILE));
 
 namespace Syft {
 
@@ -125,8 +125,6 @@ public:
             add1Sub2(weights[add1], weights[sub1], weights[sub2], color);
         } else if (addSize_ == 2 && subSize_ == 2) {
             add2Sub2(weights[add1], weights[add2], weights[sub1], weights[sub2], color);
-        } else {
-            assert(false);
         }
 
         mark(color, CLEAN);
@@ -313,10 +311,10 @@ public:
     NNUE() noexcept : params_(), accumulators_(), ply_(0), lastClean_() { loadInternal(); }
 
     void loadInternal() noexcept {
-        assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_NNUE_PARAMS_size);
-        assert(reinterpret_cast<uintptr_t>(INTERNAL_NNUE_PARAMS_data) % alignof(Params) == 0);
+        assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_EVAL_FILE_size);
+        assert(reinterpret_cast<uintptr_t>(INTERNAL_EVAL_FILE_data) % alignof(Params) == 0);
 
-        params_ = reinterpret_cast<const Params *>(INTERNAL_NNUE_PARAMS_data);
+        params_ = reinterpret_cast<const Params *>(INTERNAL_EVAL_FILE_data);
     }
 
     void load(std::string_view path) noexcept {
@@ -352,15 +350,15 @@ public:
         }
     }
 
-    inline Int32 evaluate(const Position &position) noexcept {
+    inline Int32 evaluate(Color color) noexcept {
         update(Color::WHITE);
         update(Color::BLACK);
 
-        assert(accumulators_[ply_].state(position.sideToMove()) == Accumulator::CLEAN);
-        assert(accumulators_[ply_].state(~position.sideToMove()) == Accumulator::CLEAN);
+        assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
+        assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
 
-        const LayerVector &friendlyAcc = accumulators_[ply_].data(position.sideToMove());
-        const LayerVector &enemyAcc = accumulators_[ply_].data(~position.sideToMove());
+        const LayerVector &friendlyAcc = accumulators_[ply_].data(color);
+        const LayerVector &enemyAcc = accumulators_[ply_].data(~color);
 
         Int32 score = 0;
 #if defined(USE_SIMD)
