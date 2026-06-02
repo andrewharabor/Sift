@@ -11,10 +11,7 @@ using namespace Syft;
 int main(int argc, const char *argv[]) {
     Attacks::init();
     CuckooTable::init();
-
-#if defined(OPEN_BENCH_TUNE)
     TunableList::init();
-#endif
 
     if (argc > 1) {
         const std::string_view mode = argv[1];
@@ -25,10 +22,10 @@ int main(int argc, const char *argv[]) {
             return 0;
         }
 #endif
-    }
+        }
 
     UCI uci;
     uci.run();
 
     return 0;
-}
+    }
