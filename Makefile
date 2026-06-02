@@ -3,9 +3,9 @@ BUILD ?= engine
 MODE  ?= release
 
 SRCS := src/main.cpp
-CPPFLAGS := -MMD -MP -Isrc
-CXXFLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
-LDFLAGS :=
+CPP_FLAGS := -MMD -MP -Isrc
+CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
+LD_FLAGS :=
 
 BUILD_DIR := build
 OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
@@ -17,8 +17,8 @@ else
 	DETECTED_OS := $(shell uname)
 endif
 
-VERSION := $(shell $(CXX) --version 2>/dev/null)
-ifneq ($(findstring clang,$(VERSION)),)
+CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
+ifneq ($(findstring clang,$(CXX_VERSION)),)
     CXX := clang++
 else
     CXX := g++
@@ -32,10 +32,19 @@ endif
 
 ifneq (,$(findstring dev,$(VERSION)))
 	COMMIT_HASH := $(shell git rev-parse --short HEAD)
-	VERSION := $(strip $(VERSION))-$(COMMIT_HASH)
+# 	VERSION := $(strip $(VERSION))-$(COMMIT_HASH)
+	VERSION := $(VERSION)-$(COMMIT_HASH)
 endif
 
-CPPFLAGS += -DBUILD_VERSION=\"$(VERSION)\"
+CPP_FLAGS += -DBUILD_VERSION=\"$(VERSION)\"
+
+# ifeq ($(DETECTED_OS),windows)
+# 	EVAL_FILE := $(shell type network.txt)
+# else
+# 	EVAL_FILE := $(shell cat network.txt)
+# endif
+
+# CPP_FLAGS += -DEVAL_FILE=\"$(EVAL_FILE)\"
 
 ifeq ($(DETECTED_OS),windows)
 	TARGET_EXEC := Syft$(VERSION).exe
@@ -53,99 +62,101 @@ endif
 
 ifeq ($(ARCH),native)
 	PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
-	CXXFLAGS += -march=native
+	CXX_FLAGS += -march=native
 	ifneq ($(findstring __POPCNT__, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_POPCNT
+		CPP_FLAGS += -DUSE_POPCNT
 	endif
 	ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
 		ifeq ($(findstring __znver1, $(PROPERTIES)),)
 			ifeq ($(findstring __znver2, $(PROPERTIES)),)
-				CPPFLAGS += -DUSE_PEXT
+				CPP_
+			FLAGS += -DUSE_PEXT
 			endif
 		endif
 	endif
 	ifneq ($(findstring __SSE4_2__, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_SSE4
+		CPP_FLAGS += -DUSE_SSE4
 	endif
 	ifneq ($(findstring __AVX__, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_AVX
+		CPP_FLAGS += -DUSE_AVX
 	endif
 	ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_AVX2
+		CPP_FLAGS += -DUSE_AVX2
 	endif
 	ifneq ($(findstring __AVX512F__, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_AVX512
+		CPP_FLAGS += -DUSE_AVX512
 	endif
 	ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
 		ifeq ($(findstring __znver4, $(PROPERTIES)),)
-			CPPFLAGS += -DUSE_AVX512_VNNI
+			CPP_
+		FLAGS += -DUSE_AVX512_VNNI
 		endif
 	endif
 	ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
-		CPPFLAGS += -DUSE_NEON
-		CPPFLAGS += -DUSE_NEON_DOTPROD
+		CPP_FLAGS += -DUSE_NEON
+		CPP_FLAGS += -DUSE_NEON_DOTPROD
 	endif
 else ifeq ($(ARCH),sse4)
-	CPPFLAGS += -DUSE_SSE4
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2
+	CPP_FLAGS += -DUSE_SSE4
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2
 else ifeq ($(ARCH),avx)
-	CPPFLAGS += -DUSE_SSE4 -DUSE_AVX
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma
+	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma
 else ifeq ($(ARCH),avx2)
-	CPPFLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt
+	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt
 else ifeq ($(ARCH),avx2-pext)
-	CPPFLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT -DUSE_PEXT
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2
+	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT -DUSE_PEXT
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2
 else ifeq ($(ARCH),avx512)
-	CPPFLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
+	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
 else ifeq ($(ARCH),avx512vnni)
-	CPPFLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_AVX512_VNNI -DUSE_POPCNT -DUSE_PEXT
-	CXXFLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mavx512ifma -mavx512vbmi -mavx512vbmi2 -mavx512bitalg -mavx512vnni -mavx512vpopcntdq
+	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_AVX512_VNNI -DUSE_POPCNT -DUSE_PEXT
+	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mavx512ifma -mavx512vbmi -mavx512vbmi2 -mavx512bitalg -mavx512vnni -mavx512vpopcntdq
 else ifeq ($(ARCH),neon)
-	CPPFLAGS += -DUSE_NEON
-	CXXFLAGS += -march=armv8-a+simd
+	CPP_FLAGS += -DUSE_NEON
+	CXX_FLAGS += -march=armv8-a+simd
 else ifeq ($(ARCH),neon-dotprod)
-	CPPFLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
-	CXXFLAGS += -march=armv8.2-a+dotprod
+	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
+	CXX_FLAGS += -march=armv8.2-a+dotprod
 else ifeq ($(ARCH),generic)
-	CPPFLAGS += -DUSE_GENERIC
+	CPP_FLAGS += -DUSE_GENERIC
 endif
 
 ifeq ($(DETECTED_OS),windows)
-	CXXFLAGS += -static
+	CXX_FLAGS += -static
 else
-	CXXFLAGS += -pthread
-	LDFLAGS  += -pthread
+	CXX_FLAGS += -pthread
+	LD_FLAGS  += -pthread
 endif
 
 ifeq ($(MODE),release)
-	CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
+	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
 	ifneq ($(DETECTED_OS),windows)
-		CXXFLAGS += -flto
-		LDFLAGS  += -flto
+		CXX_FLAGS += -flto
+		LD_FLAGS  += -flto
 	endif
 else ifeq ($(MODE),tune)
-	CXXFLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
-	CPPFLAGS += -DOPEN_BENCH_TUNE
+	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
+	CPP_FLAGS += -DOPEN_BENCH_TUNE
 	ifneq ($(DETECTED_OS),windows)
-		CXXFLAGS += -flto
-		LDFLAGS  += -flto
+		CXX_FLAGS += -flto
+		LD_FLAGS  += -flto
 	endif
 else ifeq ($(MODE),debug)
-	CXXFLAGS += -O0 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
-	LDFLAGS  += -fsanitize=undefined,address
+	CXX_FLAGS += -O0 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
+	LD_FLAGS  += -fsanitize=undefined,address
 endif
 
 -include $(DEPS)
 
 $(TARGET_EXEC): info $(OBJS)
-	$(CXX) $(CXXFLAGS) $(OBJS) -o $@ $(LDFLAGS)
+	$(CXX) $(CXX_FLAGS) $(OBJS) -o $@ $(LD_FLAGS)
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CPP_FLAGS) $(CXX_FLAGS) -c $< -o $@
 
 .DEFAULT_GOAL := engine
 

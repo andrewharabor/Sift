@@ -2,6 +2,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
+
+#define INCBIN_PREFIX
+#define INCBIN_STYLE INCBIN_STYLE_CAMEL
+
+#include "incbin/incbin.h"
 
 #include "arch.hpp"
 #include "coords.hpp"
@@ -10,6 +16,11 @@
 #include "score.hpp"
 #include "simd.hpp"
 #include "types.hpp"
+
+#undef INCBIN_ALIGNMENT
+#define INCBIN_ALIGNMENT 64
+
+// INCBIN(std::byte, INTERNAL_NNUE, EVAL_FILE);
 
 
 namespace Syft {
@@ -49,7 +60,7 @@ public:
     static constexpr FeatureState DIRTY = FeatureState::DIRTY;
     static constexpr FeatureState REFRESH = FeatureState::REFRESH;
 
-    constexpr Accumulator() noexcept : data_(), states_(), add_(), sub_(), addSize_(0), subSize_(0) {}
+    constexpr Accumulator() noexcept : data_(), states_({REFRESH, REFRESH}), add_(), sub_(), addSize_(0), subSize_(0) {}
 
     constexpr const DualLayerVector &data() const noexcept { return data_; }
     constexpr DualLayerVector &data() noexcept { return data_; }
@@ -96,6 +107,8 @@ public:
         assert(addSize_ >= 1);
         assert(subSize_ >= 1);
         assert(color != Color::NONE);
+
+        data(color) = previous.data(color);
 
         const USize add1 = add_[0].index(color);
         const USize add2 = (addSize_ > 1) ? add_[1].index(color) : 0;
@@ -293,26 +306,35 @@ class NNUE {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    NNUE() noexcept : inputWeights_(), inputBiases_(), layerWeights_(), layerBias_(), accumulators_(), ply_(0), lastClean_() {}
+    NNUE() noexcept : params_(), accumulators_(), ply_(0), lastClean_() {}
 
     constexpr void reset(const Position &position) noexcept {
         ply_ = 0;
         lastClean_ = {0, 0};
-        accumulators_[ply_].refresh(inputWeights_, inputBiases_, position, Color::WHITE);
-        accumulators_[ply_].refresh(inputWeights_, inputBiases_, position, Color::BLACK);
+        accumulators_[ply_].mark(Color::WHITE, Accumulator::REFRESH);
+        accumulators_[ply_].mark(Color::BLACK, Accumulator::REFRESH);
+        accumulators_[ply_].refresh(params_.inputWeights, params_.inputBiases, position, Color::WHITE);
+        accumulators_[ply_].refresh(params_.inputWeights, params_.inputBiases, position, Color::BLACK);
     }
 
     constexpr void update(Color color) noexcept {
         USize &cleanIdx = lastClean_[static_cast<USize>(color)];
         while (cleanIdx < ply_) {
             cleanIdx++;
-            accumulators_[cleanIdx].update(inputWeights_, accumulators_[cleanIdx - 1], color);
+            accumulators_[cleanIdx].update(params_.inputWeights, accumulators_[cleanIdx - 1], color);
         }
     }
 
-    constexpr Int32 evaluate(const Position &position) const noexcept {
+    constexpr Int32 evaluate(const Position &position) noexcept {
+        update(Color::WHITE);
+        update(Color::BLACK);
+
+        assert(accumulators_[ply_].state(position.sideToMove()) == Accumulator::CLEAN);
+        assert(accumulators_[ply_].state(~position.sideToMove()) == Accumulator::CLEAN);
+
         const LayerVector &friendlyAcc = accumulators_[ply_].data(position.sideToMove());
         const LayerVector &enemyAcc = accumulators_[ply_].data(~position.sideToMove());
+
         Int32 score = 0;
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
@@ -328,14 +350,14 @@ public:
             const RegInt16 enemyClampReg2 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH]), zero, quantA);
             const RegInt16 enemyClampReg3 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 2]), zero, quantA);
             const RegInt16 enemyClampReg4 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 3]), zero, quantA);
-            const RegInt16 friendlyWeightReg1 = SIMD::loadInt16(&layerWeights_[0][i]);
-            const RegInt16 friendlyWeightReg2 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH]);
-            const RegInt16 friendlyWeightReg3 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH * 2]);
-            const RegInt16 friendlyWeightReg4 = SIMD::loadInt16(&layerWeights_[0][i + SIMD::WIDTH * 3]);
-            const RegInt16 enemyWeightReg1 = SIMD::loadInt16(&layerWeights_[1][i]);
-            const RegInt16 enemyWeightReg2 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH]);
-            const RegInt16 enemyWeightReg3 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH * 2]);
-            const RegInt16 enemyWeightReg4 = SIMD::loadInt16(&layerWeights_[1][i + SIMD::WIDTH * 3]);
+            const RegInt16 friendlyWeightReg1 = SIMD::loadInt16(&params_.layerWeights[0][i]);
+            const RegInt16 friendlyWeightReg2 = SIMD::loadInt16(&params_.layerWeights[0][i + SIMD::WIDTH]);
+            const RegInt16 friendlyWeightReg3 = SIMD::loadInt16(&params_.layerWeights[0][i + SIMD::WIDTH * 2]);
+            const RegInt16 friendlyWeightReg4 = SIMD::loadInt16(&params_.layerWeights[0][i + SIMD::WIDTH * 3]);
+            const RegInt16 enemyWeightReg1 = SIMD::loadInt16(&params_.layerWeights[1][i]);
+            const RegInt16 enemyWeightReg2 = SIMD::loadInt16(&params_.layerWeights[1][i + SIMD::WIDTH]);
+            const RegInt16 enemyWeightReg3 = SIMD::loadInt16(&params_.layerWeights[1][i + SIMD::WIDTH * 2]);
+            const RegInt16 enemyWeightReg4 = SIMD::loadInt16(&params_.layerWeights[1][i + SIMD::WIDTH * 3]);
             const RegInt32 friendlyProdReg1 = SIMD::mulAddInt16(friendlyClampReg1, SIMD::mulLoInt16(friendlyClampReg1, friendlyWeightReg1));
             const RegInt32 friendlyProdReg2 = SIMD::mulAddInt16(friendlyClampReg2, SIMD::mulLoInt16(friendlyClampReg2, friendlyWeightReg2));
             const RegInt32 friendlyProdReg3 = SIMD::mulAddInt16(friendlyClampReg3, SIMD::mulLoInt16(friendlyClampReg3, friendlyWeightReg3));
@@ -358,12 +380,12 @@ public:
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             const Int32 friendlyClamp1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
             const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
-            score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(layerWeights_[0][i]);
-            score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(layerWeights_[1][i]);
+            score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(params_.layerWeights[0][i]);
+            score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(params_.layerWeights[1][i]);
         }
 #endif
         score /= Arch::QUANT_A;
-        score += static_cast<Int32>(layerBias_);
+        score += static_cast<Int32>(params_.layerBias);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
         return score;
@@ -410,19 +432,22 @@ public:
     constexpr void unmakeMove() noexcept {
         assert(ply_ > 0);
         ply_--;
+        lastClean_ = {std::min(lastClean_[0], ply_), std::min(lastClean_[1], ply_)};
     }
 
 private:
-    alignas(64) InputMatrix inputWeights_;
-    alignas(64) LayerVector inputBiases_;
-    alignas(64) DualLayerVector layerWeights_;
-    alignas(64) Int16 layerBias_;
+    struct Params {
+        alignas(64) InputMatrix inputWeights;
+        alignas(64) LayerVector inputBiases;
+        alignas(64) DualLayerVector layerWeights;
+        alignas(64) Int16 layerBias;
+    };
+
+    Params params_;
 
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
     std::array<USize, 2> lastClean_;
-
-private:
 
 };
 
