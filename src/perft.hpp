@@ -12,7 +12,7 @@ namespace Syft {
 
 struct PerftTest {
     std::string_view fen;
-    UInt32 depth;
+    Int32 depth;
     UInt64 expectedNodes;
 };
 
@@ -153,7 +153,7 @@ public:
 
 
     template<MoveGenType MOVE_GEN_TYPE = MoveGenType::ALL>
-    static UInt64 run(Position &position, UInt32 depth) {
+    static UInt64 run(Position &position, Int32 depth) {
         if (depth <= 0) {
             return 1;
         }

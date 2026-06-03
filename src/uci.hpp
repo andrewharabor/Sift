@@ -13,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+#include "bench.hpp"
 #include "color.hpp"
 #include "move.hpp"
 #include "move-gen.hpp"
@@ -193,6 +194,7 @@ private:
         STOP,
         SET_OPTION,
         QUIT,
+        BENCH,
         PERFT,
         PERFT_TESTS,
         BOARD,
@@ -247,6 +249,8 @@ private:
             setOption(stream);
         } else if (cmd == Command::QUIT) {
             return true;
+        } else if (cmd == Command::BENCH) {
+            bench(stream);
         } else if (cmd == Command::PERFT) {
             perft(stream);
         } else if (cmd == Command::PERFT_TESTS) {
@@ -283,6 +287,8 @@ private:
             return Command::SET_OPTION;
         } else if (token == "quit") {
             return Command::QUIT;
+        } else if (token == "bench") {
+            return Command::BENCH;
         } else if (token == "perft") {
             return Command::PERFT;
         } else if (token == "perfttests") {
@@ -553,16 +559,73 @@ private:
         }
     }
 
+
+    void bench(std::istringstream &stream) {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
+        Int32 depth;
+        stream >> depth;
+
+        UInt64 nodes = 0;
+        UInt64 time = 0;
+        for (USize i = 0; i < Bench::TEST_COUNT; i++) {
+            Position position = Position(Bench::TEST_CASES[i]);
+
+            SearchLimits limits = SearchLimits();
+            limits.depth = depth;
+
+            const auto start = std::chrono::high_resolution_clock::now();
+            const UInt64 testNodes = search_.bench(position, limits);
+            const auto end = std::chrono::high_resolution_clock::now();
+            const UInt64 testTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+
+            std::cout << "info fen " << Bench::TEST_CASES[i];
+            std::cout << " depth " << depth;
+            std::cout << " nodes " << testNodes;
+            std::cout << " time " << testTime;
+            std::cout << " nps " << (testNodes * 1000ULL) / (testTime + 1);
+            std::cout << std::endl;
+
+            nodes += testNodes;
+            time += testTime;
+        }
+
+        std::cout << "info nodes " << nodes;
+        std::cout << " time " << time;
+        std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
+        std::cout << std::endl;
+    }
+
     void perft(std::istringstream &stream) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        UInt32 depth;
+        Int32 depth;
         stream >> depth;
 
-        const auto start = std::chrono::high_resolution_clock::now();
-        const UInt64 nodes = Perft::run(position_, depth);
-        const auto end = std::chrono::high_resolution_clock::now();
-        const UInt64 time = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+        UInt64 nodes = 0;
+        UInt64 time = 0;
+
+        MoveList legalMoves;
+        MoveGen::legal(position_, legalMoves);
+        for (Move move : legalMoves) {
+            Position newPosition = position_;
+            newPosition.make(move);
+
+            const auto start = std::chrono::high_resolution_clock::now();
+            const UInt64 moveNodes = Perft::run(newPosition, std::max(0, depth - 1));
+            const auto end = std::chrono::high_resolution_clock::now();
+            const UInt64 moveTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+
+            std::cout << "info move " << std::string(move);
+            std::cout << " nodes " << moveNodes;
+            std::cout << " time " << moveTime;
+            std::cout << " nps " << (moveNodes * 1000ULL) / (moveTime + 1);
+            std::cout << std::endl;
+
+            nodes += moveNodes;
+            time += moveTime;
+        }
+
         std::cout << "info depth " << depth;
         std::cout << " nodes " << nodes;
         std::cout << " time " << time;
@@ -587,8 +650,7 @@ private:
                 testsPassed++;
             }
 
-            std::cout << "info testnumber " << (i + 1);
-            std::cout << " fen " << testCase.fen;
+            std::cout << "info fen " << testCase.fen;
             std::cout << " depth " << testCase.depth;
             std::cout << " expected " << testCase.expectedNodes;
             std::cout << " nodes " << nodes;

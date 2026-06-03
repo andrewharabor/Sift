@@ -108,7 +108,9 @@ struct SearchThread {
 
     History history;
 
-    SearchThread(Int32 id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history() { reset(); }
+    NNUE nnue;
+
+    SearchThread(Int32 id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history(), nnue() { reset(); }
 
     SearchThread(const SearchThread &) = delete;
     SearchThread &operator=(const SearchThread &) = delete;
@@ -215,7 +217,7 @@ public:
 
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
-    Search(USize hashSizeMB, USize multiPV, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), multiPV_(multiPV), nnue_(), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)) {
+    Search(USize hashSizeMB, USize multiPV, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), multiPV_(multiPV), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
         stop_.store(false, std::memory_order_relaxed);
         threadCount(1);
     }
@@ -257,13 +259,13 @@ public:
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
         if (legalMoves.empty()) {
-            uciBestMove_(Move::NULL_MOVE);
+            if (printInfo_) {
+                uciBestMove_(Move::NULL_MOVE);
+            }
             return;
         }
 
         tTable_.incrementAge();
-
-        nnue_.set(position);
 
         stop_.store(false, std::memory_order_relaxed);
 
@@ -273,10 +275,47 @@ public:
         for (auto &thread : threads_) {
             thread->reset();
             thread->position = position;
+            thread->nnue.set(position);
             thread->limits = limits;
             thread->initMoves();
             thread->start();
         }
+    }
+
+
+    UInt64 bench(const Position &position, const SearchLimits &limits) noexcept {
+        printInfo_ = false;
+
+        for (auto &thread : threads_) {
+            thread->wait();
+        }
+
+        tTable_.reset(threads_.size());
+        tTable_.incrementAge();
+
+        stop_.store(false, std::memory_order_relaxed);
+
+        MoveList legalMoves;
+        MoveGen::legal(position, legalMoves);
+        timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
+        timeManager_.start();
+
+        UInt64 nodes = 0;
+        for (auto &thread : threads_) {
+            thread->reset();
+            thread->history.reset();
+            thread->position = position;
+            thread->nnue.set(position);
+            thread->limits = limits;
+            thread->initMoves();
+            thread->start();
+            thread->wait();
+            nodes += thread->nodes.load(std::memory_order_relaxed);
+        }
+
+        printInfo_ = true;
+
+        return nodes;
     }
 
     bool running() const noexcept {
@@ -300,8 +339,17 @@ public:
 
     void multiPV(USize multiPV) noexcept { multiPV_ = multiPV; }
 
-    void loadEvalFile(std::string_view path) noexcept { nnue_.load(path); }
-    void loadInternalEvalFile() noexcept { nnue_.loadInternal(); }
+    void loadEvalFile(std::string_view path) noexcept {
+        for (auto &thread : threads_) {
+            thread->nnue.load(path);
+        }
+    }
+
+    void loadInternalEvalFile() noexcept {
+        for (auto &thread : threads_) {
+            thread->nnue.loadInternal();
+        }
+    }
 
 private:
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
@@ -309,8 +357,6 @@ private:
     TTable tTable_;
 
     USize multiPV_;
-
-    NNUE nnue_;
 
     TimeManager timeManager_;
     std::atomic_bool stop_;
@@ -320,6 +366,8 @@ private:
     SearchInfoCallback uciSearchInfo_;
     BestMoveCallback uciBestMove_;
     CurrMoveCallback uciCurrMove_;
+
+    bool printInfo_;
 
     void joinThreads() noexcept {
         for (auto &thread : threads_) {
@@ -358,7 +406,6 @@ private:
             }
 
             for (thread.pvIndex = 0; thread.pvIndex < std::min(multiPV_, thread.rootMoves.size()); thread.pvIndex++) {
-
                 const RootMove &rootMove = thread.rootMoves[thread.pvIndex];
 
                 Int32 alpha = Score::MIN;
@@ -379,7 +426,7 @@ private:
                         break;
                     }
 
-                    if (thread.main() && (score <= alpha || score >= beta) && multiPV_ == 1) {
+                    if (printInfo_ && thread.main() && (score <= alpha || score >= beta) && multiPV_ == 1) {
                         printSearchInfo(thread, thread.pvIndex, depth);
                     }
 
@@ -405,7 +452,7 @@ private:
                 }
             }
 
-            if (thread.main()) {
+            if (printInfo_ && thread.main()) {
                 for (USize idx = 0; idx < std::min(multiPV_, thread.rootMoves.size()); idx++) {
                     printSearchInfo(thread, idx, depth);
                 }
@@ -428,7 +475,10 @@ private:
                 }
             }
             stop_.store(true, std::memory_order_relaxed);
-            uciBestMove_(thread.rootMoves[0].move);
+
+            if (printInfo_) {
+                uciBestMove_(thread.rootMoves[0].move);
+            }
         }
     }
 
@@ -486,7 +536,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : nnue_.evaluate(position.sideToMove());
+            return (inCheck) ? 0 : thread.nnue.evaluate(position.sideToMove());
         }
 
         SearchStack &nextStack = thread.stack[rootPly + 1];
@@ -514,7 +564,7 @@ private:
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                rawStaticEval = (tableHit) ? tableEntry.staticEval : nnue_.evaluate(position.sideToMove());
+                rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position.sideToMove());
                 stack.staticEval = history.correct(position, rawStaticEval, rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
 
@@ -649,7 +699,7 @@ private:
                     continue;
                 }
 
-                if (thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
+                if (printInfo_ && thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
                     uciCurrMove_(move, movesTried + 1, thread.rootDepth);
                 }
             }
@@ -928,7 +978,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : nnue_.evaluate(position.sideToMove());
+            return (inCheck) ? 0 : thread.nnue.evaluate(position.sideToMove());
         }
 
         auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -947,7 +997,7 @@ private:
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            rawStaticEval = (tableHit) ? tableEntry.staticEval : nnue_.evaluate(position.sideToMove());
+            rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position.sideToMove());
             stack.staticEval = history.correct(position, rawStaticEval, rootPly);
 
             stack.eval = stack.staticEval;
@@ -1064,8 +1114,7 @@ private:
         historyStack.contEntry = &thread.history.contEntry(thread.position, move);
         historyStack.score = historyScore;
 
-        nnue_.makeMove(thread.position, move);
-
+        thread.nnue.makeMove(thread.position, move);
         thread.position.make(move);
         thread.nodes.store(thread.nodes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
         thread.rootPly++;
@@ -1076,8 +1125,7 @@ private:
         thread.rootPly--;
         thread.position.unmake();
 
-        nnue_.unmakeMove();
-
+        thread.nnue.unmakeMove();
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.playedMove = Move::NULL_MOVE;
         historyStack.movedPiece = Piece::NONE;
