@@ -717,7 +717,7 @@ private:
                     const Int32 lmrDepth = std::max(depth - baseLMR / LMR_REDUCTION_DIVISOR, 0);
                     const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
-                        break;
+                        continue;
                     }
 
                     const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HIST_DIVISOR, NOISY_FP_MARGIN_MIN);
