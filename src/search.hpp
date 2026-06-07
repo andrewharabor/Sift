@@ -536,7 +536,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : thread.nnue.evaluate(position.sideToMove());
+            return (inCheck) ? 0 : thread.nnue.evaluate(position);
         }
 
         SearchStack &nextStack = thread.stack[rootPly + 1];
@@ -564,7 +564,7 @@ private:
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position.sideToMove());
+                rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position);
                 stack.staticEval = history.correct(position, rawStaticEval, rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
 
@@ -978,7 +978,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : thread.nnue.evaluate(position.sideToMove());
+            return (inCheck) ? 0 : thread.nnue.evaluate(position);
         }
 
         auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -997,7 +997,7 @@ private:
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position.sideToMove());
+            rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position);
             stack.staticEval = history.correct(position, rawStaticEval, rootPly);
 
             stack.eval = stack.staticEval;

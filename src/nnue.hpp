@@ -21,6 +21,7 @@
 #include "position.hpp"
 #include "score.hpp"
 #include "simd.hpp"
+#include "tunable.hpp"
 #include "types.hpp"
 #include "utils.hpp"
 
@@ -350,9 +351,11 @@ public:
         }
     }
 
-    inline Int32 evaluate(Color color) noexcept {
+    inline Int32 evaluate(const Position &position) noexcept {
         update(Color::WHITE);
         update(Color::BLACK);
+
+        const Color color = position.sideToMove();
 
         assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
         assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
@@ -413,6 +416,17 @@ public:
         score += static_cast<Int32>(params_->layerBias);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
+
+        Int32 materialAdjust = 0;
+        materialAdjust += EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count();
+        materialAdjust += EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count();
+        materialAdjust += EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count();
+        materialAdjust += EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
+
+        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
+        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE * position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
+        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
+
         return score;
     }
 
@@ -473,7 +487,6 @@ private:
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
     std::array<USize, 2> lastClean_;
-
 };
 
 }

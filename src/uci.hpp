@@ -695,7 +695,7 @@ private:
                 nnue.load(evalFilePath);
             }
             nnue.set(position_);
-            std::cout << nnue.evaluate(position_.sideToMove()) << " cp";
+            std::cout << nnue.evaluate(position_) << " cp";
         }
         std::cout << std::endl;
     }
