@@ -523,7 +523,7 @@ private:
         const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
         if constexpr (!ROOT_NODE) {
-            if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
+            if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
                 alpha = drawScore;
                 if (alpha >= beta) {
                     return alpha;
@@ -966,7 +966,7 @@ private:
 
         const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
 
-        if (position.halfmoveClock() >= 3 && alpha < Score::DRAW && position.upcomingRepetition(rootPly)) {
+        if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
             alpha = drawScore;
             if (alpha >= beta) {
                 return alpha;
