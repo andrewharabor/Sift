@@ -30,11 +30,6 @@ else
 	VERSION := $(shell cat version.txt)
 endif
 
-ifneq (,$(findstring dev,$(VERSION)))
-	COMMIT_HASH := $(shell git rev-parse --short HEAD)
-	VERSION := $(VERSION)-$(COMMIT_HASH)
-endif
-
 CPP_FLAGS += -DBUILD_VERSION=$(VERSION)
 
 ifeq ($(DETECTED_OS),windows)
