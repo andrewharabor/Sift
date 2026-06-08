@@ -12,7 +12,7 @@ namespace Arch {
 static constexpr USize INPUT_SIZE = 768;
 static constexpr USize LAYER_SIZE = 64;
 
-static constexpr Int32 SCALE = 157;
+static constexpr Int32 SCALE = 132;
 static constexpr Int32 QUANT_A = 255;
 static constexpr Int32 QUANT_B = 64;
 
