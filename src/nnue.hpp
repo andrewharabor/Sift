@@ -352,7 +352,7 @@ public:
     }
 
     inline Int32 evaluate(const Position &position) noexcept {
-        Int32 score = forward(position);
+        Int32 score = forward(position.sideToMove());
 
         const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
 
@@ -363,11 +363,9 @@ public:
         return score;
     }
 
-    inline Int32 forward(const Position &position) noexcept {
+    inline Int32 forward(Color color) noexcept {
         update(Color::WHITE);
         update(Color::BLACK);
-
-        const Color color = position.sideToMove();
 
         assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
         assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
