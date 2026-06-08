@@ -352,6 +352,18 @@ public:
     }
 
     inline Int32 evaluate(const Position &position) noexcept {
+        Int32 score = forward(position);
+
+        const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
+
+        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
+        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE - position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
+        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
+
+        return score;
+    }
+
+    inline Int32 forward(const Position &position) noexcept {
         update(Color::WHITE);
         update(Color::BLACK);
 
@@ -416,13 +428,6 @@ public:
         score += static_cast<Int32>(params_->layerBias);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
-
-        const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
-
-        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
-        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE - position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
-        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
-
         return score;
     }
 

@@ -38,7 +38,7 @@ else
 	EVAL_FILE := $(shell cat network.txt)
 endif
 
-CPP_FLAGS += -DEVAL_FILE=nets/$(EVAL_FILE).nnue
+CPP_FLAGS += -DEVAL_FILE=net/$(EVAL_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
 	TARGET_EXEC := Syft$(VERSION).exe
