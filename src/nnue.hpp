@@ -384,6 +384,8 @@ public:
         const LayerVector &friendlyAcc = accumulators_[ply_].data(color);
         const LayerVector &enemyAcc = accumulators_[ply_].data(~color);
 
+        const USize bucketIndex = (position.occupied().count() - 2) / Arch::OUTPUT_BUCKET_DIV;
+
         Int32 score = 0;
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (SIMD::WIDTH * 4) == 0);
@@ -399,14 +401,14 @@ public:
             const RegInt16 enemyClampReg2 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH]), zero, quantA);
             const RegInt16 enemyClampReg3 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 2]), zero, quantA);
             const RegInt16 enemyClampReg4 = SIMD::clampInt16(SIMD::loadInt16(&enemyAcc[i + SIMD::WIDTH * 3]), zero, quantA);
-            const RegInt16 friendlyWeightReg1 = SIMD::loadInt16(&params_->layerWeights[0][i]);
-            const RegInt16 friendlyWeightReg2 = SIMD::loadInt16(&params_->layerWeights[0][i + SIMD::WIDTH]);
-            const RegInt16 friendlyWeightReg3 = SIMD::loadInt16(&params_->layerWeights[0][i + SIMD::WIDTH * 2]);
-            const RegInt16 friendlyWeightReg4 = SIMD::loadInt16(&params_->layerWeights[0][i + SIMD::WIDTH * 3]);
-            const RegInt16 enemyWeightReg1 = SIMD::loadInt16(&params_->layerWeights[1][i]);
-            const RegInt16 enemyWeightReg2 = SIMD::loadInt16(&params_->layerWeights[1][i + SIMD::WIDTH]);
-            const RegInt16 enemyWeightReg3 = SIMD::loadInt16(&params_->layerWeights[1][i + SIMD::WIDTH * 2]);
-            const RegInt16 enemyWeightReg4 = SIMD::loadInt16(&params_->layerWeights[1][i + SIMD::WIDTH * 3]);
+            const RegInt16 friendlyWeightReg1 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][0][i]);
+            const RegInt16 friendlyWeightReg2 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][0][i + SIMD::WIDTH]);
+            const RegInt16 friendlyWeightReg3 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][0][i + SIMD::WIDTH * 2]);
+            const RegInt16 friendlyWeightReg4 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][0][i + SIMD::WIDTH * 3]);
+            const RegInt16 enemyWeightReg1 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][1][i]);
+            const RegInt16 enemyWeightReg2 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][1][i + SIMD::WIDTH]);
+            const RegInt16 enemyWeightReg3 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][1][i + SIMD::WIDTH * 2]);
+            const RegInt16 enemyWeightReg4 = SIMD::loadInt16(&params_->layerWeights[bucketIndex][1][i + SIMD::WIDTH * 3]);
             const RegInt32 friendlyProdReg1 = SIMD::mulAddInt16(friendlyClampReg1, SIMD::mulLoInt16(friendlyClampReg1, friendlyWeightReg1));
             const RegInt32 friendlyProdReg2 = SIMD::mulAddInt16(friendlyClampReg2, SIMD::mulLoInt16(friendlyClampReg2, friendlyWeightReg2));
             const RegInt32 friendlyProdReg3 = SIMD::mulAddInt16(friendlyClampReg3, SIMD::mulLoInt16(friendlyClampReg3, friendlyWeightReg3));
@@ -429,12 +431,12 @@ public:
         for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
             const Int32 friendlyClamp1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
             const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
-            score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(params_->layerWeights[0][i]);
-            score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(params_->layerWeights[1][i]);
+            score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][0][i]);
+            score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][1][i]);
         }
 #endif
         score /= Arch::QUANT_A;
-        score += static_cast<Int32>(params_->layerBias);
+        score += static_cast<Int32>(params_->layerBiases[bucketIndex]);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
         return score;
@@ -493,8 +495,8 @@ private:
     struct Params {
         alignas(64) InputMatrix inputWeights;
         alignas(64) LayerVector inputBiases;
-        alignas(64) DualLayerVector layerWeights;
-        alignas(64) Int16 layerBias;
+        alignas(64) std::array<DualLayerVector, Arch::OUTPUT_BUCKETS> layerWeights;
+        alignas(64) std::array<Int16, Arch::OUTPUT_BUCKETS> layerBiases;
     };
 
     const Params *params_;
