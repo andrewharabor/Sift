@@ -32,6 +32,8 @@ public:
     constexpr bool operator!=(const Color &other) const noexcept { return color_ != other.color_; }
     constexpr operator UInt8() const noexcept { return static_cast<UInt8>(color_); }
 
+    constexpr UInt8 index() const noexcept { return static_cast<UInt8>(color_); }
+
     constexpr ColorEnum internal() const noexcept { return color_; }
 
 private:

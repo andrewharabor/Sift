@@ -101,9 +101,7 @@ public:
 
     constexpr Rank(RankEnum rank, Color color) noexcept : rank_(rank) {
         assert(color != Color::NONE);
-        if (color == Color::BLACK) {
-            rank_ = static_cast<RankEnum>(7 - static_cast<UInt8>(rank_));
-        }
+        rank_ = static_cast<RankEnum>(static_cast<UInt8>(rank_) ^ (static_cast<UInt8>(color) * 7));
     }
 
     constexpr Rank(std::string_view rank) noexcept {
@@ -222,9 +220,7 @@ public:
 
     constexpr Square(SquareEnum square, Color color) noexcept : square_(square) {
         assert(color != Color::NONE);
-        if (color == Color::BLACK) {
-            square_ = static_cast<SquareEnum>(static_cast<UInt8>(square) ^ 56);
-        }
+        square_ = static_cast<SquareEnum>(static_cast<UInt8>(square) ^ (static_cast<UInt8>(color) * 56));
     }
 
     constexpr Square(std::string_view square) noexcept : square_(SquareEnum::NONE) {
@@ -276,6 +272,17 @@ public:
     constexpr Square flipped() const noexcept {
         assert(square_ != SquareEnum::NONE);
         return Square(static_cast<SquareEnum>(index() ^ 56));
+    }
+
+    constexpr Square &mirror() noexcept {
+        assert(square_ != SquareEnum::NONE);
+        square_ = static_cast<SquareEnum>(index() ^ 7);
+        return *this;
+    }
+
+    constexpr Square mirrored() const noexcept {
+        assert(square_ != SquareEnum::NONE);
+        return Square(static_cast<SquareEnum>(index() ^ 7));
     }
 
     constexpr File file() const noexcept {

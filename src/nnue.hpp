@@ -41,29 +41,28 @@ struct InputFeature {
         assert(square != Square::NONE);
     }
 
-    constexpr USize index(Color color) const noexcept {
+    constexpr USize index(Color color, bool mirror) const noexcept {
         assert(color != Color::NONE);
 
-        const USize colorIndex = static_cast<USize>(color);
-        const USize pieceTypeIndex = static_cast<USize>(piece.type());
-        const USize pieceColorIndex = static_cast<USize>(piece.color());
-        const USize squareIndex = (color == Color::BLACK) ? static_cast<USize>(square.flipped().index()) : static_cast<USize>(square.index());
+        Square relativeSquare = (color == Color::WHITE) ? square : square.flipped();
+        relativeSquare = (mirror) ? relativeSquare.mirrored() : relativeSquare;
+        const Piece relativePiece = (piece.color() == color) ? Piece(piece.type(), Color::WHITE) : Piece(piece.type(), Color::BLACK);
 
-        return squareIndex + (pieceTypeIndex + ((pieceColorIndex ^ colorIndex) * 6)) * 64;
+        return static_cast<USize>(relativeSquare) + 64 * static_cast<USize>(relativePiece);
     }
 };
 
 class Accumulator {
 public:
-    enum class FeatureState : UInt8 {
+    enum class AccState : UInt8 {
         CLEAN,
         DIRTY,
         REFRESH
     };
 
-    static constexpr FeatureState CLEAN = FeatureState::CLEAN;
-    static constexpr FeatureState DIRTY = FeatureState::DIRTY;
-    static constexpr FeatureState REFRESH = FeatureState::REFRESH;
+    static constexpr AccState CLEAN = AccState::CLEAN;
+    static constexpr AccState DIRTY = AccState::DIRTY;
+    static constexpr AccState REFRESH = AccState::REFRESH;
 
     constexpr Accumulator() noexcept : data_(), states_({REFRESH, REFRESH}), add_(), sub_(), addSize_(0), subSize_(0) {}
 
@@ -80,12 +79,12 @@ public:
         return data_[static_cast<USize>(color)];
     }
 
-    constexpr FeatureState state(Color color) const noexcept {
+    constexpr AccState state(Color color) const noexcept {
         assert(color != Color::NONE);
         return states_[static_cast<USize>(color)];
     }
 
-    constexpr void mark(Color color, FeatureState newState) noexcept {
+    constexpr void mark(Color color, AccState newState) noexcept {
         assert(color != Color::NONE);
         states_[static_cast<USize>(color)] = newState;
     }
@@ -106,7 +105,7 @@ public:
         sub_[subSize_++] = feature;
     }
 
-    constexpr void update(const InputMatrix &weights, const Accumulator &previous, Color color) noexcept {
+    constexpr void update(const InputMatrix &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
         assert(state(color) == DIRTY);
         assert(previous.state(color) == CLEAN);
         assert(addSize_ >= 1);
@@ -115,10 +114,10 @@ public:
 
         data(color) = previous.data(color);
 
-        const USize add1 = add_[0].index(color);
-        const USize add2 = (addSize_ > 1) ? add_[1].index(color) : 0;
-        const USize sub1 = sub_[0].index(color);
-        const USize sub2 = (subSize_ > 1) ? sub_[1].index(color) : 0;
+        const USize add1 = add_[0].index(color, mirror);
+        const USize add2 = (addSize_ > 1) ? add_[1].index(color, mirror) : 0;
+        const USize sub1 = sub_[0].index(color, mirror);
+        const USize sub2 = (subSize_ > 1) ? sub_[1].index(color, mirror) : 0;
 
         if (addSize_ == 1 && subSize_ == 1) {
             add1Sub1(weights[add1], weights[sub1], color);
@@ -131,7 +130,7 @@ public:
         mark(color, CLEAN);
     }
 
-    constexpr void refresh(const InputMatrix &weights, const LayerVector &biases, const Position &position, Color color) noexcept {
+    constexpr void refresh(const InputMatrix &weights, const LayerVector &biases, const Position &position, Color color, bool mirror) noexcept {
         assert(state(color) == REFRESH);
         assert(color != Color::NONE);
 
@@ -140,7 +139,7 @@ public:
         while (occupied) {
             const Square square = static_cast<Square>(occupied.pop());
             const Piece piece = position.pieceAt(square);
-            const USize featureIndex = InputFeature(piece, square).index(color);
+            const USize featureIndex = InputFeature(piece, square).index(color, mirror);
             add1(weights[featureIndex], color);
         }
 
@@ -149,7 +148,7 @@ public:
 
 private:
     alignas(64) DualLayerVector data_;
-    std::array<FeatureState, 2> states_;
+    std::array<AccState, 2> states_;
     std::array<InputFeature, 2> add_;
     std::array<InputFeature, 2> sub_;
     USize addSize_;
@@ -309,7 +308,7 @@ class NNUE {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    NNUE() noexcept : params_(), accumulators_(), ply_(0), lastClean_() { loadInternal(); }
+    NNUE() noexcept : params_(), accumulators_(), ply_(0) { loadInternal(); }
 
     void loadInternal() noexcept {
         assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_EVAL_FILE_size);
@@ -336,23 +335,33 @@ public:
 
     constexpr void set(const Position &position) noexcept {
         ply_ = 0;
-        lastClean_ = {0, 0};
-        accumulators_[ply_].mark(Color::WHITE, Accumulator::REFRESH);
-        accumulators_[ply_].mark(Color::BLACK, Accumulator::REFRESH);
-        accumulators_[ply_].refresh(params_->inputWeights, params_->inputBiases, position, Color::WHITE);
-        accumulators_[ply_].refresh(params_->inputWeights, params_->inputBiases, position, Color::BLACK);
+        for (Color color : {Color::WHITE, Color::BLACK}) {
+            const bool mirror = needsMirror(position.kingSquare(color));
+            accumulators_[0].mark(color, Accumulator::REFRESH);
+            accumulators_[0].refresh(params_->inputWeights, params_->inputBiases, position, color, mirror);
+        }
     }
 
-    constexpr void update(Color color) noexcept {
-        USize &cleanIdx = lastClean_[static_cast<USize>(color)];
-        while (cleanIdx < ply_) {
-            cleanIdx++;
-            accumulators_[cleanIdx].update(params_->inputWeights, accumulators_[cleanIdx - 1], color);
+    constexpr void update(const Position &position, Color color) noexcept {
+        const bool mirror = needsMirror(position.kingSquare(color));
+
+        if (accumulators_[ply_].state(color) == Accumulator::REFRESH) {
+            accumulators_[ply_].refresh(params_->inputWeights, params_->inputBiases, position, color, mirror);
+        } else {
+            USize idx_ = ply_;
+            while (accumulators_[idx_].state(color) == Accumulator::DIRTY) {
+                idx_--;
+            }
+
+            while (idx_ < ply_) {
+                idx_++;
+                accumulators_[idx_].update(params_->inputWeights, accumulators_[idx_ - 1], color, mirror);
+            }
         }
     }
 
     inline Int32 evaluate(const Position &position) noexcept {
-        Int32 score = forward(position.sideToMove());
+        Int32 score = forward(position);
 
         const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
 
@@ -363,9 +372,11 @@ public:
         return score;
     }
 
-    inline Int32 forward(Color color) noexcept {
-        update(Color::WHITE);
-        update(Color::BLACK);
+    inline Int32 forward(const Position &position) noexcept {
+        update(position, Color::WHITE);
+        update(position, Color::BLACK);
+
+        const Color color = position.sideToMove();
 
         assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
         assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
@@ -437,6 +448,7 @@ public:
         acc.clearFeatures();
 
         const Color color = position.sideToMove();
+        const Piece movedPiece = position.pieceAt(move.from());
         const Piece capturedPiece = position.pieceAt(move.to());
 
         acc.subFeature(InputFeature(position.pieceAt(move.from()), move.from()));
@@ -461,7 +473,13 @@ public:
             acc.subFeature(InputFeature(Piece(PieceType::PAWN, ~color), enPassantSquare));
         }
 
-        if (accumulators_[ply_ - 1].state(color) == Accumulator::REFRESH) {
+        for (Color col : {Color::WHITE, Color::BLACK}) {
+            if (accumulators_[ply_ - 1].state(col) == Accumulator::REFRESH) {
+                acc.mark(col, Accumulator::REFRESH);
+            }
+        }
+
+        if (movedPiece.type() == PieceType::KING && needsMirror(move.to()) != needsMirror(move.from())) {
             acc.mark(color, Accumulator::REFRESH);
         }
     }
@@ -469,7 +487,6 @@ public:
     constexpr void unmakeMove() noexcept {
         assert(ply_ > 0);
         ply_--;
-        lastClean_ = {std::min(lastClean_[0], ply_), std::min(lastClean_[1], ply_)};
     }
 
 private:
@@ -485,7 +502,8 @@ private:
 
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
-    std::array<USize, 2> lastClean_;
+
+    constexpr bool needsMirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
 };
 
 }
