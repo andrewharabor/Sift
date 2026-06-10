@@ -126,13 +126,13 @@ else
 endif
 
 ifeq ($(MODE),release)
-	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
+	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
 	ifneq ($(DETECTED_OS),windows)
 		CXX_FLAGS += -flto
 		LD_FLAGS  += -flto
 	endif
 else ifeq ($(MODE),tune)
-	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops -fomit-frame-pointer
+	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
 	CPP_FLAGS += -DOPEN_BENCH_TUNE
 	ifneq ($(DETECTED_OS),windows)
 		CXX_FLAGS += -flto
