@@ -26,7 +26,7 @@
 #include "utils.hpp"
 
 
-INCBIN(unsigned char, INTERNAL_EVAL_FILE, TOSTRING(EVAL_FILE));
+INCBIN(unsigned char, EMBEDDED_NETWORK, TOSTRING(NETWORK_FILE));
 
 namespace Syft {
 
@@ -414,14 +414,14 @@ public:
             const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
             score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][0][i]);
             score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][1][i]);
-    }
+        }
 #endif
         score /= Arch::QUANT_A;
         score += static_cast<Int32>(params_->layerBiases[bucketIndex]);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
         return score;
-}
+    }
 
     constexpr void makeMove(const Position &position, Move move) noexcept {
         assert(ply_ < MAX_PLY);
@@ -486,10 +486,10 @@ private:
     USize ply_;
 
     void load() noexcept {
-        assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_EVAL_FILE_size);
-        assert(reinterpret_cast<uintptr_t>(INTERNAL_EVAL_FILE_data) % alignof(Params) == 0);
+        assert(64 * ((sizeof(Params) + 63) / 64) == EMBEDDED_NETWORK_size);
+        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(Params) == 0);
 
-        params_ = reinterpret_cast<const Params *>(INTERNAL_EVAL_FILE_data);
+        params_ = reinterpret_cast<const Params *>(EMBEDDED_NETWORK_data);
     }
 
     constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }

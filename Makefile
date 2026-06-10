@@ -33,12 +33,12 @@ endif
 CPP_FLAGS += -DBUILD_VERSION=$(VERSION)
 
 ifeq ($(DETECTED_OS),windows)
-	EVAL_FILE := $(shell type network.txt)
+	NETWORK_FILE := $(shell type network.txt)
 else
-	EVAL_FILE := $(shell cat network.txt)
+	NETWORK_FILE := $(shell cat network.txt)
 endif
 
-CPP_FLAGS += -DEVAL_FILE=net/$(EVAL_FILE).nnue
+CPP_FLAGS += -DNETWORK_FILE=net/$(NETWORK_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
 	TARGET_EXEC := Syft$(VERSION).exe
@@ -161,8 +161,10 @@ engine: $(TARGET_EXEC)
 info:
 	@echo Detected OS: $(DETECTED_OS)
 	@echo Detected compiler: $(CXX)
+	@echo Build version: $(VERSION)
 	@echo Build architecture: $(ARCH)
 	@echo Build mode: $(MODE)
+	@echo Network file: $(NETWORK_FILE)
 
 .PHONY: clean
 clean:
