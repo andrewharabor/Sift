@@ -339,18 +339,6 @@ public:
 
     void multiPV(USize multiPV) noexcept { multiPV_ = multiPV; }
 
-    void loadEvalFile(std::string_view path) noexcept {
-        for (auto &thread : threads_) {
-            thread->nnue.load(path);
-        }
-    }
-
-    void loadInternalEvalFile() noexcept {
-        for (auto &thread : threads_) {
-            thread->nnue.loadInternal();
-        }
-    }
-
 private:
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
 

@@ -310,30 +310,7 @@ class NNUE {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    NNUE() noexcept : params_(), accumulators_(), ply_(0) { loadInternal(); }
-
-    void loadInternal() noexcept {
-        assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_EVAL_FILE_size);
-        assert(reinterpret_cast<uintptr_t>(INTERNAL_EVAL_FILE_data) % alignof(Params) == 0);
-
-        params_ = reinterpret_cast<const Params *>(INTERNAL_EVAL_FILE_data);
-    }
-
-    void load(std::string_view path) noexcept {
-        std::ifstream file = std::ifstream(path.data(), std::ios::binary);
-
-        assert(file.is_open());
-
-#if !defined(NDEBUG)
-        file.seekg(0, std::ios::end);
-        const std::streamsize fileSize = file.tellg();
-        assert(64 * ((sizeof(Params) + 63) / 64) == fileSize);
-        file.seekg(0, std::ios::beg);
-#endif
-
-        file.read(reinterpret_cast<char *>(&loadedParams_), sizeof(Params));
-        params_ = &loadedParams_;
-    }
+    NNUE() noexcept : params_(), accumulators_(), ply_(0) { load(); }
 
     constexpr void set(const Position &position) noexcept {
         ply_ = 0;
@@ -353,7 +330,7 @@ public:
             accumulators_[ply_].refresh(params_->featureWeights[kBucket], params_->featureBiases, position, color, mirr);
         } else {
             USize idx_ = ply_;
-            while (accumulators_[idx_].state(color) == Accumulator::DIRTY) {
+            while (idx_ > 0 && accumulators_[idx_].state(color) == Accumulator::DIRTY) {
                 idx_--;
             }
 
@@ -437,14 +414,14 @@ public:
             const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
             score += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][0][i]);
             score += enemyClamp1 * enemyClamp1 * static_cast<Int32>(params_->layerWeights[bucketIndex][1][i]);
-        }
+    }
 #endif
         score /= Arch::QUANT_A;
         score += static_cast<Int32>(params_->layerBiases[bucketIndex]);
         score *= Arch::SCALE;
         score /= (Arch::QUANT_A * Arch::QUANT_B);
         return score;
-    }
+}
 
     constexpr void makeMove(const Position &position, Move move) noexcept {
         assert(ply_ < MAX_PLY);
@@ -504,10 +481,16 @@ private:
     };
 
     const Params *params_;
-    Params loadedParams_;
 
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
+
+    void load() noexcept {
+        assert(64 * ((sizeof(Params) + 63) / 64) == INTERNAL_EVAL_FILE_size);
+        assert(reinterpret_cast<uintptr_t>(INTERNAL_EVAL_FILE_data) % alignof(Params) == 0);
+
+        params_ = reinterpret_cast<const Params *>(INTERNAL_EVAL_FILE_data);
+    }
 
     constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
 

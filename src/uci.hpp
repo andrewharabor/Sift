@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -76,8 +77,6 @@ public:
     static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
 
     static constexpr bool DEFAULT_SOFT_NODES = false;
-
-    static constexpr std::string_view DEFAULT_EVAL_FILE = "<internal>";
 
     Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
     Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
@@ -154,16 +153,6 @@ public:
         options_.push_back(Option("ShowWDL", CheckOption(Option::DEFAULT_SHOW_WDL), []([[maybe_unused]] const Option &option) {}));
         options_.push_back(Option("MoveOverhead", SpinOption(Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS), []([[maybe_unused]] const Option &option) {}));
         options_.push_back(Option("SoftNodes", CheckOption(Option::DEFAULT_SOFT_NODES), []([[maybe_unused]] const Option &option) {}));
-
-        auto evalFileCallback = [this](const Option &option) {
-            if (option.stringValue() != Option::DEFAULT_EVAL_FILE) {
-                search_.loadEvalFile(option.stringValue());
-            } else {
-                search_.loadInternalEvalFile();
-            }
-        };
-
-        options_.push_back(Option("EvalFile", StringOption(std::string(Option::DEFAULT_EVAL_FILE), std::string(Option::DEFAULT_EVAL_FILE)), evalFileCallback));
 
 #if defined(OPEN_BENCH_TUNE)
         for (Tunable &tunable : TUNABLES) {
@@ -689,11 +678,7 @@ private:
         if (position_.inCheck()) {
             std::cout << "(none)";
         } else {
-            NNUE nnue;
-            std::string evalFilePath = options_[optionIndex("EvalFile")].stringValue();
-            if (evalFilePath != Option::DEFAULT_EVAL_FILE) {
-                nnue.load(evalFilePath);
-            }
+            NNUE nnue = NNUE();
             nnue.set(position_);
             std::cout << nnue.evaluate(position_) << " cp";
         }
