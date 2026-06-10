@@ -29,4 +29,4 @@ int main(int argc, const char *argv[]) {
     uci.run();
 
     return 0;
-}
+        }
