@@ -46,7 +46,9 @@ struct InputFeature {
 
         Square relativeSquare = (color == Color::WHITE) ? square : square.flipped();
         relativeSquare = (mirror) ? relativeSquare.mirrored() : relativeSquare;
-        const Piece relativePiece = (piece.color() == color) ? Piece(piece.type(), Color::WHITE) : Piece(piece.type(), Color::BLACK);
+        Piece relativePiece = (piece.color() == color) ? Piece(piece.type(), Color::WHITE) : Piece(piece.type(), Color::BLACK);
+        // TODO: king-plane merging
+        // relativePiece = (piece.type() == PieceType::KING) ? Piece::WHITE_KING : relativePiece;
 
         return static_cast<USize>(relativeSquare) + 64 * static_cast<USize>(relativePiece);
     }
@@ -105,7 +107,7 @@ public:
         sub_[subSize_++] = feature;
     }
 
-    constexpr void update(const InputMatrix &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
+    constexpr void update(const FeatureMatrix &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
         assert(state(color) == DIRTY);
         assert(previous.state(color) == CLEAN);
         assert(addSize_ >= 1);
@@ -130,7 +132,7 @@ public:
         mark(color, CLEAN);
     }
 
-    constexpr void refresh(const InputMatrix &weights, const LayerVector &biases, const Position &position, Color color, bool mirror) noexcept {
+    constexpr void refresh(const FeatureMatrix &weights, const LayerVector &biases, const Position &position, Color color, bool mirror) noexcept {
         assert(state(color) == REFRESH);
         assert(color != Color::NONE);
 
@@ -336,17 +338,19 @@ public:
     constexpr void set(const Position &position) noexcept {
         ply_ = 0;
         for (Color color : {Color::WHITE, Color::BLACK}) {
-            const bool mirror = needsMirror(position.kingSquare(color));
+            const bool mirr = mirror(position.kingSquare(color));
+            const USize kBucket = kingBucket(position.kingSquare(color), color);
             accumulators_[0].mark(color, Accumulator::REFRESH);
-            accumulators_[0].refresh(params_->inputWeights, params_->inputBiases, position, color, mirror);
+            accumulators_[0].refresh(params_->featureWeights[kBucket], params_->featureBiases, position, color, mirr);
         }
     }
 
     constexpr void update(const Position &position, Color color) noexcept {
-        const bool mirror = needsMirror(position.kingSquare(color));
+        const bool mirr = mirror(position.kingSquare(color));
+        const bool kBucket = kingBucket(position.kingSquare(color), color);
 
         if (accumulators_[ply_].state(color) == Accumulator::REFRESH) {
-            accumulators_[ply_].refresh(params_->inputWeights, params_->inputBiases, position, color, mirror);
+            accumulators_[ply_].refresh(params_->featureWeights[kBucket], params_->featureBiases, position, color, mirr);
         } else {
             USize idx_ = ply_;
             while (accumulators_[idx_].state(color) == Accumulator::DIRTY) {
@@ -355,7 +359,7 @@ public:
 
             while (idx_ < ply_) {
                 idx_++;
-                accumulators_[idx_].update(params_->inputWeights, accumulators_[idx_ - 1], color, mirror);
+                accumulators_[idx_].update(params_->featureWeights[kBucket], accumulators_[idx_ - 1], color, mirr);
             }
         }
     }
@@ -481,7 +485,7 @@ public:
             }
         }
 
-        if (movedPiece.type() == PieceType::KING && needsMirror(move.to()) != needsMirror(move.from())) {
+        if ((movedPiece.type() == PieceType::KING && mirror(move.to()) != mirror(move.from())) || (kingBucket(move.to(), color) != kingBucket(move.from(), color))) {
             acc.mark(color, Accumulator::REFRESH);
         }
     }
@@ -493,8 +497,8 @@ public:
 
 private:
     struct Params {
-        alignas(64) InputMatrix inputWeights;
-        alignas(64) LayerVector inputBiases;
+        alignas(64) std::array<FeatureMatrix, Arch::KING_BUCKETS> featureWeights;
+        alignas(64) LayerVector featureBiases;
         alignas(64) std::array<DualLayerVector, Arch::OUTPUT_BUCKETS> layerWeights;
         alignas(64) std::array<Int16, Arch::OUTPUT_BUCKETS> layerBiases;
     };
@@ -505,7 +509,14 @@ private:
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
 
-    constexpr bool needsMirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
+    constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
+
+    constexpr USize kingBucket(Square kingSquare, Color color) const noexcept {
+        const bool mirr = mirror(kingSquare);
+        Square relativeSquare = (mirr) ? kingSquare.mirrored() : kingSquare;
+        relativeSquare = (color == Color::WHITE) ? relativeSquare : relativeSquare.flipped();
+        return Arch::KING_BUCKET_LAYOUT[4 * static_cast<USize>(relativeSquare.rank()) + static_cast<USize>(relativeSquare.file())];
+    }
 };
 
 }
