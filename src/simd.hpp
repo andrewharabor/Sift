@@ -280,6 +280,203 @@ public:
 
 #endif
 
+    static inline void add1(LayerVector &data, const LayerVector &add1) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = addInt16(dataReg1, loadInt16(&add1[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add1[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add1[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add1[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] += add1[i];
+        }
+#endif
+    }
+
+    static inline void sub1(LayerVector &data, const LayerVector &sub1) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub1[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub1[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub1[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub1[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] -= sub1[i];
+        }
+#endif
+    }
+
+    static inline void add1Sub1(LayerVector &data, const LayerVector &add1, const LayerVector &sub1) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = addInt16(dataReg1, loadInt16(&add1[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add1[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add1[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add1[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub1[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub1[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub1[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub1[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] += add1[i] - sub1[i];
+        }
+#endif
+    }
+
+    static inline void add1Sub2(LayerVector &data, const LayerVector &add1, const LayerVector &sub1, const LayerVector &sub2) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = addInt16(dataReg1, loadInt16(&add1[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add1[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add1[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add1[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub1[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub1[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub1[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub1[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub2[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub2[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub2[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub2[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] += add1[i] - sub1[i] - sub2[i];
+        }
+#endif
+    }
+
+    static inline void add2Sub2(LayerVector &data, const LayerVector &add1, const LayerVector &add2, const LayerVector &sub1, const LayerVector &sub2) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = addInt16(dataReg1, loadInt16(&add1[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add1[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add1[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add1[i + WIDTH * 3]));
+            dataReg1 = addInt16(dataReg1, loadInt16(&add2[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add2[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add2[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add2[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub1[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub1[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub1[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub1[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub2[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub2[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub2[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub2[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
+        }
+#endif
+    }
+
+    static inline Int32 activate(const LayerVector &friendlyAcc, const LayerVector &enemyAcc, const DualLayerVector &weights) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        const RegInt16 zero = zeroInt16();
+        const RegInt16 quantA = setInt16(static_cast<Int16>(Arch::QUANT_A));
+        RegInt32 sum = zeroInt32();
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            const RegInt16 friendlyClampReg1 = clampInt16(loadInt16(&friendlyAcc[i]), zero, quantA);
+            const RegInt16 friendlyClampReg2 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH]), zero, quantA);
+            const RegInt16 friendlyClampReg3 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 2]), zero, quantA);
+            const RegInt16 friendlyClampReg4 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 3]), zero, quantA);
+            const RegInt16 enemyClampReg1 = clampInt16(loadInt16(&enemyAcc[i]), zero, quantA);
+            const RegInt16 enemyClampReg2 = clampInt16(loadInt16(&enemyAcc[i + WIDTH]), zero, quantA);
+            const RegInt16 enemyClampReg3 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 2]), zero, quantA);
+            const RegInt16 enemyClampReg4 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 3]), zero, quantA);
+            const RegInt16 friendlyWeightReg1 = loadInt16(&weights[0][i]);
+            const RegInt16 friendlyWeightReg2 = loadInt16(&weights[0][i + WIDTH]);
+            const RegInt16 friendlyWeightReg3 = loadInt16(&weights[0][i + WIDTH * 2]);
+            const RegInt16 friendlyWeightReg4 = loadInt16(&weights[0][i + WIDTH * 3]);
+            const RegInt16 enemyWeightReg1 = loadInt16(&weights[1][i]);
+            const RegInt16 enemyWeightReg2 = loadInt16(&weights[1][i + WIDTH]);
+            const RegInt16 enemyWeightReg3 = loadInt16(&weights[1][i + WIDTH * 2]);
+            const RegInt16 enemyWeightReg4 = loadInt16(&weights[1][i + WIDTH * 3]);
+            const RegInt32 friendlyProdReg1 = mulAddInt16(friendlyClampReg1, mulLoInt16(friendlyClampReg1, friendlyWeightReg1));
+            const RegInt32 friendlyProdReg2 = mulAddInt16(friendlyClampReg2, mulLoInt16(friendlyClampReg2, friendlyWeightReg2));
+            const RegInt32 friendlyProdReg3 = mulAddInt16(friendlyClampReg3, mulLoInt16(friendlyClampReg3, friendlyWeightReg3));
+            const RegInt32 friendlyProdReg4 = mulAddInt16(friendlyClampReg4, mulLoInt16(friendlyClampReg4, friendlyWeightReg4));
+            const RegInt32 enemyProdReg1 = mulAddInt16(enemyClampReg1, mulLoInt16(enemyClampReg1, enemyWeightReg1));
+            const RegInt32 enemyProdReg2 = mulAddInt16(enemyClampReg2, mulLoInt16(enemyClampReg2, enemyWeightReg2));
+            const RegInt32 enemyProdReg3 = mulAddInt16(enemyClampReg3, mulLoInt16(enemyClampReg3, enemyWeightReg3));
+            const RegInt32 enemyProdReg4 = mulAddInt16(enemyClampReg4, mulLoInt16(enemyClampReg4, enemyWeightReg4));
+            sum = addInt32(sum, friendlyProdReg1);
+            sum = addInt32(sum, friendlyProdReg2);
+            sum = addInt32(sum, friendlyProdReg3);
+            sum = addInt32(sum, friendlyProdReg4);
+            sum = addInt32(sum, enemyProdReg1);
+            sum = addInt32(sum, enemyProdReg2);
+            sum = addInt32(sum, enemyProdReg3);
+            sum = addInt32(sum, enemyProdReg4);
+        }
+        return horizAddInt32(sum);
+#else
+        Int32 sum = 0;
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            const Int32 friendlyClamp1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
+            const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
+            sum += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(weights[0][i]);
+            sum += enemyClamp1 * enemyClamp1 * static_cast<Int32>(weights[1][i]);
+        }
+        return sum;
+#endif
+    }
+
 };
 
 }
