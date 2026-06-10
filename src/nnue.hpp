@@ -347,7 +347,7 @@ public:
 
     constexpr void update(const Position &position, Color color) noexcept {
         const bool mirr = mirror(position.kingSquare(color));
-        const bool kBucket = kingBucket(position.kingSquare(color), color);
+        const USize kBucket = kingBucket(position.kingSquare(color), color);
 
         if (accumulators_[ply_].state(color) == Accumulator::REFRESH) {
             accumulators_[ply_].refresh(params_->featureWeights[kBucket], params_->featureBiases, position, color, mirr);
@@ -485,7 +485,7 @@ public:
             }
         }
 
-        if ((movedPiece.type() == PieceType::KING && mirror(move.to()) != mirror(move.from())) || (kingBucket(move.to(), color) != kingBucket(move.from(), color))) {
+        if (movedPiece.type() == PieceType::KING && ((mirror(move.to()) != mirror(move.from())) || (kingBucket(move.to(), color) != kingBucket(move.from(), color)))) {
             acc.mark(color, Accumulator::REFRESH);
         }
     }
