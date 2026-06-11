@@ -401,7 +401,7 @@ private:
     struct Params {
         alignas(64) std::array<FeatureMatrix, Arch::KING_BUCKETS> featureWeights;
         alignas(64) LayerVector featureBiases;
-        alignas(64) std::array<DualLayerVector, Arch::OUTPUT_BUCKETS> layerWeights;
+        alignas(64) std::array<LayerVector, Arch::OUTPUT_BUCKETS> layerWeights;
         alignas(64) std::array<Int16, Arch::OUTPUT_BUCKETS> layerBiases;
     };
 

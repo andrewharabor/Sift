@@ -480,37 +480,45 @@ public:
 #endif
     }
 
-    static inline Int32 activate(const LayerVector &friendlyAcc, const LayerVector &enemyAcc, const DualLayerVector &weights) noexcept {
+    static inline Int32 activate(const LayerVector &friendlyAcc, const LayerVector &enemyAcc, const LayerVector &weights) noexcept {
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
         const RegInt16 zero = zeroInt16();
         const RegInt16 quantA = setInt16(static_cast<Int16>(Arch::QUANT_A));
         RegInt32 sum = zeroInt32();
-        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
-            const RegInt16 friendlyClampReg1 = clampInt16(loadInt16(&friendlyAcc[i]), zero, quantA);
-            const RegInt16 friendlyClampReg2 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH]), zero, quantA);
-            const RegInt16 friendlyClampReg3 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 2]), zero, quantA);
-            const RegInt16 friendlyClampReg4 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 3]), zero, quantA);
-            const RegInt16 enemyClampReg1 = clampInt16(loadInt16(&enemyAcc[i]), zero, quantA);
-            const RegInt16 enemyClampReg2 = clampInt16(loadInt16(&enemyAcc[i + WIDTH]), zero, quantA);
-            const RegInt16 enemyClampReg3 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 2]), zero, quantA);
-            const RegInt16 enemyClampReg4 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 3]), zero, quantA);
-            const RegInt16 friendlyWeightReg1 = loadInt16(&weights[0][i]);
-            const RegInt16 friendlyWeightReg2 = loadInt16(&weights[0][i + WIDTH]);
-            const RegInt16 friendlyWeightReg3 = loadInt16(&weights[0][i + WIDTH * 2]);
-            const RegInt16 friendlyWeightReg4 = loadInt16(&weights[0][i + WIDTH * 3]);
-            const RegInt16 enemyWeightReg1 = loadInt16(&weights[1][i]);
-            const RegInt16 enemyWeightReg2 = loadInt16(&weights[1][i + WIDTH]);
-            const RegInt16 enemyWeightReg3 = loadInt16(&weights[1][i + WIDTH * 2]);
-            const RegInt16 enemyWeightReg4 = loadInt16(&weights[1][i + WIDTH * 3]);
-            const RegInt32 friendlyProdReg1 = mulAddInt16(friendlyClampReg1, mulLoInt16(friendlyClampReg1, friendlyWeightReg1));
-            const RegInt32 friendlyProdReg2 = mulAddInt16(friendlyClampReg2, mulLoInt16(friendlyClampReg2, friendlyWeightReg2));
-            const RegInt32 friendlyProdReg3 = mulAddInt16(friendlyClampReg3, mulLoInt16(friendlyClampReg3, friendlyWeightReg3));
-            const RegInt32 friendlyProdReg4 = mulAddInt16(friendlyClampReg4, mulLoInt16(friendlyClampReg4, friendlyWeightReg4));
-            const RegInt32 enemyProdReg1 = mulAddInt16(enemyClampReg1, mulLoInt16(enemyClampReg1, enemyWeightReg1));
-            const RegInt32 enemyProdReg2 = mulAddInt16(enemyClampReg2, mulLoInt16(enemyClampReg2, enemyWeightReg2));
-            const RegInt32 enemyProdReg3 = mulAddInt16(enemyClampReg3, mulLoInt16(enemyClampReg3, enemyWeightReg3));
-            const RegInt32 enemyProdReg4 = mulAddInt16(enemyClampReg4, mulLoInt16(enemyClampReg4, enemyWeightReg4));
+        for (USize i = 0; i < Arch::LAYER_SIZE / 2; i += WIDTH * 4) {
+            const RegInt16 friendlyClamp1Reg1 = clampInt16(loadInt16(&friendlyAcc[i]), zero, quantA);
+            const RegInt16 friendlyClamp1Reg2 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH]), zero, quantA);
+            const RegInt16 friendlyClamp1Reg3 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 2]), zero, quantA);
+            const RegInt16 friendlyClamp1Reg4 = clampInt16(loadInt16(&friendlyAcc[i + WIDTH * 3]), zero, quantA);
+            const RegInt16 friendlyClamp2Reg1 = clampInt16(loadInt16(&friendlyAcc[i + Arch::LAYER_SIZE / 2]), zero, quantA);
+            const RegInt16 friendlyClamp2Reg2 = clampInt16(loadInt16(&friendlyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH]), zero, quantA);
+            const RegInt16 friendlyClamp2Reg3 = clampInt16(loadInt16(&friendlyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH * 2]), zero, quantA);
+            const RegInt16 friendlyClamp2Reg4 = clampInt16(loadInt16(&friendlyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH * 3]), zero, quantA);
+            const RegInt16 enemyClamp1Reg1 = clampInt16(loadInt16(&enemyAcc[i]), zero, quantA);
+            const RegInt16 enemyClamp1Reg2 = clampInt16(loadInt16(&enemyAcc[i + WIDTH]), zero, quantA);
+            const RegInt16 enemyClamp1Reg3 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 2]), zero, quantA);
+            const RegInt16 enemyClamp1Reg4 = clampInt16(loadInt16(&enemyAcc[i + WIDTH * 3]), zero, quantA);
+            const RegInt16 enemyClamp2Reg1 = clampInt16(loadInt16(&enemyAcc[i + Arch::LAYER_SIZE / 2]), zero, quantA);
+            const RegInt16 enemyClamp2Reg2 = clampInt16(loadInt16(&enemyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH]), zero, quantA);
+            const RegInt16 enemyClamp2Reg3 = clampInt16(loadInt16(&enemyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH * 2]), zero, quantA);
+            const RegInt16 enemyClamp2Reg4 = clampInt16(loadInt16(&enemyAcc[i + Arch::LAYER_SIZE / 2 + WIDTH * 3]), zero, quantA);
+            const RegInt16 friendlyWeightReg1 = loadInt16(&weights[i]);
+            const RegInt16 friendlyWeightReg2 = loadInt16(&weights[i + WIDTH]);
+            const RegInt16 friendlyWeightReg3 = loadInt16(&weights[i + WIDTH * 2]);
+            const RegInt16 friendlyWeightReg4 = loadInt16(&weights[i + WIDTH * 3]);
+            const RegInt16 enemyWeightReg1 = loadInt16(&weights[i + Arch::LAYER_SIZE / 2]);
+            const RegInt16 enemyWeightReg2 = loadInt16(&weights[i + Arch::LAYER_SIZE / 2 + WIDTH]);
+            const RegInt16 enemyWeightReg3 = loadInt16(&weights[i + Arch::LAYER_SIZE / 2 + WIDTH * 2]);
+            const RegInt16 enemyWeightReg4 = loadInt16(&weights[i + Arch::LAYER_SIZE / 2 + WIDTH * 3]);
+            const RegInt32 friendlyProdReg1 = mulAddInt16(friendlyClamp1Reg1, mulLoInt16(friendlyClamp2Reg1, friendlyWeightReg1));
+            const RegInt32 friendlyProdReg2 = mulAddInt16(friendlyClamp1Reg2, mulLoInt16(friendlyClamp2Reg2, friendlyWeightReg2));
+            const RegInt32 friendlyProdReg3 = mulAddInt16(friendlyClamp1Reg3, mulLoInt16(friendlyClamp2Reg3, friendlyWeightReg3));
+            const RegInt32 friendlyProdReg4 = mulAddInt16(friendlyClamp1Reg4, mulLoInt16(friendlyClamp2Reg4, friendlyWeightReg4));
+            const RegInt32 enemyProdReg1 = mulAddInt16(enemyClamp1Reg1, mulLoInt16(enemyClamp2Reg1, enemyWeightReg1));
+            const RegInt32 enemyProdReg2 = mulAddInt16(enemyClamp1Reg2, mulLoInt16(enemyClamp2Reg2, enemyWeightReg2));
+            const RegInt32 enemyProdReg3 = mulAddInt16(enemyClamp1Reg3, mulLoInt16(enemyClamp2Reg3, enemyWeightReg3));
+            const RegInt32 enemyProdReg4 = mulAddInt16(enemyClamp1Reg4, mulLoInt16(enemyClamp2Reg4, enemyWeightReg4));
             sum = addInt32(sum, friendlyProdReg1);
             sum = addInt32(sum, friendlyProdReg2);
             sum = addInt32(sum, friendlyProdReg3);
@@ -523,11 +531,13 @@ public:
         return horizAddInt32(sum);
 #else
         Int32 sum = 0;
-        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+        for (USize i = 0; i < Arch::LAYER_SIZE / 2; i++) {
             const Int32 friendlyClamp1 = std::clamp(static_cast<Int32>(friendlyAcc[i]), 0, Arch::QUANT_A);
+            const Int32 friendlyClamp2 = std::clamp(static_cast<Int32>(friendlyAcc[i + Arch::LAYER_SIZE / 2]), 0, Arch::QUANT_A);
             const Int32 enemyClamp1 = std::clamp(static_cast<Int32>(enemyAcc[i]), 0, Arch::QUANT_A);
-            sum += friendlyClamp1 * friendlyClamp1 * static_cast<Int32>(weights[0][i]);
-            sum += enemyClamp1 * enemyClamp1 * static_cast<Int32>(weights[1][i]);
+            const Int32 enemyClamp2 = std::clamp(static_cast<Int32>(enemyAcc[i + Arch::LAYER_SIZE / 2]), 0, Arch::QUANT_A);
+            sum += friendlyClamp1 * friendlyClamp2 * weights[i];
+            sum += enemyClamp1 * enemyClamp2 * weights[i + Arch::LAYER_SIZE / 2];
         }
         return sum;
 #endif
