@@ -101,12 +101,24 @@ struct RefreshEntry {
             occupancyBitboards[static_cast<USize>(pieceColor)] = position.friendly(pieceColor);
         }
 
-        for (USize i = 0; i < addSize; i++) {
-            SIMD::add1(data, weights[add[i]]);
+        while (addSize >= 2) {
+            SIMD::add2(data, weights[add[addSize - 1]], weights[add[addSize - 2]]);
+            addSize -= 2;
         }
 
-        for (USize i = 0; i < subSize; i++) {
-            SIMD::sub1(data, weights[sub[i]]);
+        while (addSize >= 1) {
+            SIMD::add1(data, weights[add[addSize - 1]]);
+            addSize--;
+        }
+
+        while (subSize >= 2) {
+            SIMD::sub2(data, weights[sub[subSize - 1]], weights[sub[subSize - 2]]);
+            subSize -= 2;
+        }
+
+        while (subSize >= 1) {
+            SIMD::sub1(data, weights[sub[subSize - 1]]);
+            subSize--;
         }
     }
 

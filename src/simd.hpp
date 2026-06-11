@@ -328,6 +328,62 @@ public:
 #endif
     }
 
+    static inline void add2(LayerVector &data, const LayerVector &add1, const LayerVector &add2) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = addInt16(dataReg1, loadInt16(&add1[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add1[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add1[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add1[i + WIDTH * 3]));
+            dataReg1 = addInt16(dataReg1, loadInt16(&add2[i]));
+            dataReg2 = addInt16(dataReg2, loadInt16(&add2[i + WIDTH]));
+            dataReg3 = addInt16(dataReg3, loadInt16(&add2[i + WIDTH * 2]));
+            dataReg4 = addInt16(dataReg4, loadInt16(&add2[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] += add1[i] + add2[i];
+        }
+#endif
+    }
+
+    static inline void sub2(LayerVector &data, const LayerVector &sub1, const LayerVector &sub2) noexcept {
+#if defined(USE_SIMD)
+        static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
+        for (USize i = 0; i < Arch::LAYER_SIZE; i += WIDTH * 4) {
+            RegInt16 dataReg1 = loadInt16(&data[i]);
+            RegInt16 dataReg2 = loadInt16(&data[i + WIDTH]);
+            RegInt16 dataReg3 = loadInt16(&data[i + WIDTH * 2]);
+            RegInt16 dataReg4 = loadInt16(&data[i + WIDTH * 3]);
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub1[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub1[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub1[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub1[i + WIDTH * 3]));
+            dataReg1 = subInt16(dataReg1, loadInt16(&sub2[i]));
+            dataReg2 = subInt16(dataReg2, loadInt16(&sub2[i + WIDTH]));
+            dataReg3 = subInt16(dataReg3, loadInt16(&sub2[i + WIDTH * 2]));
+            dataReg4 = subInt16(dataReg4, loadInt16(&sub2[i + WIDTH * 3]));
+            storeInt16(&data[i], dataReg1);
+            storeInt16(&data[i + WIDTH], dataReg2);
+            storeInt16(&data[i + WIDTH * 2], dataReg3);
+            storeInt16(&data[i + WIDTH * 3], dataReg4);
+        }
+#else
+        for (USize i = 0; i < Arch::LAYER_SIZE; i++) {
+            data[i] -= sub1[i] + sub2[i];
+        }
+#endif
+    }
+
     static inline void add1Sub1(LayerVector &data, const LayerVector &add1, const LayerVector &sub1) noexcept {
 #if defined(USE_SIMD)
         static_assert(Arch::LAYER_SIZE % (WIDTH * 4) == 0);
