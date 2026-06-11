@@ -49,8 +49,7 @@ struct InputFeature {
         Square relativeSquare = (color == Color::WHITE) ? square : square.flipped();
         relativeSquare = (mirror) ? relativeSquare.mirrored() : relativeSquare;
         Piece relativePiece = (piece.color() == color) ? Piece(piece.type(), Color::WHITE) : Piece(piece.type(), Color::BLACK);
-        // TODO: king-plane merging
-        // relativePiece = (piece.type() == PieceType::KING) ? Piece::WHITE_KING : relativePiece;
+        relativePiece = (piece.type() == PieceType::KING) ? Piece::WHITE_KING : relativePiece;
 
         return static_cast<USize>(relativeSquare) + 64 * static_cast<USize>(relativePiece);
     }
@@ -359,6 +358,43 @@ public:
     constexpr void unmakeMove() noexcept {
         assert(ply_ > 0);
         ply_--;
+    }
+
+    Int32 scale(std::string_view path) noexcept {
+        static constexpr Float64 TARGET_AVG_ABS_EVAL = 308.274;
+
+        std::ifstream file = std::ifstream(path.data());
+        if (!file.is_open()) {
+            return 0;
+        }
+
+        UInt64 total = 0;
+        UInt64 count = 0;
+
+        std::string line;
+        while (std::getline(file, line)) {
+            std::istringstream stream = std::istringstream(line);
+            std::string fen;
+            for (USize i = 0; i < 6; i++) {
+                if (i > 0) {
+                    fen += " ";
+                }
+                std::string token;
+                stream >> token;
+                fen += token;
+            }
+
+            Position position = Position(fen);
+            set(position);
+            total += static_cast<UInt64>(std::abs(forward(position)));
+            count++;
+        }
+
+        file.close();
+
+        Float64 avgAbsEval = static_cast<Float64>(total) / static_cast<Float64>(count);
+        Float64 scale = TARGET_AVG_ABS_EVAL * Arch::SCALE / avgAbsEval;
+        return static_cast<Int32>(std::round(scale));
     }
 
 private:
