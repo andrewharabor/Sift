@@ -582,6 +582,9 @@ private:
         std::cout << "info nodes " << nodes;
         std::cout << " time " << time;
         std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
+#if defined(MEASURE_SPARSITY)
+        std::cout << " sparsity " << NNUE::saveFTActs("ft-acts.json");
+#endif
         std::cout << std::endl;
     }
 

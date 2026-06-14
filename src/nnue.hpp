@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <fstream>
+#include <sstream>
 #include <string_view>
 
 #define INCBIN_PREFIX
@@ -56,13 +57,13 @@ struct InputFeature {
 };
 
 struct RefreshEntry {
-    alignas(64) LayerVector data;
+    alignas(64) std::array<Int16, Arch::L1_SIZE> data;
 
     constexpr RefreshEntry() noexcept : data(), piecesBitboards(), occupancyBitboards() {}
 
-    constexpr void init(const LayerVector &biases) noexcept { data = biases; }
+    constexpr void init(const std::array<Int16, Arch::L1_SIZE> &biases) noexcept { data = biases; }
 
-    constexpr void update(const FeatureMatrix &weights, const Position &position, Color color, bool mirror) noexcept {
+    constexpr void update(const MultiArray<Int16, Arch::INPUT_SIZE, Arch::L1_SIZE> &weights, const Position &position, Color color, bool mirror) noexcept {
         std::array<USize, MAX_CHANGES> add;
         std::array<USize, MAX_CHANGES> sub;
         USize addSize = 0;
@@ -101,22 +102,22 @@ struct RefreshEntry {
         }
 
         while (addSize >= 2) {
-            SIMD::add2(data, weights[add[addSize - 1]], weights[add[addSize - 2]]);
+            FusedUpdate::add2(data, weights[add[addSize - 1]], weights[add[addSize - 2]]);
             addSize -= 2;
         }
 
         while (addSize >= 1) {
-            SIMD::add1(data, weights[add[addSize - 1]]);
+            FusedUpdate::add1(data, weights[add[addSize - 1]]);
             addSize--;
         }
 
         while (subSize >= 2) {
-            SIMD::sub2(data, weights[sub[subSize - 1]], weights[sub[subSize - 2]]);
+            FusedUpdate::sub2(data, weights[sub[subSize - 1]], weights[sub[subSize - 2]]);
             subSize -= 2;
         }
 
         while (subSize >= 1) {
-            SIMD::sub1(data, weights[sub[subSize - 1]]);
+            FusedUpdate::sub1(data, weights[sub[subSize - 1]]);
             subSize--;
         }
     }
@@ -147,15 +148,15 @@ public:
 
     constexpr Accumulator() noexcept : data_(), states_({REFRESH, REFRESH}), add_(), sub_(), addSize_(0), subSize_(0) {}
 
-    constexpr const DualLayerVector &data() const noexcept { return data_; }
-    constexpr DualLayerVector &data() noexcept { return data_; }
+    constexpr const MultiArray<Int16, 2, Arch::L1_SIZE> &data() const noexcept { return data_; }
+    constexpr MultiArray<Int16, 2, Arch::L1_SIZE> &data() noexcept { return data_; }
 
-    constexpr const LayerVector &data(Color color) const noexcept {
+    constexpr const std::array<Int16, Arch::L1_SIZE> &data(Color color) const noexcept {
         assert(color != Color::NONE);
         return data_[static_cast<USize>(color)];
     }
 
-    constexpr LayerVector &data(Color color) noexcept {
+    constexpr std::array<Int16, Arch::L1_SIZE> &data(Color color) noexcept {
         assert(color != Color::NONE);
         return data_[static_cast<USize>(color)];
     }
@@ -186,7 +187,7 @@ public:
         sub_[subSize_++] = feature;
     }
 
-    constexpr void update(const FeatureMatrix &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
+    constexpr void update(const MultiArray<Int16, Arch::INPUT_SIZE, Arch::L1_SIZE> &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
         assert(state(color) == DIRTY);
         assert(previous.state(color) == CLEAN);
         assert(addSize_ >= 1);
@@ -201,11 +202,11 @@ public:
         const USize sub2 = (subSize_ > 1) ? sub_[1].index(color, mirror) : 0;
 
         if (addSize_ == 1 && subSize_ == 1) {
-            SIMD::add1Sub1(data(color), weights[add1], weights[sub1]);
+            FusedUpdate::add1Sub1(data(color), weights[add1], weights[sub1]);
         } else if (addSize_ == 1 && subSize_ == 2) {
-            SIMD::add1Sub2(data(color), weights[add1], weights[sub1], weights[sub2]);
+            FusedUpdate::add1Sub2(data(color), weights[add1], weights[sub1], weights[sub2]);
         } else if (addSize_ == 2 && subSize_ == 2) {
-            SIMD::add2Sub2(data(color), weights[add1], weights[add2], weights[sub1], weights[sub2]);
+            FusedUpdate::add2Sub2(data(color), weights[add1], weights[add2], weights[sub1], weights[sub2]);
         }
 
         mark(color, CLEAN);
@@ -220,7 +221,7 @@ public:
     }
 
 private:
-    alignas(64) DualLayerVector data_;
+    alignas(64) MultiArray<Int16, 2, Arch::L1_SIZE> data_;
     std::array<AccState, 2> states_;
     std::array<InputFeature, 2> add_;
     std::array<InputFeature, 2> sub_;
@@ -233,15 +234,15 @@ public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
     NNUE() noexcept : params_(), accumulators_(), ply_(0), refreshTable_() {
-        assert(64 * ((sizeof(Params) + 63) / 64) == EMBEDDED_NETWORK_size);
-        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(Params) == 0);
+        assert(64 * ((sizeof(NetParams) + 63) / 64) == EMBEDDED_NETWORK_size);
+        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(NetParams) == 0);
 
-        params_ = reinterpret_cast<const Params *>(EMBEDDED_NETWORK_data);
+        params_ = reinterpret_cast<const NetParams *>(EMBEDDED_NETWORK_data);
 
         for (Color color : {Color::WHITE, Color::BLACK}) {
             for (bool mirror : {false, true}) {
                 for (USize kBucket = 0; kBucket < Arch::KING_BUCKETS; kBucket++) {
-                    refreshTable_[static_cast<USize>(color)][mirror][kBucket].init(params_->featureBiases);
+                    refreshTable_[static_cast<USize>(color)][mirror][kBucket].init(params_->ftBiases);
                 }
             }
         }
@@ -254,7 +255,7 @@ public:
             const USize kBucket = kingBucket(position.kingSquare(color), color);
             accumulators_[0].mark(color, Accumulator::REFRESH);
             RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
-            refreshEntry.update(params_->featureWeights[kBucket], position, color, mirr);
+            refreshEntry.update(params_->ftWeights[kBucket], position, color, mirr);
             accumulators_[0].refresh(refreshEntry, color);
         }
     }
@@ -265,7 +266,7 @@ public:
 
         if (accumulators_[ply_].state(color) == Accumulator::REFRESH) {
             RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
-            refreshEntry.update(params_->featureWeights[kBucket], position, color, mirr);
+            refreshEntry.update(params_->ftWeights[kBucket], position, color, mirr);
             accumulators_[ply_].refresh(refreshEntry, color);
         } else {
             USize idx_ = ply_;
@@ -275,7 +276,7 @@ public:
 
             while (idx_ < ply_) {
                 idx_++;
-                accumulators_[idx_].update(params_->featureWeights[kBucket], accumulators_[idx_ - 1], color, mirr);
+                accumulators_[idx_].update(params_->ftWeights[kBucket], accumulators_[idx_ - 1], color, mirr);
             }
         }
     }
@@ -301,14 +302,28 @@ public:
         assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
         assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
 
-        const USize bucketIndex = (position.occupied().count() - 2) / Arch::OUTPUT_BUCKET_DIV;
+        const std::array<Int16, Arch::L1_SIZE> &friendlyAcc = accumulators_[ply_].data(color);
+        const std::array<Int16, Arch::L1_SIZE> &enemyAcc = accumulators_[ply_].data(~color);
+        alignas(64) std::array<UInt8, Arch::L1_SIZE> l0Out;
+        alignas(64) std::array<Int32, Arch::L2_SIZE> l1Out;
 
-        Int32 score = SIMD::activate(accumulators_[ply_].data(color), accumulators_[ply_].data(~color), params_->layerWeights[bucketIndex]);
-        score /= Arch::QUANT_A;
-        score += static_cast<Int32>(params_->layerBiases[bucketIndex]);
-        score *= Arch::SCALE;
-        score /= (Arch::QUANT_A * Arch::QUANT_B);
-        return score;
+        static constexpr USize OUTPUT_BUCKET_DIV = (32 + Arch::OUTPUT_BUCKETS - 1) / Arch::OUTPUT_BUCKETS;
+        const USize outputBucket = (position.occupied().count() - 2) / OUTPUT_BUCKET_DIV;
+
+        SparsityIterator sparsityIter = SparsityIterator();
+
+        Inference::l0Half(l0Out, 0, friendlyAcc, sparsityIter);
+        Inference::l0Half(l0Out, Arch::L1_SIZE / 2, enemyAcc, sparsityIter);
+        Inference::l1(l1Out, l0Out, params_, outputBucket, sparsityIter);
+        Int64 score = Inference::l2L3(l1Out, params_, outputBucket);
+
+#if defined(MEASURE_SPARSITY)
+        addFTActs(l0Out);
+#endif
+
+        score *= static_cast<Int64>(Arch::SCALE);
+        score /= static_cast<Int64>(Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C);
+        return static_cast<Int32>(score);
     }
 
     constexpr void makeMove(const Position &position, Move move) noexcept {
@@ -364,9 +379,6 @@ public:
         static constexpr Float64 TARGET_AVG_ABS_EVAL = 308.274;
 
         std::ifstream file = std::ifstream(path.data());
-        if (!file.is_open()) {
-            return 0;
-        }
 
         UInt64 total = 0;
         UInt64 count = 0;
@@ -397,20 +409,63 @@ public:
         return static_cast<Int32>(std::round(scale));
     }
 
-private:
-    struct Params {
-        alignas(64) std::array<FeatureMatrix, Arch::KING_BUCKETS> featureWeights;
-        alignas(64) LayerVector featureBiases;
-        alignas(64) std::array<LayerVector, Arch::OUTPUT_BUCKETS> layerWeights;
-        alignas(64) std::array<Int16, Arch::OUTPUT_BUCKETS> layerBiases;
-    };
+#if defined(MEASURE_SPARSITY)
+    static void addFTActs(const std::array<UInt8, Arch::L1_SIZE> &l0Out) noexcept {
+        for (USize i = 0; i < Arch::L1_SIZE / 2; i++) {
+            if (l0Out[i]) {
+                ftActs[i]++;
+            }
+        }
 
-    const Params *params_;
+        for (USize i = 0; i < Arch::L1_SIZE / 2; i += 4) {
+            bool nonzero = false;
+            for (USize j = 0; j < 4; j++) {
+                if (l0Out[i + j]) {
+                    nonzero = true;
+                    break;
+                }
+            }
+
+            if (nonzero) {
+                nonzeroActs++;
+            }
+        }
+
+        totalCalls++;
+    }
+
+    static UInt64 saveFTActs(std::string_view path) noexcept {
+        std::ofstream file = std::ofstream(path.data());
+        assert(file.is_open());
+
+        file << "[ ";
+        for (USize i = 0; i < Arch::L1_SIZE / 2; i++) {
+            if (i > 0) {
+                file << ", ";
+            }
+            file << ftActs[i];
+        }
+        file << " ]" << std::endl;
+        file.close();
+
+        assert(totalCalls > 0);
+        return nonzeroActs / totalCalls;
+    }
+#endif
+
+private:
+    const NetParams *params_;
 
     Accumulator accumulators_[MAX_PLY + 1];
     USize ply_;
 
     MultiArray<RefreshEntry, 2, 2, Arch::KING_BUCKETS> refreshTable_;
+
+#if defined(MEASURE_SPARSITY)
+    static inline std::array<UInt64, Arch::L1_SIZE / 2> ftActs = {};
+    static inline UInt64 nonzeroActs = 0;
+    static inline UInt64 totalCalls = 0;
+#endif
 
     constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
 

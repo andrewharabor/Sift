@@ -1,6 +1,9 @@
 
 Syft*
+permute*
 build/
+ft-acts.json
+!src/*
 
 *.d
 

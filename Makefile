@@ -2,14 +2,19 @@ ARCH  ?= native
 BUILD ?= engine
 MODE  ?= release
 
-SRCS := src/main.cpp
+BUILD_DIR := build
+
+MAIN_SRCS := src/main.cpp
+MAIN_OBJS := $(MAIN_SRCS:%.cpp=$(BUILD_DIR)/%.o)
+MAIN_DEPS := $(MAIN_OBJS:%.o=%.d)
+
+PERM_SRCS := src/permute.cpp
+PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
+PERM_DEPS := $(PERM_OBJS:%.o=%.d)
+
 CPP_FLAGS := -MMD -MP -Isrc
 CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
 LD_FLAGS :=
-
-BUILD_DIR := build
-OBJS := $(SRCS:%.cpp=$(BUILD_DIR)/%.o)
-DEPS := $(OBJS:%.o=%.d)
 
 ifeq ($(OS),Windows_NT)
 	DETECTED_OS := windows
@@ -41,13 +46,15 @@ endif
 CPP_FLAGS += -DNETWORK_FILE=net/$(NETWORK_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
-	TARGET_EXEC := Syft$(VERSION).exe
+	MAIN_EXEC := Syft$(VERSION).exe
+	PERM_EXEC := permute-$(NETWORK_FILE).exe
 	MKDIR = mkdir
 	RM_FILE = del /f /q
 	RM_DIR = rmdir /s /q
 	SEP = \\
 else
-	TARGET_EXEC := Syft$(VERSION)
+	MAIN_EXEC := Syft$(VERSION)
+	PERM_EXEC := permute-$(NETWORK_FILE)
 	MKDIR = mkdir -p
 	RM_FILE = rm -f
 	RM_DIR = rm -rf
@@ -138,24 +145,40 @@ else ifeq ($(MODE),tune)
 		CXX_FLAGS += -flto
 		LD_FLAGS  += -flto
 	endif
+else ifeq ($(MODE),sparsity)
+	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
+	CPP_FLAGS += -DMEASURE_SPARSITY
+	ifneq ($(DETECTED_OS),windows)
+		CXX_FLAGS += -flto
+		LD_FLAGS  += -flto
+	endif
 else ifeq ($(MODE),debug)
 	CXX_FLAGS += -O0 -g3 -fsanitize=undefined,address -fno-omit-frame-pointer
 	LD_FLAGS  += -fsanitize=undefined,address
 endif
 
--include $(DEPS)
+-include $(MAIN_DEPS)
+-include $(PERM_DEPS)
 
-$(TARGET_EXEC): info $(OBJS)
-	$(CXX) $(CXX_FLAGS) $(OBJS) -o $@ $(LD_FLAGS)
+$(MAIN_EXEC): info __perm $(MAIN_OBJS)
+	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
+
+$(PERM_EXEC): $(PERM_OBJS)
+	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
 	$(CXX) $(CPP_FLAGS) $(CXX_FLAGS) -c $< -o $@
 
-.DEFAULT_GOAL := engine
+.DEFAULT_GOAL := main
 
-.PHONY: engine
-engine: $(TARGET_EXEC)
+.PHONY: main
+main: $(MAIN_EXEC)
+
+.PHONY: __perm
+__perm: $(PERM_EXEC)
+	./$(PERM_EXEC)
+	$(RM_FILE) $(PERM_EXEC)
 
 .PHONY: info
 info:
@@ -168,14 +191,15 @@ info:
 
 .PHONY: clean
 clean:
-	$(RM_FILE) $(TARGET_EXEC)
+	$(RM_FILE) $(MAIN_EXEC)
+	$(RM_FILE) $(PERM_EXEC)
 	$(RM_DIR) $(BUILD_DIR)
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|sse4|avx|avx2|avx2-pext|avx512|avx512vnni|neon|neon-dotprod|generic]> <MODE=[release|tune|debug]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|sse4|avx|avx2|avx2-pext|avx512|avx512vnni|neon|neon-dotprod|generic]> <MODE=[release|tune|sparsity|debug]>"
 	@echo "Targets:"
-	@echo "  engine"
+	@echo "  main"
 	@echo "  info"
 	@echo "  clean"
 	@echo "  help"
