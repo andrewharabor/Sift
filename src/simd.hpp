@@ -818,7 +818,7 @@ public:
         for (USize i = 0; i < Arch::L1_SIZE / 2; i++) {
             const Int32 clamp0 = std::clamp(static_cast<Int32>(acc[i]), 0, Arch::QUANT_A);
             const Int32 clamp1 = std::clamp(static_cast<Int32>(acc[i + Arch::L1_SIZE / 2]), 0, Arch::QUANT_A);
-            l0Out[offset + i] = ((clamp0 << 7) * clamp1) >> 16;
+            l0Out[offset + i] = static_cast<UInt8>(((clamp0 << 7) * clamp1) >> 16);
         }
 #endif
     }
