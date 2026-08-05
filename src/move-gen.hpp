@@ -12,7 +12,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 enum class PieceFlag : UInt8 {
     PAWN = 1 << 0,

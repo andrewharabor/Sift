@@ -24,7 +24,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 struct SearchStack {
     MoveList pv;
@@ -135,8 +135,8 @@ struct SearchThread {
 
             history.stack[i].playedMove = Move::NULL_MOVE;
             history.stack[i].movedPiece = Piece::NONE;
-            history.stack[i].contCorrEntry = nullptr;
-            history.stack[i].contEntry = nullptr;
+            history.stack[i].contCorrHistEntry = nullptr;
+            history.stack[i].contHistEntry = nullptr;
             history.stack[i].score = 0;
         }
     }
@@ -207,6 +207,9 @@ struct SearchThread {
         }
         return rootMoves.size();
     }
+
+    UInt64 loadNodes() const noexcept { return nodes.load(std::memory_order_relaxed); }
+    void incNodes() noexcept { nodes.store(loadNodes() + 1, std::memory_order_relaxed); }
 };
 
 class Search {
@@ -218,7 +221,7 @@ public:
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
     Search(USize hashSizeMB, USize multiPV, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), multiPV_(multiPV), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
-        stop_.store(false, std::memory_order_relaxed);
+        setTimeUp(false);
         threadCount(1);
     }
 
@@ -267,7 +270,7 @@ public:
 
         tTable_.incrementAge();
 
-        stop_.store(false, std::memory_order_relaxed);
+        setTimeUp(false);
 
         timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
         timeManager_.start();
@@ -293,7 +296,7 @@ public:
         tTable_.reset(threads_.size());
         tTable_.incrementAge();
 
-        stop_.store(false, std::memory_order_relaxed);
+        setTimeUp(false);
 
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
@@ -310,7 +313,7 @@ public:
             thread->initMoves();
             thread->start();
             thread->wait();
-            nodes += thread->nodes.load(std::memory_order_relaxed);
+            nodes += thread->loadNodes();
         }
 
         printInfo_ = true;
@@ -329,7 +332,7 @@ public:
     }
 
     void stop() noexcept {
-        stop_.store(true, std::memory_order_relaxed);
+        setTimeUp(true);
         for (auto &thread : threads_) {
             thread->wait();
         }
@@ -342,12 +345,47 @@ public:
 private:
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
 
+    static constexpr Int32 WINDOW_MIN_DEPTH = 6;
+    static constexpr Int32 WINDOW_MAX_DEPTH_REDUCTION = 5;
+
+    static constexpr Int32 RFP_MAX_DEPTH = 8;
+
+    static constexpr Int32 RAZORING_MAX_DEPTH = 3;
+
+    static constexpr Int32 NMP_MIN_DEPTH = 2;
+    static constexpr Int32 NMP_NO_VERIFICATION_MAX_DEPTH = 15;
+    static constexpr Int32 NMP_MIN_PLY_DEPTH_SCALE = 3;
+    static constexpr Int32 NMP_MIN_PLY_DEPTH_DIVISOR = 4;
+
+    static constexpr Int32 PROBCUT_MIN_DEPTH = 5;
+    static constexpr Int32 PROBCUT_TTABLE_DEPTH_MARGIN = 3;
+    static constexpr Int32 PROBCUT_REDUCTION = 4;
+
+    static constexpr Int32 IIR_MIN_DEPTH = 4;
+    static constexpr Int32 IIR_TTABLE_DEPTH_MARGIN = 5;
+
+    static constexpr Int32 LMR_MIN_DEPTH = 3;
+    static constexpr Int32 LMR_MIN_MOVES_PV = 4;
+    static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
+
+    static constexpr Int32 FP_MAX_DEPTH = 8;
+
+    static constexpr Int32 NOISY_FP_MAX_DEPTH = 5;
+
+    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
+
+    static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
+    static constexpr Int32 SE_MIN_DEPTH = 5;
+    static constexpr Int32 SE_TABLE_DEPTH_MARGIN = 3;
+
+    static constexpr Int32 QSEARCH_MAX_MOVES = 2;
+
     TTable tTable_;
 
     USize multiPV_;
 
     TimeManager timeManager_;
-    std::atomic_bool stop_;
+    std::atomic_bool timeUp_;
 
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
@@ -410,7 +448,7 @@ private:
                     Int32 score = search<true, true>(thread, searchDepth, alpha, beta, false);
                     thread.sortRemainingMoves();
 
-                    if (stop_.load(std::memory_order_relaxed)) {
+                    if (timeUp()) {
                         break;
                     }
 
@@ -435,7 +473,7 @@ private:
 
                 thread.sortSearchedMoves();
 
-                if (stop_.load(std::memory_order_relaxed)) {
+                if (timeUp()) {
                     break;
                 }
             }
@@ -446,11 +484,11 @@ private:
                 }
             }
 
-            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, thread.rootMoves[0].score, thread.rootMoves[0].nodes, thread.nodes.load(std::memory_order_relaxed))) {
-                stop_.store(true, std::memory_order_relaxed);
+            if (thread.main() && timeManager_.stopSoft(thread.limits, depth, thread.rootMoves[0].move, thread.rootMoves[0].score, thread.rootMoves[0].nodes, thread.loadNodes())) {
+                setTimeUp(true);
             }
 
-            if (stop_.load(std::memory_order_relaxed)) {
+            if (timeUp()) {
                 break;
             }
 
@@ -458,11 +496,11 @@ private:
 
         if (thread.main()) {
             if (thread.limits.infinite) {
-                while (!stop_.load(std::memory_order_relaxed)) {
+                while (!timeUp()) {
                     std::this_thread::yield();
                 }
             }
-            stop_.store(true, std::memory_order_relaxed);
+            setTimeUp(true);
 
             if (printInfo_) {
                 uciBestMove_(thread.rootMoves[0].move);
@@ -484,12 +522,12 @@ private:
 
         stack.pv.clear();
 
-        if (thread.main() && timeManager_.stopHard(thread.limits, thread.nodes.load(std::memory_order_relaxed), static_cast<Int32>(threads_.size()))) {
-            stop_.store(true, std::memory_order_relaxed);
+        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), static_cast<Int32>(threads_.size()))) {
+            setTimeUp(true);
             return alpha;
         }
 
-        if (stop_.load(std::memory_order_relaxed)) {
+        if (timeUp()) {
             return alpha;
         }
 
@@ -508,7 +546,7 @@ private:
         const bool inCheck = position.inCheck();
         const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
 
-        const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
+        const Int32 drawScore = Score::draw(thread.loadNodes());
 
         if constexpr (!ROOT_NODE) {
             if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
@@ -533,18 +571,18 @@ private:
             return quiescenceSearch<PV_NODE>(thread, alpha, beta);
         }
 
-        TTableEntry tableEntry = TTableEntry();
-        bool tableHit = false;
+        TTableEntry tTableEntry = TTableEntry();
+        bool tTableHit = false;
 
         Int32 rawStaticEval = Score::NONE;
         Int32 complexity = 0;
 
         if (!excludedMove) {
-            std::tie(tableEntry, tableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
+            std::tie(tTableEntry, tTableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
 
             if constexpr (!PV_NODE) {
-                if (tableHit && tableEntry.depth >= depth && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
-                    return tableEntry.score;
+                if (tTableHit && tTableEntry.depth >= depth && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
+                    return tTableEntry.score;
                 }
             }
 
@@ -552,20 +590,20 @@ private:
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position);
-                stack.staticEval = history.correct(position, rawStaticEval, rootPly);
+                rawStaticEval = (tTableHit) ? tTableEntry.staticEval : thread.nnue.evaluate(position);
+                stack.staticEval = history.correctStaticEval(position, rawStaticEval, rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
 
                 stack.eval = stack.staticEval;
-                if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= stack.eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= stack.eval))) {
-                    stack.eval = tableEntry.score;
+                if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
+                    stack.eval = tTableEntry.score;
                 }
             }
         }
 
-        const Move hashMove = ROOT_NODE ? thread.rootMoves[thread.pvIndex].move : tableEntry.move;
-        const bool noisyHashMove = hashMove != Move::NULL_MOVE && position.noisy(hashMove);
-        const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
+        const Move tTableMove = ROOT_NODE ? thread.rootMoves[thread.pvIndex].move : tTableEntry.move;
+        const bool noisyTTableMove = tTableMove != Move::NULL_MOVE && position.noisy(tTableMove);
+        const bool tTablePV = PV_NODE || (tTableHit && tTableEntry.pv);
 
         nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
 
@@ -625,8 +663,8 @@ private:
 
 
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
-                if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tableHit || tableEntry.score >= probcutBeta || tableEntry.depth + PROBCUT_TABLE_DEPTH_MARGIN < depth)) {
-                    MoveOrder moveOrder = MoveOrder(position, history, hashMove);
+                if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.depth + PROBCUT_TTABLE_DEPTH_MARGIN < depth)) {
+                    MoveOrder moveOrder = MoveOrder(position, history, tTableMove);
                     ScoredMove scoredMove;
                     Int32 seeMargin = probcutBeta - stack.staticEval;
                     Int32 probcutDepth = depth - PROBCUT_REDUCTION;
@@ -639,7 +677,7 @@ private:
 
                         tTable_.prefetch(position.hashAfter(move));
 
-                        makeMove(thread, move, history.noisyStats(position, move));
+                        makeMove(thread, move, history.noisyScore(position, move));
 
                         Int32 score = -quiescenceSearch<false>(thread, -probcutBeta, -probcutBeta + 1);
                         if (score >= probcutBeta && probcutDepth >= 0) {
@@ -648,12 +686,12 @@ private:
 
                         unmakeMove(thread);
 
-                        if (stop_.load(std::memory_order_relaxed)) {
+                        if (timeUp()) {
                             return alpha;
                         }
 
                         if (score >= probcutBeta) {
-                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tablePV, TTableEntry::Bound::LOWER);
+                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tTablePV, TTableEntry::Bound::LOWER);
                             return score;
                         }
                     }
@@ -661,7 +699,7 @@ private:
             }
         }
 
-        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tableHit || (tableEntry.move != Move::NULL_MOVE && tableEntry.depth <= depth - IIR_TABLE_DEPTH_MARGIN))) {
+        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tTableHit || (tTableEntry.move != Move::NULL_MOVE && tTableEntry.depth <= depth - IIR_TTABLE_DEPTH_MARGIN))) {
             depth--;
         }
 
@@ -676,7 +714,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, history, hashMove, stack.killerMoves, rootPly);
+        MoveOrder moveOrder = MoveOrder(position, history, tTableMove, stack.killerMoves, rootPly);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -697,18 +735,18 @@ private:
             }
 
             const bool quiet = position.quiet(move);
-            const Int32 historyScore = (quiet) ? history.quietStats(position, move, rootPly) : history.noisyStats(position, move);
+            const Int32 historyScore = (quiet) ? history.quietScore(position, move, rootPly) : history.noisyScore(position, move);
             const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
                 if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
-                    const Int32 lmrDepth = std::max(depth - baseLMR / LMR_REDUCTION_DIVISOR, 0);
+                    const Int32 lmrDepth = std::max(depth - baseLMR / LMR_BASE_DIVISOR, 0);
                     const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
                         continue;
                     }
 
-                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HIST_DIVISOR, NOISY_FP_MARGIN_MIN);
+                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HISTORY_DIVISOR, NOISY_FP_MARGIN_MIN);
                     if (depth <= NOISY_FP_MAX_DEPTH && !quiet && !inCheck && alpha < Score::WIN && stack.staticEval + noisyFPMargin <= alpha) {
                         break;
                     }
@@ -730,12 +768,12 @@ private:
                 }
             }
 
-            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && depth >= SE_MIN_DEPTH + tablePV && hashMove == move && tableEntry.depth >= depth - SE_TABLE_DEPTH_MARGIN && tableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tableEntry.score) < Score::KNOWN_WIN;
+            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && depth >= SE_MIN_DEPTH + tTablePV && tTableMove == move && tTableEntry.depth >= depth - SE_TABLE_DEPTH_MARGIN && tTableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tTableEntry.score) < Score::KNOWN_WIN;
             Int32 extension = 0;
 
             if (doSE) {
-                const Int32 seBeta = std::max(Score::MATED, tableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tablePV && !PV_NODE)) * depth / SE_BETA_DEPTH_DIVISOR);
-                const Int32 seDepth = (depth + SE_DEPTH_OFFSET) / SE_DEPTH_DIVISOR;
+                const Int32 seBeta = std::max(Score::MATED, tTableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tTablePV && !PV_NODE)) * depth / SE_BETA_DEPTH_DIVISOR);
+                const Int32 seDepth = (depth - 1) / 2;
 
                 stack.excludedMove = move;
                 const Int32 score = search<false, false>(thread, seDepth, seBeta - 1, seBeta, cutNode);
@@ -745,16 +783,16 @@ private:
                     extension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (2 + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN)) : 1;
                 } else if (seBeta >= beta) {
                     return seBeta;
-                } else if (tableEntry.score >= beta) {
+                } else if (tTableEntry.score >= beta) {
                     extension = -2 + PV_NODE;
-                } else if (tableEntry.score <= alpha && cutNode) {
+                } else if (tTableEntry.score <= alpha && cutNode) {
                     extension = -1;
                 }
             }
 
             tTable_.prefetch(position.hashAfter(move));
 
-            const UInt64 nodesBefore = thread.nodes.load(std::memory_order_relaxed);
+            const UInt64 nodesBefore = thread.loadNodes();
 
             makeMove(thread, move, historyScore);
             movesTried++;
@@ -773,12 +811,12 @@ private:
             Int32 newDepth = depth - 1 + extension;
             Int32 score = 0;
 
-            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tablePV || moveScore <= MoveScore::KILLER1)) {
+            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tTablePV || moveScore <= MoveScore::KILLER1)) {
                 Int32 reduction = baseLMR;
                 reduction += LMR_NON_IMPROVING_SCALE * !improving;
-                reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyHashMove;
-                if (tablePV) {
-                    reduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tableHit && tableEntry.score > alpha);
+                reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
+                if (tTablePV) {
+                    reduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tTableHit && tTableEntry.score > alpha);
                 }
                 reduction -= LMR_GIVES_CHECK_SCALE * givesCheck;
                 reduction -= LMR_IN_CHECK_SCALE * inCheck;
@@ -799,7 +837,7 @@ private:
 
                     if (quiet && (score <= alpha || score >= beta)) {
                         Int32 bonus = (score >= beta) ? history.bonus(depth) : history.penalty(depth);
-                        history.updateCont(position, move, rootPly, bonus);
+                        history.updateContHist(position, move, rootPly, bonus);
                     }
                 }
             } else if (!PV_NODE || movesTried > 1) {
@@ -814,7 +852,7 @@ private:
 
             unmakeMove(thread);
 
-            if (stop_.load(std::memory_order_relaxed)) {
+            if (timeUp()) {
                 return alpha;
             }
 
@@ -826,7 +864,7 @@ private:
 
                 RootMove &rootMove = thread.rootMoves[rootMoveIndex];
                 rootMove.windowScore = rootMove.score;
-                rootMove.nodes += thread.nodes.load(std::memory_order_relaxed) - nodesBefore;
+                rootMove.nodes += thread.loadNodes() - nodesBefore;
 
                 if (movesTried == 1 || score > alpha) {
                     rootMove.score = score;
@@ -883,19 +921,19 @@ private:
                     Int32 penalty = history.penalty(historyDepth);
 
                     if (quiet) {
-                        history.updateQuietStats(position, move, rootPly, bonus);
+                        history.updateQuietHists(position, move, rootPly, bonus);
                         for (const Move quietMove : quietsTried) {
                             if (quietMove != move) {
-                                history.updateQuietStats(position, quietMove, rootPly, penalty);
+                                history.updateQuietHists(position, quietMove, rootPly, penalty);
                             }
                         }
                     } else {
-                        history.updateNoisyStats(position, move, bonus);
+                        history.updateNoisyHists(position, move, bonus);
                     }
 
                     for (const Move noisyMove : noisiesTried) {
                         if (noisyMove != move) {
-                            history.updateNoisyStats(position, noisyMove, penalty);
+                            history.updateNoisyHists(position, noisyMove, penalty);
                         }
                     }
 
@@ -914,11 +952,11 @@ private:
 
         if (!excludedMove) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
-                history.updateCorr(position, depth, rootPly, bestScore - stack.staticEval);
+                history.updateCorrHist(position, depth, rootPly, bestScore - stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, depth, tablePV, bound);
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, depth, tTablePV, bound);
             }
         }
 
@@ -937,12 +975,12 @@ private:
 
         stack.pv.clear();
 
-        if (thread.main() && timeManager_.stopHard(thread.limits, thread.nodes.load(std::memory_order_relaxed), static_cast<Int32>(threads_.size()))) {
-            stop_.store(true, std::memory_order_relaxed);
+        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), static_cast<Int32>(threads_.size()))) {
+            setTimeUp(true);
             return alpha;
         }
 
-        if (stop_.load(std::memory_order_relaxed)) {
+        if (timeUp()) {
             return alpha;
         }
 
@@ -952,7 +990,7 @@ private:
 
         const bool inCheck = position.inCheck();
 
-        const Int32 drawScore = Score::draw(thread.nodes.load(std::memory_order_relaxed));
+        const Int32 drawScore = Score::draw(thread.loadNodes());
 
         if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
             alpha = drawScore;
@@ -969,13 +1007,13 @@ private:
             return (inCheck) ? 0 : thread.nnue.evaluate(position);
         }
 
-        auto [tableEntry, tableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
-        const bool tablePV = PV_NODE || (tableHit && tableEntry.pv);
-        const Move hashMove = tableEntry.move;
+        auto [tTableEntry, tTableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
+        const bool tTablePV = PV_NODE || (tTableHit && tTableEntry.pv);
+        const Move tTableMove = tTableEntry.move;
 
         if constexpr (!PV_NODE) {
-            if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= beta) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= alpha))) {
-                return tableEntry.score;
+            if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
+                return tTableEntry.score;
             }
         }
 
@@ -985,18 +1023,18 @@ private:
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            rawStaticEval = (tableHit) ? tableEntry.staticEval : thread.nnue.evaluate(position);
-            stack.staticEval = history.correct(position, rawStaticEval, rootPly);
+            rawStaticEval = (tTableHit) ? tTableEntry.staticEval : thread.nnue.evaluate(position);
+            stack.staticEval = history.correctStaticEval(position, rawStaticEval, rootPly);
 
             stack.eval = stack.staticEval;
-            if (tableHit && ((tableEntry.bound == TTableEntry::Bound::EXACT) || (tableEntry.bound == TTableEntry::Bound::LOWER && tableEntry.score >= stack.eval) || (tableEntry.bound == TTableEntry::Bound::UPPER && tableEntry.score <= stack.eval))) {
-                stack.eval = tableEntry.score;
+            if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
+                stack.eval = tTableEntry.score;
             }
         }
 
         if (stack.eval >= beta) {
-            if (!tableHit) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), stack.eval, rawStaticEval, Move::NULL_MOVE, 0, tablePV, TTableEntry::Bound::LOWER);
+            if (!tTableHit) {
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), stack.eval, rawStaticEval, Move::NULL_MOVE, 0, tTablePV, TTableEntry::Bound::LOWER);
             }
             return stack.eval;
         }
@@ -1016,7 +1054,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, hashMove, stack.killerMoves, rootPly) : MoveOrder(position, history, hashMove);
+        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, tTableMove, stack.killerMoves, rootPly) : MoveOrder(position, history, tTableMove);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -1044,7 +1082,7 @@ private:
 
             unmakeMove(thread);
 
-            if (stop_.load(std::memory_order_relaxed)) {
+            if (timeUp()) {
                 return alpha;
             }
 
@@ -1077,7 +1115,7 @@ private:
             return Score::matedIn(static_cast<Int32>(rootPly));
         }
 
-        tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, tablePV, bound);
+        tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, tTablePV, bound);
 
         return bestScore;
     }
@@ -1098,13 +1136,13 @@ private:
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.playedMove = move;
         historyStack.movedPiece = thread.position.moved(move);
-        historyStack.contCorrEntry = &thread.history.contCorrEntry(thread.position, move);
-        historyStack.contEntry = &thread.history.contEntry(thread.position, move);
+        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, move);
+        historyStack.contHistEntry = &thread.history.contHistEntry(thread.position, move);
         historyStack.score = historyScore;
 
         thread.nnue.makeMove(thread.position, move);
         thread.position.make(move);
-        thread.nodes.store(thread.nodes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+        thread.incNodes();
         thread.rootPly++;
     }
 
@@ -1117,15 +1155,15 @@ private:
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.playedMove = Move::NULL_MOVE;
         historyStack.movedPiece = Piece::NONE;
-        historyStack.contCorrEntry = nullptr;
-        historyStack.contEntry = nullptr;
+        historyStack.contCorrHistEntry = nullptr;
+        historyStack.contHistEntry = nullptr;
         historyStack.score = 0;
 
     }
 
     void makeNullMove(SearchThread &thread) noexcept {
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
-        historyStack.contCorrEntry = &thread.history.contCorrEntry(thread.position, Move::NULL_MOVE);
+        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, Move::NULL_MOVE);
 
         thread.position.makeNull();
         thread.rootPly++;
@@ -1137,7 +1175,7 @@ private:
         thread.position.unmake();
 
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
-        historyStack.contCorrEntry = nullptr;
+        historyStack.contCorrHistEntry = nullptr;
     }
 
     void printSearchInfo(SearchThread &thread, USize pvIndex, Int32 depth) const noexcept {
@@ -1147,7 +1185,7 @@ private:
         info.time = timeManager_.elapsed();
         info.nodes = 0;
         for (auto &searchThread : threads_) {
-            info.nodes += searchThread->nodes.load(std::memory_order_relaxed);
+            info.nodes += searchThread->loadNodes();
         }
         info.hashfull = tTable_.hashfull();
         info.score = thread.rootMoves[pvIndex].displayScore;
@@ -1158,6 +1196,9 @@ private:
 
         uciSearchInfo_(info);
     }
+
+    bool timeUp() const noexcept { return timeUp_.load(std::memory_order_relaxed); }
+    void setTimeUp(bool value) noexcept { timeUp_.store(value, std::memory_order_relaxed); }
 };
 
 }

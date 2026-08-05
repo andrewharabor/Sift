@@ -12,7 +12,7 @@
 #include "zobrist.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 class CuckooTable {
 public:

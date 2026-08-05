@@ -9,7 +9,7 @@
 #define TOSTRING(x) STRINGIFY(x)
 
 
-namespace Syft {
+namespace Sift {
 
 class Utils {
 public:

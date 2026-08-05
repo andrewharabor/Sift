@@ -8,7 +8,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 struct PerftTest {
     std::string_view fen;

@@ -5,7 +5,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 class Color {
 public:

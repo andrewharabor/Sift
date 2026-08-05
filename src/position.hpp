@@ -19,7 +19,7 @@
 #include "zobrist.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 class CastlingRights {
 public:

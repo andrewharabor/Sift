@@ -13,7 +13,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 struct ScoredMove {
     Move move;
@@ -21,14 +21,14 @@ struct ScoredMove {
 };
 
 enum class MoveOrderStage : UInt8 {
-    HASH,
+    TTABLE,
     GEN_NOISY,
     GOOD_NOISY,
     KILLER1,
     KILLER2,
     GEN_QUIET,
     BAD_NOISY_QUIET,
-    QSEARCH_HASH,
+    QSEARCH_TTABLE,
     QSEARCH_GEN_NOISY,
     QSEARCH_NOISY
 };
@@ -42,14 +42,14 @@ inline MoveOrderStage operator++(MoveOrderStage &type, int) {
 
 class MoveOrder {
 public:
-    constexpr MoveOrder(const Position &position, const History &history, const Move hashMove, const std::array<Move, 2> &killerMoves, USize ply) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::HASH), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), hashMove_(hashMove), killerMoves_(killerMoves), rootPly_(ply) {}
-    constexpr MoveOrder(const Position &position, const History &history, const Move hashMove) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::QSEARCH_HASH), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), hashMove_(hashMove), killerMoves_(), rootPly_(0) {}
+    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove, const std::array<Move, 2> &killerMoves, USize ply) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), killerMoves_(killerMoves), rootPly_(ply) {}
+    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), killerMoves_(), rootPly_(0) {}
 
     ScoredMove next() noexcept {
-        if (moveOrderStage_ == MoveOrderStage::HASH) {
+        if (moveOrderStage_ == MoveOrderStage::TTABLE) {
             moveOrderStage_++;
-            if (hashMove_ != Move::NULL_MOVE && position_.legal(hashMove_)) {
-                return ScoredMove(hashMove_, MoveScore::HASH);
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
+                return ScoredMove(tTableMove_, MoveScore::TTABLE);
             }
         }
 
@@ -65,7 +65,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::GOOD_NOISY) {
             while (moveIndex_ < moves_.size()) {
                 ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == hashMove_) {
+                if (scoredMove.move == tTableMove_) {
                     continue;
                 }
                 if (scoredMove.score <= MoveScore::BAD_NOISY) {
@@ -80,7 +80,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::KILLER1) {
             moveOrderStage_++;
             if (killerMoves_[0] != Move::NULL_MOVE && position_.legal(killerMoves_[0]) && position_.quiet(killerMoves_[0])) {
-                if (killerMoves_[0] != hashMove_) {
+                if (killerMoves_[0] != tTableMove_) {
                     return ScoredMove(killerMoves_[0], MoveScore::KILLER1);
                 }
             } else {
@@ -91,7 +91,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::KILLER2) {
             moveOrderStage_++;
             if (killerMoves_[1] != Move::NULL_MOVE && position_.legal(killerMoves_[1]) && position_.quiet(killerMoves_[1])) {
-                if (killerMoves_[1] != hashMove_) {
+                if (killerMoves_[1] != tTableMove_) {
                     return ScoredMove(killerMoves_[1], MoveScore::KILLER2);
                 }
             } else {
@@ -110,7 +110,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::BAD_NOISY_QUIET) {
             while (moveIndex_ < moves_.size()) {
                 ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == hashMove_ || scoredMove.move == killerMoves_[0] || scoredMove.move == killerMoves_[1]) {
+                if (scoredMove.move == tTableMove_ || scoredMove.move == killerMoves_[0] || scoredMove.move == killerMoves_[1]) {
                     continue;
                 }
                 return scoredMove;
@@ -118,10 +118,10 @@ public:
             return ScoredMove(Move::NULL_MOVE, MoveScore::NONE);
         }
 
-        if (moveOrderStage_ == MoveOrderStage::QSEARCH_HASH) {
+        if (moveOrderStage_ == MoveOrderStage::QSEARCH_TTABLE) {
             moveOrderStage_++;
-            if (hashMove_ != Move::NULL_MOVE && position_.legal(hashMove_) && !position_.quiet(hashMove_)) {
-                return ScoredMove(hashMove_, MoveScore::HASH);
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_) && !position_.quiet(tTableMove_)) {
+                return ScoredMove(tTableMove_, MoveScore::TTABLE);
             }
         }
 
@@ -136,7 +136,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::QSEARCH_NOISY) {
             while (moveIndex_ < moves_.size()) {
                 ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == hashMove_) {
+                if (scoredMove.move == tTableMove_) {
                     continue;
                 }
                 return scoredMove;
@@ -162,7 +162,7 @@ private:
     USize moveIndex_;
     USize firstQuietIndex_;
 
-    Move hashMove_;
+    Move tTableMove_;
     std::array<Move, 2> killerMoves_;
 
     USize rootPly_;
@@ -189,7 +189,7 @@ private:
         const bool capture = position_.capture(move);
         const bool promotion = (move.type() == MoveType::PROMOTION);
 
-        Int32 score = history_.noisyStats(position_, move);
+        Int32 score = history_.noisyScore(position_, move);
 
         if (promotion) {
             score += (move.promotion() == PieceType::QUEEN) ? MoveScore::PROMOTION_BONUS : 0;
@@ -208,7 +208,7 @@ private:
 
     constexpr Int32 scoreQuiet(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
-        return history_.quietStats(position_, move, rootPly_);
+        return history_.quietScore(position_, move, rootPly_);
     }
 
     constexpr Int32 scoreQSearchNoisy(const Move move) const noexcept {
@@ -217,7 +217,7 @@ private:
         const bool capture = position_.capture(move);
         const bool promotion = (move.type() == MoveType::PROMOTION);
 
-        Int32 score = history_.noisyStats(position_, move);
+        Int32 score = history_.noisyScore(position_, move);
 
         if (promotion) {
             score += (move.promotion() == PieceType::QUEEN) ? MoveScore::QSEARCH_PROMOTION_BONUS : 0;

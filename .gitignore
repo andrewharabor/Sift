@@ -1,9 +1,11 @@
 
-Syft*
-permute*
+Sift*
+permute-net*
+
 build/
+
 ft-acts.json
-!src/*
+*.nnue
 
 *.d
 

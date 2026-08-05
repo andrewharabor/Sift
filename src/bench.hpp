@@ -6,7 +6,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 namespace Bench {
 

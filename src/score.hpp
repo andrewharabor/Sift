@@ -3,7 +3,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 namespace Score {
 
@@ -39,7 +39,7 @@ static constexpr Int32 draw(UInt64 seed) noexcept { return 2 - static_cast<Int32
 
 namespace MoveScore {
 
-static constexpr Int32 HASH = 10000000;
+static constexpr Int32 TTABLE = 10000000;
 
 static constexpr Int32 GOOD_NOISY = 400000;
 static constexpr Int32 BAD_NOISY = GOOD_NOISY - 50001;

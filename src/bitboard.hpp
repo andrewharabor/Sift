@@ -7,7 +7,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 class Bitboard {
 public:

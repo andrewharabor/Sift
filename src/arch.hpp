@@ -5,7 +5,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 namespace Arch {
 
@@ -28,7 +28,7 @@ static constexpr std::array<USize, 32> KING_BUCKET_LAYOUT = {
 
 static constexpr USize OUTPUT_BUCKETS = 8;
 
-static constexpr Int32 SCALE = 155;
+static constexpr Int32 SCALE = 279;
 static constexpr Int32 QUANT_A = 255;
 static constexpr Int32 QUANT_B = 128;
 static constexpr Int32 QUANT_C = 64;

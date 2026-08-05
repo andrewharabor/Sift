@@ -11,7 +11,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 enum class MoveType : UInt16 {
     NORMAL = 0,

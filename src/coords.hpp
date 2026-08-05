@@ -9,7 +9,7 @@
 #include "types.hpp"
 
 
-namespace Syft {
+namespace Sift {
 
 #define SQUARE_DECLARE_RANK(X)                                         \
     static constexpr SquareEnum A##X = SquareEnum::A##X; \

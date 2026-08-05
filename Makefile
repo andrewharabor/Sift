@@ -8,7 +8,7 @@ MAIN_SRCS := src/main.cpp
 MAIN_OBJS := $(MAIN_SRCS:%.cpp=$(BUILD_DIR)/%.o)
 MAIN_DEPS := $(MAIN_OBJS:%.o=%.d)
 
-PERM_SRCS := src/permute.cpp
+PERM_SRCS := tools/permute.cpp
 PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
 PERM_DEPS := $(PERM_OBJS:%.o=%.d)
 
@@ -43,17 +43,17 @@ else
 	NETWORK_FILE := $(shell cat network.txt)
 endif
 
-CPP_FLAGS += -DNETWORK_FILE=net/$(NETWORK_FILE).nnue
+CPP_FLAGS += -DNETWORK_FILE=$(NETWORK_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
-	MAIN_EXEC := Syft$(VERSION).exe
+	MAIN_EXEC := Sift$(VERSION).exe
 	PERM_EXEC := permute-$(NETWORK_FILE).exe
 	MKDIR = mkdir
 	RM_FILE = del /f /q
 	RM_DIR = rmdir /s /q
 	SEP = \\
 else
-	MAIN_EXEC := Syft$(VERSION)
+	MAIN_EXEC := Sift$(VERSION)
 	PERM_EXEC := permute-$(NETWORK_FILE)
 	MKDIR = mkdir -p
 	RM_FILE = rm -f

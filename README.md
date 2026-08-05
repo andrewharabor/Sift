@@ -1,4 +1,4 @@
 
-<h1 align="center"> Syft </h1>
+<h1 align="center"> Sift </h1>
 
-<p align="center"> Syft is a strong UCI chess engine written in C++. </p>
+<p align="center"> Sift is a strong UCI chess engine written in C++. </p>

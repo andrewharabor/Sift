@@ -5,7 +5,7 @@
 #include <cstdint>
 
 
-namespace Syft {
+namespace Sift {
 
 using UInt8 = std::uint8_t;
 using UInt16 = std::uint16_t;

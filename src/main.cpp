@@ -7,7 +7,7 @@
 #include "uci.hpp"
 
 
-using namespace Syft;
+using namespace Sift;
 
 int main(int argc, const char *argv[]) {
     Attacks::init();
