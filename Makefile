@@ -84,14 +84,8 @@ ifeq ($(ARCH),native)
 	ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
 		CPP_FLAGS += -DUSE_AVX2
 	endif
-	ifneq ($(findstring __AVX512F__, $(PROPERTIES)),)
+	ifneq ($(findstring __AVX512VBMI2__, $(PROPERTIES)),)
 		CPP_FLAGS += -DUSE_AVX512
-	endif
-	ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
-		ifeq ($(findstring __znver4, $(PROPERTIES)),)
-			CPP_
-		FLAGS += -DUSE_AVX512_VNNI
-		endif
 	endif
 	ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
 		CPP_FLAGS += -DUSE_NEON
@@ -112,9 +106,6 @@ else ifeq ($(ARCH),avx2-pext)
 else ifeq ($(ARCH),avx512)
 	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
 	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
-else ifeq ($(ARCH),avx512vnni)
-	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_AVX512_VNNI -DUSE_POPCNT -DUSE_PEXT
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw -mavx512ifma -mavx512vbmi -mavx512vbmi2 -mavx512bitalg -mavx512vnni -mavx512vpopcntdq
 else ifeq ($(ARCH),neon)
 	CPP_FLAGS += -DUSE_NEON
 	CXX_FLAGS += -march=armv8-a+simd
@@ -197,7 +188,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|sse4|avx|avx2|avx2-pext|avx512|avx512vnni|neon|neon-dotprod|generic]> <MODE=[release|tune|sparsity|debug]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|sse4|avx|avx2|avx2-pext|avx512|neon|neon-dotprod|generic]> <MODE=[release|tune|sparsity|debug]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"

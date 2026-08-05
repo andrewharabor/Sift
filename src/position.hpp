@@ -149,7 +149,7 @@ public:
 
         pieceBitboards_.fill(Bitboard());
         occupancyBitboards_.fill(Bitboard());
-        board_.fill(Piece::NONE);
+        mailbox_.fill(Piece::NONE);
 
         sideToMove_ = Color::WHITE;
         ply_ = 0;
@@ -387,7 +387,7 @@ public:
     constexpr Bitboard threats() const noexcept { return state().threats; }
     constexpr Bitboard winningThreats() const noexcept { return state().winningThreats; }
 
-    constexpr const std::array<Piece, 64> &board() const noexcept { return board_; }
+    constexpr const std::array<Piece, 64> &mailbox() const noexcept { return mailbox_; }
 
     constexpr Bitboard castlingPath(CastlingRights::Side castlingSide) const noexcept {
         return CASTLING_PATH_BITBOARDS[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
@@ -714,7 +714,7 @@ public:
 
     constexpr Piece pieceAt(Square square) const noexcept {
         assert(square != Square::NONE);
-        return board_[static_cast<USize>(square.index())];
+        return mailbox_[static_cast<USize>(square.index())];
     }
 
     constexpr Bitboard pieces(PieceType pieceType) const noexcept {
@@ -1307,7 +1307,7 @@ private:
 
     std::array<Bitboard, 6> pieceBitboards_;
     std::array<Bitboard, 2> occupancyBitboards_;
-    std::array<Piece, 64> board_;
+    std::array<Piece, 64> mailbox_;
 
     Color sideToMove_;
     UInt16 ply_;
@@ -1340,7 +1340,7 @@ private:
 
         pieceBitboards_[static_cast<USize>(pieceType)].set(index);
         occupancyBitboards_[static_cast<USize>(color)].set(index);
-        board_[static_cast<USize>(index)] = piece;
+        mailbox_[static_cast<USize>(index)] = piece;
     }
 
     template<bool UPDATE_HASH>
@@ -1368,7 +1368,7 @@ private:
 
         pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
         occupancyBitboards_[static_cast<USize>(color)].clear(index);
-        board_[static_cast<USize>(index)] = Piece::NONE;
+        mailbox_[static_cast<USize>(index)] = Piece::NONE;
     }
 
     constexpr void updateRepetitions() noexcept {

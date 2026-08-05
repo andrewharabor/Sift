@@ -33,13 +33,13 @@ INCBIN(unsigned char, EMBEDDED_NETWORK, TOSTRING(NETWORK_FILE));
 
 namespace Sift {
 
-struct InputFeature {
+struct PSQFeature {
     Piece piece;
     Square square;
 
-    constexpr InputFeature() noexcept : piece(), square() {}
+    constexpr PSQFeature() noexcept : piece(), square() {}
 
-    constexpr InputFeature(Piece piece, Square square) noexcept : piece(piece), square(square) {
+    constexpr PSQFeature(Piece piece, Square square) noexcept : piece(piece), square(square) {
         assert(piece != Piece::NONE);
         assert(square != Square::NONE);
     }
@@ -63,7 +63,7 @@ struct RefreshEntry {
 
     constexpr void init(const std::array<Int16, Arch::L1_SIZE> &biases) noexcept { data = biases; }
 
-    constexpr void update(const MultiArray<Int16, Arch::INPUT_SIZE, Arch::L1_SIZE> &weights, const Position &position, Color color, bool mirror) noexcept {
+    constexpr void update(const MultiArray<Int16, Arch::PSQ_SIZE, Arch::L1_SIZE> &weights, const Position &position, Color color, bool mirror) noexcept {
         std::array<USize, MAX_CHANGES> add;
         std::array<USize, MAX_CHANGES> sub;
         USize addSize = 0;
@@ -80,7 +80,7 @@ struct RefreshEntry {
                     const Square square = Square(addOccupancy.pop());
 
                     assert(addSize < MAX_CHANGES);
-                    add[addSize++] = InputFeature(piece, square).index(color, mirror);
+                    add[addSize++] = PSQFeature(piece, square).index(color, mirror);
                 }
 
                 Bitboard subOccupancy = oldOccupancy & ~newOccupancy;
@@ -88,7 +88,7 @@ struct RefreshEntry {
                     const Square square = Square(subOccupancy.pop());
 
                     assert(subSize < MAX_CHANGES);
-                    sub[subSize++] = InputFeature(piece, square).index(color, mirror);
+                    sub[subSize++] = PSQFeature(piece, square).index(color, mirror);
                 }
             }
         }
@@ -177,17 +177,17 @@ public:
         subSize_ = 0;
     }
 
-    constexpr void addFeature(InputFeature feature) noexcept {
+    constexpr void addFeature(PSQFeature feature) noexcept {
         assert(addSize_ < 2);
         add_[addSize_++] = feature;
     }
 
-    constexpr void subFeature(InputFeature feature) noexcept {
+    constexpr void subFeature(PSQFeature feature) noexcept {
         assert(subSize_ < 2);
         sub_[subSize_++] = feature;
     }
 
-    constexpr void update(const MultiArray<Int16, Arch::INPUT_SIZE, Arch::L1_SIZE> &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
+    constexpr void update(const MultiArray<Int16, Arch::PSQ_SIZE, Arch::L1_SIZE> &weights, const Accumulator &previous, Color color, bool mirror) noexcept {
         assert(state(color) == DIRTY);
         assert(previous.state(color) == CLEAN);
         assert(addSize_ >= 1);
@@ -223,12 +223,11 @@ public:
 private:
     alignas(64) MultiArray<Int16, 2, Arch::L1_SIZE> data_;
     std::array<AccState, 2> states_;
-    std::array<InputFeature, 2> add_;
-    std::array<InputFeature, 2> sub_;
+    std::array<PSQFeature, 2> add_;
+    std::array<PSQFeature, 2> sub_;
     USize addSize_;
     USize subSize_;
 };
-
 
 class SparsityIterator {
 public:
@@ -237,7 +236,7 @@ public:
     SparsityIterator() noexcept : indices_(), count_(0) { offset_ = SIMD::zeroInt16(); }
 
     inline void addNonzeros(VecUInt8 vecA, VecUInt8 vecB) noexcept {
-#if defined(USE_AVX512_VNNI)
+#if defined(USE_AVX512)
         alignas(64) static constexpr std::array<Int16, 32> INDEX_TABLE = [] {
             std::array<Int16, 32> table = {};
             for (Int16 i = 0; i < 32; i++) {
@@ -252,11 +251,8 @@ public:
         _mm512_mask_compressstoreu_epi16(&indices_[count_], mask, indexTable);
         count_ += std::popcount(mask);
         offset_ = SIMD::addInt16(offset_, SIMD::setInt16(32));
-#elif defined(USE_AVX512) || defined(USE_AVX2) || defined(USE_SSE4)
-#if defined(USE_AVX512)
-        UInt32 mask = SIMD::nonzeroMaskUInt8(vecA) | (SIMD::nonzeroMaskUInt8(vecB) << 16);
-        __m128i offset = _mm512_castsi512_si128(offset_);
-#elif defined(USE_AVX2)
+#elif defined(USE_AVX2) || defined(USE_SSE4)
+#if defined(USE_AVX2)
         UInt16 mask = static_cast<UInt16>(SIMD::nonzeroMaskUInt8(vecA) | (SIMD::nonzeroMaskUInt8(vecB) << 8));
         __m128i offset = _mm256_castsi256_si128(offset_);
 #elif defined(USE_SSE4)
@@ -274,9 +270,7 @@ public:
             count_ += entry.count;
             offset = _mm_add_epi16(offset, _mm_set1_epi16(8));
         }
-#if defined(USE_AVX512)
-        offset_ = _mm512_castsi128_si512(offset);
-#elif defined(USE_AVX2)
+#if defined(USE_AVX2)
         offset_ = _mm256_castsi128_si256(offset);
 #elif defined(USE_SSE4)
         offset_ = offset;
@@ -333,20 +327,15 @@ private:
 #endif
 };
 
-class NNUE {
+class NNUEState {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    NNUE() noexcept : params_(), accumulators_(), ply_(0), refreshTable_() {
-        assert(64 * ((sizeof(NetParams) + 63) / 64) == EMBEDDED_NETWORK_size);
-        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(NetParams) == 0);
-
-        params_ = reinterpret_cast<const NetParams *>(EMBEDDED_NETWORK_data);
-
+    NNUEState(const MultiArray<Int16, Arch::KING_BUCKETS, Arch::PSQ_SIZE, Arch::L1_SIZE> &ftWeights, const std::array<Int16, Arch::L1_SIZE> &ftBiases) :ftWeights_(ftWeights), accumulators_(), ply_(0), refreshTable_() {
         for (Color color : {Color::WHITE, Color::BLACK}) {
             for (bool mirror : {false, true}) {
                 for (USize kBucket = 0; kBucket < Arch::KING_BUCKETS; kBucket++) {
-                    refreshTable_[static_cast<USize>(color)][mirror][kBucket].init(params_->ftBiases);
+                    refreshTable_[static_cast<USize>(color)][mirror][kBucket].init(ftBiases);
                 }
             }
         }
@@ -359,7 +348,7 @@ public:
             const USize kBucket = kingBucket(position.kingSquare(color), color);
             accumulators_[0].mark(color, Accumulator::REFRESH);
             RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
-            refreshEntry.update(params_->ftWeights[kBucket], position, color, mirr);
+            refreshEntry.update(ftWeights_[kBucket], position, color, mirr);
             accumulators_[0].refresh(refreshEntry, color);
         }
     }
@@ -370,7 +359,7 @@ public:
 
         if (accumulators_[ply_].state(color) == Accumulator::REFRESH) {
             RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
-            refreshEntry.update(params_->ftWeights[kBucket], position, color, mirr);
+            refreshEntry.update(ftWeights_[kBucket], position, color, mirr);
             accumulators_[ply_].refresh(refreshEntry, color);
         } else {
             USize idx_ = ply_;
@@ -380,54 +369,9 @@ public:
 
             while (idx_ < ply_) {
                 idx_++;
-                accumulators_[idx_].update(params_->ftWeights[kBucket], accumulators_[idx_ - 1], color, mirr);
+                accumulators_[idx_].update(ftWeights_[kBucket], accumulators_[idx_ - 1], color, mirr);
             }
         }
-    }
-
-    inline Int32 evaluate(const Position &position) noexcept {
-        Int32 score = forward(position);
-
-        const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
-
-        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
-        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE - position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
-        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
-
-        return score;
-    }
-
-    inline Int32 forward(const Position &position) noexcept {
-        update(position, Color::WHITE);
-        update(position, Color::BLACK);
-
-        const Color color = position.sideToMove();
-
-        assert(accumulators_[ply_].state(color) == Accumulator::CLEAN);
-        assert(accumulators_[ply_].state(~color) == Accumulator::CLEAN);
-
-        const std::array<Int16, Arch::L1_SIZE> &friendlyAcc = accumulators_[ply_].data(color);
-        const std::array<Int16, Arch::L1_SIZE> &enemyAcc = accumulators_[ply_].data(~color);
-        alignas(64) std::array<UInt8, Arch::L1_SIZE> l0Out;
-        alignas(64) std::array<Int32, Arch::L2_SIZE> l1Out;
-
-        static constexpr USize OUTPUT_BUCKET_DIV = (32 + Arch::OUTPUT_BUCKETS - 1) / Arch::OUTPUT_BUCKETS;
-        const USize outputBucket = (position.occupied().count() - 2) / OUTPUT_BUCKET_DIV;
-
-        SparsityIterator sparsityIter = SparsityIterator();
-
-        forwardL0Half(l0Out, 0, friendlyAcc, sparsityIter);
-        forwardL0Half(l0Out, Arch::L1_SIZE / 2, enemyAcc, sparsityIter);
-        forwardL1(l1Out, l0Out, outputBucket, sparsityIter);
-        Int64 score = forwardL2L3(l1Out, outputBucket);
-
-#if defined(MEASURE_SPARSITY)
-        addFTActs(l0Out);
-#endif
-
-        score *= static_cast<Int64>(Arch::SCALE);
-        score /= static_cast<Int64>(Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C);
-        return static_cast<Int32>(score);
     }
 
     constexpr void makeMove(const Position &position, Move move) noexcept {
@@ -441,26 +385,26 @@ public:
         const Piece movedPiece = position.pieceAt(move.from());
         const Piece capturedPiece = position.pieceAt(move.to());
 
-        acc.subFeature(InputFeature(position.pieceAt(move.from()), move.from()));
+        acc.subFeature(PSQFeature(position.pieceAt(move.from()), move.from()));
 
         if (move.type() == MoveType::PROMOTION) {
             const Piece promotion = Piece(move.promotion(), color);
-            acc.addFeature(InputFeature(promotion, move.to()));
+            acc.addFeature(PSQFeature(promotion, move.to()));
         } else if (move.type() == MoveType::CASTLING) {
             const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), color);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
             const Square kingTo = CastlingRights::kingTo(castlingSide);
-            acc.addFeature(InputFeature(Piece(PieceType::ROOK, color), rookTo));
-            acc.addFeature(InputFeature(Piece(PieceType::KING, color), kingTo));
+            acc.addFeature(PSQFeature(Piece(PieceType::ROOK, color), rookTo));
+            acc.addFeature(PSQFeature(Piece(PieceType::KING, color), kingTo));
         } else {
-            acc.addFeature(InputFeature(position.pieceAt(move.from()), move.to()));
+            acc.addFeature(PSQFeature(position.pieceAt(move.from()), move.to()));
         }
 
         if (capturedPiece != Piece::NONE) {
-            acc.subFeature(InputFeature(capturedPiece, move.to()));
+            acc.subFeature(PSQFeature(capturedPiece, move.to()));
         } else if (move.type() == MoveType::EN_PASSANT) {
             const Square enPassantSquare = move.to().enPassant();
-            acc.subFeature(InputFeature(Piece(PieceType::PAWN, ~color), enPassantSquare));
+            acc.subFeature(PSQFeature(Piece(PieceType::PAWN, ~color), enPassantSquare));
         }
 
         for (Color col : {Color::WHITE, Color::BLACK}) {
@@ -477,6 +421,78 @@ public:
     constexpr void unmakeMove() noexcept {
         assert(ply_ > 0);
         ply_--;
+    }
+
+    const Accumulator &topAccumulator(const Position &position) noexcept {
+        update(position, Color::WHITE);
+        update(position, Color::BLACK);
+        assert(accumulators_[ply_].state(Color::WHITE) == Accumulator::CLEAN);
+        assert(accumulators_[ply_].state(Color::BLACK) == Accumulator::CLEAN);
+        return accumulators_[ply_];
+    }
+
+private:
+    const MultiArray<Int16, Arch::KING_BUCKETS, Arch::PSQ_SIZE, Arch::L1_SIZE> &ftWeights_;
+
+    Accumulator accumulators_[MAX_PLY + 1];
+    USize ply_;
+
+    MultiArray<RefreshEntry, 2, 2, Arch::KING_BUCKETS> refreshTable_;
+
+    constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
+
+    constexpr USize kingBucket(Square kingSquare, Color color) const noexcept {
+        const bool mirr = mirror(kingSquare);
+        Square relativeSquare = (mirr) ? kingSquare.mirrored() : kingSquare;
+        relativeSquare = (color == Color::WHITE) ? relativeSquare : relativeSquare.flipped();
+        return Arch::KING_BUCKET_LAYOUT[4 * static_cast<USize>(relativeSquare.rank()) + static_cast<USize>(relativeSquare.file())];
+    }
+};
+
+class NNUE {
+public:
+    NNUE() : params_(loadParams()), state_(params_->ftWeights, params_->ftBiases) {}
+
+    constexpr NNUEState &state() noexcept { return state_; }
+
+    inline Int32 forward(const Position &position) noexcept {
+        const Color color = position.sideToMove();
+        const Accumulator &acc = state_.topAccumulator(position);
+        const std::array<Int16, Arch::L1_SIZE> &friendlyAcc = acc.data(color);
+        const std::array<Int16, Arch::L1_SIZE> &enemyAcc = acc.data(~color);
+
+        static constexpr USize OUTPUT_BUCKET_DIV = (32 + Arch::OUTPUT_BUCKETS - 1) / Arch::OUTPUT_BUCKETS;
+        const USize outputBucket = (position.occupied().count() - 2) / OUTPUT_BUCKET_DIV;
+
+        SparsityIterator sparsityIter = SparsityIterator();
+
+        alignas(64) std::array<UInt8, Arch::L1_SIZE> l0Out;
+        alignas(64) std::array<Int32, Arch::L2_SIZE> l1Out;
+
+        forwardL0Half(l0Out, 0, friendlyAcc, sparsityIter);
+        forwardL0Half(l0Out, Arch::L1_SIZE / 2, enemyAcc, sparsityIter);
+        forwardL1(l1Out, l0Out, outputBucket, sparsityIter);
+        Int64 score = forwardL2L3(l1Out, outputBucket);
+
+#if defined(MEASURE_SPARSITY)
+        addFTActs(l0Out);
+#endif
+
+        score *= static_cast<Int64>(Arch::SCALE);
+        score /= static_cast<Int64>(Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C);
+        return static_cast<Int32>(score);
+    }
+
+    inline Int32 evaluate(const Position &position) noexcept {
+        Int32 score = forward(position);
+
+        const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
+
+        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
+        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE - position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
+        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
+
+        return score;
     }
 
     Int32 scale(std::string_view path) noexcept {
@@ -501,7 +517,7 @@ public:
             }
 
             Position position = Position(fen);
-            set(position);
+            state_.set(position);
             total += static_cast<UInt64>(std::abs(forward(position)));
             count++;
         }
@@ -561,26 +577,19 @@ public:
 
 private:
     const NetParams *params_;
+    NNUEState state_;
 
-    Accumulator accumulators_[MAX_PLY + 1];
-    USize ply_;
-
-    MultiArray<RefreshEntry, 2, 2, Arch::KING_BUCKETS> refreshTable_;
+    const NetParams *loadParams() noexcept {
+        assert(64 * ((sizeof(NetParams) + 63) / 64) == EMBEDDED_NETWORK_size);
+        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(NetParams) == 0);
+        return reinterpret_cast<const NetParams *>(EMBEDDED_NETWORK_data);
+    }
 
 #if defined(MEASURE_SPARSITY)
     static inline std::array<UInt64, Arch::L1_SIZE / 2> ftActs = {};
     static inline UInt64 nonzeroActs = 0;
     static inline UInt64 totalCalls = 0;
 #endif
-
-    constexpr bool mirror(Square kingSquare) const noexcept { return kingSquare.file() > File::D; }
-
-    constexpr USize kingBucket(Square kingSquare, Color color) const noexcept {
-        const bool mirr = mirror(kingSquare);
-        Square relativeSquare = (mirr) ? kingSquare.mirrored() : kingSquare;
-        relativeSquare = (color == Color::WHITE) ? relativeSquare : relativeSquare.flipped();
-        return Arch::KING_BUCKET_LAYOUT[4 * static_cast<USize>(relativeSquare.rank()) + static_cast<USize>(relativeSquare.file())];
-    }
 
     inline void forwardL0Half(std::array<UInt8, Arch::L1_SIZE> &l0Out, USize offset, const std::array<Int16, Arch::L1_SIZE> &acc, [[maybe_unused]] SparsityIterator &sparsityIter) noexcept {
 #if defined(USE_SIMD)

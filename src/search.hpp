@@ -278,7 +278,7 @@ public:
         for (auto &thread : threads_) {
             thread->reset();
             thread->position = position;
-            thread->nnue.set(position);
+            thread->nnue.state().set(position);
             thread->limits = limits;
             thread->initMoves();
             thread->start();
@@ -308,7 +308,7 @@ public:
             thread->reset();
             thread->history.reset();
             thread->position = position;
-            thread->nnue.set(position);
+            thread->nnue.state().set(position);
             thread->limits = limits;
             thread->initMoves();
             thread->start();
@@ -1140,7 +1140,7 @@ private:
         historyStack.contHistEntry = &thread.history.contHistEntry(thread.position, move);
         historyStack.score = historyScore;
 
-        thread.nnue.makeMove(thread.position, move);
+        thread.nnue.state().makeMove(thread.position, move);
         thread.position.make(move);
         thread.incNodes();
         thread.rootPly++;
@@ -1151,7 +1151,7 @@ private:
         thread.rootPly--;
         thread.position.unmake();
 
-        thread.nnue.unmakeMove();
+        thread.nnue.state().unmakeMove();
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.playedMove = Move::NULL_MOVE;
         historyStack.movedPiece = Piece::NONE;

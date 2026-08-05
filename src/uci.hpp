@@ -682,7 +682,7 @@ private:
             std::cout << "(none)";
         } else {
             NNUE nnue = NNUE();
-            nnue.set(position_);
+            nnue.state().set(position_);
             std::cout << nnue.evaluate(position_) << " cp";
         }
         std::cout << std::endl;

@@ -13,11 +13,11 @@
 using namespace Sift;
 
 #if defined(USE_AVX512)
-constexpr WeightsPerm TARGET_PERM = WeightsPerm::AVX512;
+constexpr NetPerm TARGET_PERM = NetPerm::AVX512;
 #elif defined(USE_AVX2)
-constexpr WeightsPerm TARGET_PERM = WeightsPerm::AVX2;
+constexpr NetPerm TARGET_PERM = NetPerm::AVX2;
 #else
-constexpr WeightsPerm TARGET_PERM = WeightsPerm::DEFAULT;
+constexpr NetPerm TARGET_PERM = NetPerm::DEFAULT;
 #endif
 
 constexpr MultiArray<USize, 3, 8> ARRANGEMENTS = {{
@@ -43,7 +43,7 @@ int main(void) {
 
     *permutedParams = *originalParams;
 
-    WeightsPerm perm = originalParams->perm;
+    NetPerm perm = originalParams->perm;
     if (perm == TARGET_PERM) {
         return 0;
     }
@@ -58,33 +58,23 @@ int main(void) {
         permIdx[i] = ARRANGEMENTS[static_cast<USize>(TARGET_PERM)][inversePermIdx[i]];
     }
 
-    for (USize b = 0; b < Arch::KING_BUCKETS; b++) {
-        for (USize i = 0; i < Arch::INPUT_SIZE; i++) {
-            for (USize j = 0; j < Arch::L1_SIZE; j += 64) {
-                const Int16 *src = &originalParams->ftWeights[b][i][j];
-                Int16 *dst = &permutedParams->ftWeights[b][i][j];
-
-                for (USize jj = 0; jj < 64; jj++) {
-                    const USize srcChunk = jj / 8;
-                    const USize dstChunk = permIdx[srcChunk];
-                    const USize offset = jj % 8;
-                    dst[dstChunk * 8 + offset] = src[jj];
-                }
+    const auto permuteArray = [permIdx]<typename TYPE>(const TYPE * src, TYPE * dst) {
+        for (USize i = 0; i < Arch::L1_SIZE; i += 64) {
+            for (USize j = 0; j < 64; j++) {
+                const USize srcChunk = j / 8;
+                const USize dstChunk = permIdx[srcChunk];
+                const USize offset = j % 8;
+                dst[i + 8 * dstChunk + offset] = src[i + j];
             }
         }
-    }
+    };
 
-    for (USize j = 0; j < Arch::L1_SIZE; j += 64) {
-        const Int16 *src = &originalParams->ftBiases[j];
-        Int16 *dst = &permutedParams->ftBiases[j];
-
-        for (USize jj = 0; jj < 64; jj++) {
-            const USize srcChunk = jj / 8;
-            const USize dstChunk = permIdx[srcChunk];
-            const USize offset = jj % 8;
-            dst[dstChunk * 8 + offset] = src[jj];
+    for (USize b = 0; b < Arch::KING_BUCKETS; b++) {
+        for (USize i = 0; i < Arch::PSQ_SIZE; i++) {
+            permuteArray(originalParams->ftWeights[b][i].data(), permutedParams->ftWeights[b][i].data());
         }
     }
+    permuteArray(originalParams->ftBiases.data(), permutedParams->ftBiases.data());
 
     permutedParams->perm = TARGET_PERM;
 
