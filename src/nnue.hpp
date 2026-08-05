@@ -480,7 +480,7 @@ public:
     }
 
     Int32 scale(std::string_view path) noexcept {
-        static constexpr Float64 TARGET_AVG_ABS_EVAL = 308.274;
+        static constexpr Float64 TARGET_AVG_ABS_EVAL = 553.065;
 
         std::ifstream file = std::ifstream(path.data());
 
