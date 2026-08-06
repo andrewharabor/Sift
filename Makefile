@@ -70,16 +70,9 @@ ifeq ($(ARCH),native)
 	ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
 		ifeq ($(findstring __znver1, $(PROPERTIES)),)
 			ifeq ($(findstring __znver2, $(PROPERTIES)),)
-				CPP_
-			FLAGS += -DUSE_PEXT
+				CPP_FLAGS += -DUSE_PEXT
 			endif
 		endif
-	endif
-	ifneq ($(findstring __SSE4_2__, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_SSE4
-	endif
-	ifneq ($(findstring __AVX__, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_AVX
 	endif
 	ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
 		CPP_FLAGS += -DUSE_AVX2
@@ -88,28 +81,18 @@ ifeq ($(ARCH),native)
 		CPP_FLAGS += -DUSE_AVX512
 	endif
 	ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_NEON
-		CPP_FLAGS += -DUSE_NEON_DOTPROD
+		CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
 	endif
-else ifeq ($(ARCH),sse4)
-	CPP_FLAGS += -DUSE_SSE4
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2
-else ifeq ($(ARCH),avx)
-	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma
 else ifeq ($(ARCH),avx2)
-	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT
+	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT
 	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt
 else ifeq ($(ARCH),avx2-pext)
-	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_POPCNT -DUSE_PEXT
+	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT -DUSE_PEXT
 	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2
 else ifeq ($(ARCH),avx512)
-	CPP_FLAGS += -DUSE_SSE4 -DUSE_AVX -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
+	CPP_FLAGS += -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
 	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
 else ifeq ($(ARCH),neon)
-	CPP_FLAGS += -DUSE_NEON
-	CXX_FLAGS += -march=armv8-a+simd
-else ifeq ($(ARCH),neon-dotprod)
 	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
 	CXX_FLAGS += -march=armv8.2-a+dotprod
 else ifeq ($(ARCH),generic)
@@ -188,7 +171,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|sse4|avx|avx2|avx2-pext|avx512|neon|neon-dotprod|generic]> <MODE=[release|tune|sparsity|debug]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx2|avx2-pext|avx512|neon|generic]> <MODE=[release|tune|sparsity|debug]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"

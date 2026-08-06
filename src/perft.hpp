@@ -167,9 +167,9 @@ public:
         UInt64 nodes = 0;
         MoveGen::legal<MOVE_GEN_TYPE>(position, moveList);
         for (const Move move : moveList) {
-            position.make(move);
+            position.makeMove(move);
             nodes += run<MOVE_GEN_TYPE>(position, depth - 1);
-            position.unmake();
+            position.unmakeMove();
         }
 
         return nodes;

@@ -11,6 +11,7 @@
 #include "move.hpp"
 #include "score.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 
 
 namespace Sift {
@@ -128,7 +129,7 @@ public:
         }
     }
 
-    void prefetch(UInt64 key) const { prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
+    void prefetch(UInt64 key) const { Utils::prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
 
     USize hashfull() const {
         USize count = 0;
@@ -200,36 +201,7 @@ private:
         return static_cast<Int16>(score);
     }
 
-    USize index(UInt64 key) const { return mulHi64(key, size_); }
-
-#if defined(__GNUC__) || defined(__clang__)
-
-    void prefetchPtr(const void *ptr) const { __builtin_prefetch(ptr); }
-
-    UInt64 mulHi64(UInt64 a, UInt64 b) const { return __uint128_t(a) * __uint128_t(b) >> 64; }
-
-#elif defined(_MSC_VER) && !defined(__clang__)
-
-    void prefetchPtr(const void *ptr) const { _mm_prefetch(static_cast<const char *>(ptr), _MM_HINT_T0); }
-
-    U64 mulHi64(U64 a, U64 b) const { return __umulh(a, b); }
-
-#else
-
-    void prefetchPtr(const void *ptr) const {}
-
-    U64 mulHi64(U64 a, U64 b) const {
-        U64 aLo = a & 0xFFFFFFFF;
-        U64 aHi = a >> 32;
-        U64 bLo = b & 0xFFFFFFFF;
-        U64 bHi = b >> 32;
-        U64 c1 = (aLo * bLo) >> 32;
-        U64 c2 = aHi * bLo + c1;
-        U64 c3 = aLo * bHi + (c2 & 0xFFFFFFFF);
-        return aHi * bHi + (c2 >> 32) + (c3 >> 32);
-    }
-
-#endif
+    USize index(UInt64 key) const { return Utils::mulHi64(key, size_); }
 };
 
 }

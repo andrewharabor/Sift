@@ -108,6 +108,27 @@ public:
         return KING_ATTACKS[square.index()];
     }
 
+    static constexpr Bitboard attacks(Piece piece, Square square, Bitboard occupied) noexcept {
+        assert(piece != Piece::NONE);
+        assert(square != Square::NONE);
+        if (piece.type() == PieceType::PAWN) {
+            return Attacks::pawn(square, piece.color());
+        } else if (piece.type() == PieceType::KNIGHT) {
+            return Attacks::knight(square);
+        } else if (piece.type() == PieceType::BISHOP) {
+            return Attacks::bishop(square, occupied);
+        } else if (piece.type() == PieceType::ROOK) {
+            return Attacks::rook(square, occupied);
+        } else if (piece.type() == PieceType::QUEEN) {
+            return Attacks::queen(square, occupied);
+        } else if (piece.type() == PieceType::KING) {
+            return Attacks::king(square);
+        } else {
+            assert(false);
+            return Bitboard();
+        }
+    }
+
     template<PieceType::PieceTypeEnum PIECE_TYPE_ENUM>
     static Bitboard slider(Square square, Bitboard occupied) noexcept {
         static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK || PIECE_TYPE_ENUM == PieceType::QUEEN);

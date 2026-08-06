@@ -83,6 +83,8 @@ public:
         }
     }
 
+    constexpr UInt8 index() const noexcept { return static_cast<UInt8>(pieceType_); }
+
     constexpr PieceTypeEnum internal() const noexcept { return pieceType_; }
 
 private:
@@ -217,6 +219,8 @@ public:
     constexpr PieceType type() const noexcept { return (piece_ == PieceEnum::NONE) ? PieceType::NONE : PieceType(static_cast<UInt8>(piece_) % 6); }
 
     constexpr Color color() const noexcept { return (piece_ == PieceEnum::NONE) ? Color::NONE : Color(static_cast<UInt8>(piece_) / 6); }
+
+    constexpr UInt8 index() const noexcept { return static_cast<UInt8>(piece_); }
 
     constexpr PieceEnum internal() const noexcept { return piece_; }
 

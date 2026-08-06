@@ -191,6 +191,7 @@ private:
         EVAL,
         FEN,
         HASH,
+        HELP,
         NONE
     };
 
@@ -254,6 +255,8 @@ private:
             fen();
         } else if (cmd == Command::HASH) {
             hash();
+        } else if (cmd == Command::HELP) {
+            help();
         }
 
         return false;
@@ -282,7 +285,7 @@ private:
             return Command::PERFT;
         } else if (token == "perfttests") {
             return Command::PERFT_TESTS;
-        } else if (token == "board") {
+        } else if (token == "board" || token == "d") {
             return Command::BOARD;
         } else if (token == "moves") {
             return Command::MOVES;
@@ -292,6 +295,8 @@ private:
             return Command::FEN;
         } else if (token == "hash") {
             return Command::HASH;
+        } else if (token == "help" || token == "about") {
+            return Command::HELP;
         }
 
         return Command::NONE;
@@ -365,7 +370,7 @@ private:
             if (index >= legalMoves_.size()) {
                 return;
             }
-            position_.make(legalMoves_[index]);
+            position_.makeMove(legalMoves_[index]);
             legalMoves();
         }
     }
@@ -568,7 +573,7 @@ private:
             const auto end = std::chrono::high_resolution_clock::now();
             const UInt64 testTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
 
-            std::cout << "info fen " << Bench::TEST_CASES[i];
+            std::cout << "fen " << Bench::TEST_CASES[i];
             std::cout << " depth " << depth;
             std::cout << " nodes " << testNodes;
             std::cout << " time " << testTime;
@@ -579,7 +584,7 @@ private:
             time += testTime;
         }
 
-        std::cout << "info nodes " << nodes;
+        std::cout << "nodes " << nodes;
         std::cout << " time " << time;
         std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
 #if defined(MEASURE_SPARSITY)
@@ -601,14 +606,14 @@ private:
         MoveGen::legal(position_, legalMoves);
         for (Move move : legalMoves) {
             Position newPosition = position_;
-            newPosition.make(move);
+            newPosition.makeMove(move);
 
             const auto start = std::chrono::high_resolution_clock::now();
             const UInt64 moveNodes = Perft::run(newPosition, std::max(0, depth - 1));
             const auto end = std::chrono::high_resolution_clock::now();
             const UInt64 moveTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
 
-            std::cout << "info move " << std::string(move);
+            std::cout << "move " << std::string(move);
             std::cout << " nodes " << moveNodes;
             std::cout << " time " << moveTime;
             std::cout << " nps " << (moveNodes * 1000ULL) / (moveTime + 1);
@@ -618,7 +623,7 @@ private:
             time += moveTime;
         }
 
-        std::cout << "info depth " << depth;
+        std::cout << "depth " << depth;
         std::cout << " nodes " << nodes;
         std::cout << " time " << time;
         std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
@@ -642,7 +647,7 @@ private:
                 testsPassed++;
             }
 
-            std::cout << "info fen " << testCase.fen;
+            std::cout << "fen " << testCase.fen;
             std::cout << " depth " << testCase.depth;
             std::cout << " expected " << testCase.expectedNodes;
             std::cout << " nodes " << nodes;
@@ -651,23 +656,19 @@ private:
             std::cout << " result " << (nodes == testCase.expectedNodes ? "pass" : "fail");
             std::cout << std::endl;
         }
-        std::cout << "info passed " << testsPassed << " failed " << (Perft::TEST_COUNT - testsPassed) << std::endl;
+        std::cout << "passed " << testsPassed << " failed " << (Perft::TEST_COUNT - testsPassed) << std::endl;
     }
 
     void board() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        const std::string positionString = std::string(position_);
-        const std::vector<std::string_view> lines = Utils::splitStringView(positionString, '\n');
-        for (const std::string_view &line : lines) {
-            std::cout << "info board " << line << std::endl;
-        }
+        std::cout << std::string(position_) << std::endl;
     }
 
     void moves() {
         std::unique_lock<std::mutex> lock = lockStdout();
 
         legalMoves();
-        std::cout << "info moves ";
+        std::cout << "moves ";
         for (const Move move : legalMoves_) {
             std::cout << std::string(move) << " ";
         }
@@ -677,7 +678,7 @@ private:
     void eval() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::cout << "info eval ";
+        std::cout << "static eval ";
         if (position_.inCheck()) {
             std::cout << "(none)";
         } else {
@@ -690,12 +691,19 @@ private:
 
     void fen() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "info fen " << position_.fen() << std::endl;
+        std::cout << "fen " << position_.fen() << std::endl;
     }
 
     void hash() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "info hash " << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase << std::endl;
+        std::cout << "zobrist hash " << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase << std::endl;
+    }
+
+    void help() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+        std::cout << "Sift " << TOSTRING(BUILD_VERSION) << " by andrewharabor," << std::endl;
+        std::cout << "a strong UCI chess engine" << std::endl;
+        std::cout << "https://github.com/andrewharabor/Sift" << std::endl;
     }
 
     void infoString(const std::string &info) const {

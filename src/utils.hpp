@@ -35,6 +35,36 @@ public:
         value ^= value >> 33;
         return value;
     };
+
+#if defined(__GNUC__) || defined(__clang__)
+
+    static void prefetchPtr(const void *ptr) { __builtin_prefetch(ptr); }
+
+    static constexpr UInt64 mulHi64(UInt64 a, UInt64 b) { return __uint128_t(a) * __uint128_t(b) >> 64; }
+
+#elif defined(_MSC_VER) && !defined(__clang__)
+
+    static void prefetchPtr(const void *ptr) { _mm_prefetch(static_cast<const char *>(ptr), _MM_HINT_T0); }
+
+    static constexpr U64 mulHi64(U64 a, U64 b) { return __umulh(a, b); }
+
+#else
+
+    static void prefetchPtr(const void *ptr) {}
+
+    static constexpr U64 mulHi64(U64 a, U64 b) {
+        U64 aLo = a & 0xFFFFFFFF;
+        U64 aHi = a >> 32;
+        U64 bLo = b & 0xFFFFFFFF;
+        U64 bHi = b >> 32;
+        U64 c1 = (aLo * bLo) >> 32;
+        U64 c2 = aHi * bLo + c1;
+        U64 c3 = aLo * bHi + (c2 & 0xFFFFFFFF);
+        return aHi * bHi + (c2 >> 32) + (c3 >> 32);
+    }
+
+#endif
+
 };
 
 }

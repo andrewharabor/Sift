@@ -190,7 +190,7 @@ public:
                 }
 
                 const Piece piece = Piece(std::string_view(&c, 1));
-                placePiece<true>(piece, Square(static_cast<UInt8>(index)));
+                addPiece<true>(piece, Square(static_cast<UInt8>(index)));
                 index++;
             }
         }
@@ -393,7 +393,7 @@ public:
         return CASTLING_PATH_BITBOARDS[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
     }
 
-    void make(Move move) {
+    void makeMove(Move move) {
         assert(move != Move::NULL_MOVE);
         assert(pieceAt(move.from()).color() == sideToMove_);
 
@@ -470,22 +470,22 @@ public:
 
             removePiece<true>(king, move.from());
             removePiece<true>(rook, move.to());
-            placePiece<true>(king, kingTo);
-            placePiece<true>(rook, rookTo);
+            addPiece<true>(king, kingTo);
+            addPiece<true>(rook, rookTo);
         } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
             assert(promotionPiece != Piece::NONE);
 
             removePiece<true>(pawn, move.from());
-            placePiece<true>(promotionPiece, move.to());
+            addPiece<true>(promotionPiece, move.to());
         } else {
             assert(pieceAt(move.from()) != Piece::NONE);
             assert(pieceAt(move.to()) == Piece::NONE);
             const Piece movedPiece = pieceAt(move.from());
 
             removePiece<true>(movedPiece, move.from());
-            placePiece<true>(movedPiece, move.to());
+            addPiece<true>(movedPiece, move.to());
         }
 
         if (move.type() == MoveType::EN_PASSANT) {
@@ -503,7 +503,7 @@ public:
         updateThreats();
     }
 
-    void makeNull() {
+    void makeNullMove() {
         states_.push_back(state());
         state().lastMove = Move::NULL_MOVE;
         state().capturedPiece = Piece::NONE;
@@ -527,7 +527,7 @@ public:
         updateThreats();
     }
 
-    void unmake() noexcept {
+    void unmakeMove() noexcept {
         const Move move = state().lastMove;
         const Piece capturedPiece = state().capturedPiece;
 
@@ -554,8 +554,8 @@ public:
 
             removePiece<false>(king, kingTo);
             removePiece<false>(rook, rookTo);
-            placePiece<false>(king, move.from());
-            placePiece<false>(rook, move.to());
+            addPiece<false>(king, move.from());
+            addPiece<false>(rook, move.to());
         } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = pieceAt(move.to());
@@ -563,11 +563,11 @@ public:
             assert(promotionPiece.type() == move.promotion());
 
             removePiece<false>(promotionPiece, move.to());
-            placePiece<false>(pawn, move.from());
+            addPiece<false>(pawn, move.from());
 
             if (capturedPiece != Piece::NONE) {
                 assert(pieceAt(move.to()) == Piece::NONE);
-                placePiece<false>(capturedPiece, move.to());
+                addPiece<false>(capturedPiece, move.to());
             }
         } else {
             assert(pieceAt(move.to()) != Piece::NONE);
@@ -576,7 +576,7 @@ public:
             const Piece movedPiece = pieceAt(move.to());
 
             removePiece<false>(movedPiece, move.to());
-            placePiece<false>(movedPiece, move.from());
+            addPiece<false>(movedPiece, move.from());
 
             if (move.type() == MoveType::EN_PASSANT) {
                 Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
@@ -584,10 +584,10 @@ public:
 
                 assert(pieceAt(pawnSquare) == Piece::NONE);
 
-                placePiece<false>(pawn, pawnSquare);
+                addPiece<false>(pawn, pawnSquare);
             } else if (capturedPiece != Piece::NONE) {
                 assert(pieceAt(move.to()) == Piece::NONE);
-                placePiece<false>(capturedPiece, move.to());
+                addPiece<false>(capturedPiece, move.to());
             }
         }
     }
@@ -1316,7 +1316,7 @@ private:
     constexpr const State &state() const noexcept { return states_.back(); }
 
     template<bool UPDATE_HASH>
-    void placePiece(Piece piece, Square square) noexcept {
+    void addPiece(Piece piece, Square square) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
         assert(pieceAt(square) == Piece::NONE);
 

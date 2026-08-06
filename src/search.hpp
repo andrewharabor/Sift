@@ -1141,7 +1141,7 @@ private:
         historyStack.score = historyScore;
 
         thread.nnue.state().makeMove(thread.position, move);
-        thread.position.make(move);
+        thread.position.makeMove(move);
         thread.incNodes();
         thread.rootPly++;
     }
@@ -1149,7 +1149,7 @@ private:
     void unmakeMove(SearchThread &thread) noexcept {
         assert(thread.rootPly != 0);
         thread.rootPly--;
-        thread.position.unmake();
+        thread.position.unmakeMove();
 
         thread.nnue.state().unmakeMove();
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
@@ -1165,14 +1165,14 @@ private:
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, Move::NULL_MOVE);
 
-        thread.position.makeNull();
+        thread.position.makeNullMove();
         thread.rootPly++;
     }
 
     void unmakeNullMove(SearchThread &thread) noexcept {
         assert(thread.rootPly != 0);
         thread.rootPly--;
-        thread.position.unmake();
+        thread.position.unmakeMove();
 
         HistoryStack &historyStack = thread.history.stack[thread.rootPly];
         historyStack.contCorrHistEntry = nullptr;
