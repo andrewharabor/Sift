@@ -275,7 +275,7 @@ public:
 
         tTable_.incrementAge();
 
-        multiPV_ = std::min(static_cast<USize>(OPTIONS["MultiPV"].spinValue()), legalMoves.size());
+        multiPV_ = static_cast<USize>(OPTIONS["MultiPV"].spinValue());
 
         const Int32 contemptVal = WDL::unnormalize(static_cast<Int32>(OPTIONS["Contempt"].spinValue()), position.materialScore());
         contempt_[static_cast<USize>(position.sideToMove())] = contemptVal;
@@ -310,7 +310,7 @@ public:
         tTable_.reset(threads_.size());
         tTable_.incrementAge();
 
-        multiPV_ = std::min(static_cast<USize>(OptionList::DEFAULT_MULTI_PV), legalMoves.size());
+        multiPV_ = static_cast<USize>(OptionList::DEFAULT_MULTI_PV);
 
         contempt_ = {static_cast<Int32>(OptionList::DEFAULT_CONTEMPT), static_cast<Int32>(OptionList::DEFAULT_CONTEMPT)};
 
