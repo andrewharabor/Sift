@@ -1,5 +1,6 @@
 
 #include <string_view>
+#include <thread>
 
 #include "attacks.hpp"
 #include "cuckoo.hpp"
@@ -14,18 +15,32 @@ int main(int argc, const char *argv[]) {
     CuckooTable::init();
     TunableList::init();
 
+    UCI uci = UCI();
+
     if (argc > 1) {
-        const std::string_view mode = argv[1];
+        std::string args = argv[1];
 
 #if defined(OPEN_BENCH_TUNE)
-        if (mode == "obconfig") {
+        if (args == "obconfig") {
             TUNABLES.openBenchConfig();
             return 0;
         }
 #endif
+
+        for (int i = 2; i < argc; i++) {
+            args += " ";
+            args += argv[i];
+        }
+
+        uci.execute(args);
+        while (uci.searching()) {
+            std::this_thread::yield();
+        }
+
+        return 0;
     }
 
-    UCI uci;
+
     uci.run();
 
     return 0;

@@ -18,10 +18,8 @@
 
 #include "arch.hpp"
 #include "nnue-state.hpp"
-#include "piece.hpp"
 #include "position.hpp"
 #include "simd.hpp"
-#include "tunable.hpp"
 #include "types.hpp"
 
 
@@ -163,18 +161,6 @@ public:
         score *= static_cast<Int64>(Arch::SCALE);
         score /= static_cast<Int64>(Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C * Arch::QUANT_C);
         return static_cast<Int32>(score);
-    }
-
-    inline Int32 evaluate(const Position &position) noexcept {
-        Int32 score = forward(position);
-
-        const Int32 materialAdjust = EVAL_ADJUST_PAWN_SCALE * position.pieces(PieceType::PAWN).count() + EVAL_ADJUST_KNIGHT_SCALE * position.pieces(PieceType::KNIGHT).count() + EVAL_ADJUST_BISHOP_SCALE * position.pieces(PieceType::BISHOP).count() + EVAL_ADJUST_ROOK_SCALE * position.pieces(PieceType::ROOK).count() + EVAL_ADJUST_QUEEN_SCALE * position.pieces(PieceType::QUEEN).count();
-
-        score = score * (EVAL_ADJUST_MATERIAL_BASE + materialAdjust) / EVAL_ADJUST_MATERIAL_DIVISOR;
-        score = score * (EVAL_ADJUST_HALF_MOVE_SCALE - position.halfmoveClock()) / EVAL_ADJUST_HALF_MOVE_SCALE;
-        score = std::clamp(score, Score::LOSS + 1, Score::WIN - 1);
-
-        return score;
     }
 
     Int32 scale(std::string_view path) noexcept {

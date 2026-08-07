@@ -11,17 +11,20 @@
 #include <utility>
 #include <vector>
 
+#include "eval.hpp"
 #include "history.hpp"
 #include "move-gen.hpp"
 #include "move-order.hpp"
 #include "move.hpp"
 #include "nnue.hpp"
+#include "options.hpp"
 #include "position.hpp"
 #include "score.hpp"
 #include "time.hpp"
 #include "ttable.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
+#include "wdl.hpp"
 
 
 namespace Sift {
@@ -83,7 +86,7 @@ enum class ThreadFlag : UInt8 {
 struct SearchThread {
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    Int32 id;
+    USize id;
     std::thread thread;
 
     std::mutex mutex;
@@ -110,7 +113,7 @@ struct SearchThread {
 
     NNUE nnue;
 
-    SearchThread(Int32 id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history(), nnue() { reset(); }
+    SearchThread(USize id, std::thread &&thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history(), nnue() { reset(); }
 
     SearchThread(const SearchThread &) = delete;
     SearchThread &operator=(const SearchThread &) = delete;
@@ -220,9 +223,10 @@ public:
 
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
-    Search(USize hashSizeMB, USize multiPV, SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(hashSizeMB), multiPV_(multiPV), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
+    Search(SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(1), contempt_({0, 0}), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
         setTimeUp(false);
-        threadCount(1);
+        setThreads();
+        resizeTTable();
     }
 
     ~Search() noexcept {
@@ -232,12 +236,13 @@ public:
         joinThreads();
     }
 
-    void threadCount(Int32 count) noexcept {
-        if (threads_.size() != static_cast<USize>(count)) {
+    void setThreads() noexcept {
+        USize count = (OPTIONS.has("Threads")) ? static_cast<USize>(OPTIONS["Threads"].spinValue()) : OptionList::DEFAULT_THREADS;
+        if (threads_.size() != count) {
             joinThreads();
             threads_.clear();
-            threads_.reserve(static_cast<USize>(count));
-            for (Int32 i = 0; i < count; i++) {
+            threads_.reserve(count);
+            for (USize i = 0; i < count; i++) {
                 threads_.push_back(std::make_unique<SearchThread>(i, std::thread()));
                 auto &thread = threads_.back();
                 thread->thread = std::thread([this, &thread] { threadLoop(*thread); });
@@ -270,6 +275,12 @@ public:
 
         tTable_.incrementAge();
 
+        multiPV_ = std::min(static_cast<USize>(OPTIONS["MultiPV"].spinValue()), legalMoves.size());
+
+        const Int32 contemptVal = WDL::unnormalize(static_cast<Int32>(OPTIONS["Contempt"].spinValue()), position.materialScore());
+        contempt_[static_cast<USize>(position.sideToMove())] = contemptVal;
+        contempt_[static_cast<USize>(~position.sideToMove())] = -contemptVal;
+
         setTimeUp(false);
 
         timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
@@ -293,13 +304,17 @@ public:
             thread->wait();
         }
 
+        MoveList legalMoves;
+        MoveGen::legal(position, legalMoves);
+
         tTable_.reset(threads_.size());
         tTable_.incrementAge();
 
-        setTimeUp(false);
+        multiPV_ = std::min(static_cast<USize>(OptionList::DEFAULT_MULTI_PV), legalMoves.size());
 
-        MoveList legalMoves;
-        MoveGen::legal(position, legalMoves);
+        contempt_ = {static_cast<Int32>(OptionList::DEFAULT_CONTEMPT), static_cast<Int32>(OptionList::DEFAULT_CONTEMPT)};
+
+        setTimeUp(false);
         timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
         timeManager_.start();
 
@@ -338,9 +353,10 @@ public:
         }
     }
 
-    void resizeTTable(USize sizeMB) noexcept { tTable_.resize(sizeMB, threads_.size()); }
-
-    void multiPV(USize multiPV) noexcept { multiPV_ = multiPV; }
+    void resizeTTable() noexcept {
+        USize sizeMB = (OPTIONS.has("Hash")) ? static_cast<USize>(OPTIONS["Hash"].spinValue()) : OptionList::DEFAULT_HASH_MB;
+        tTable_.resize(sizeMB, threads_.size());
+    }
 
 private:
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
@@ -380,14 +396,16 @@ private:
 
     static constexpr Int32 QSEARCH_MAX_MOVES = 2;
 
+    std::vector<std::unique_ptr<SearchThread>> threads_;
+
     TTable tTable_;
 
     USize multiPV_;
 
+    std::array<Int32, 2> contempt_;
+
     TimeManager timeManager_;
     std::atomic_bool timeUp_;
-
-    std::vector<std::unique_ptr<SearchThread>> threads_;
 
     SearchInfoCallback uciSearchInfo_;
     BestMoveCallback uciBestMove_;
@@ -546,7 +564,7 @@ private:
         const bool inCheck = position.inCheck();
         const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
 
-        const Int32 drawScore = Score::draw(thread.loadNodes());
+        const Int32 drawScore = Score::drawScore(thread.loadNodes());
 
         if constexpr (!ROOT_NODE) {
             if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
@@ -562,7 +580,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : thread.nnue.evaluate(position);
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_);
         }
 
         SearchStack &nextStack = thread.stack[rootPly + 1];
@@ -590,10 +608,9 @@ private:
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                rawStaticEval = (tTableHit) ? tTableEntry.staticEval : thread.nnue.evaluate(position);
-                stack.staticEval = history.correctStaticEval(position, rawStaticEval, rootPly);
+                rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
+                stack.staticEval = history.correctStaticEval(position, Eval::adjust(rawStaticEval, position), rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
-
                 stack.eval = stack.staticEval;
                 if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                     stack.eval = tTableEntry.score;
@@ -947,7 +964,7 @@ private:
                 return alpha;
             }
 
-            return (inCheck) ? Score::matedIn(static_cast<Int32>(rootPly)) : Score::DRAW;
+            return (inCheck) ? Score::matedIn(static_cast<Int32>(rootPly)) : Score::STALEMATE;
         }
 
         if (!excludedMove) {
@@ -990,7 +1007,7 @@ private:
 
         const bool inCheck = position.inCheck();
 
-        const Int32 drawScore = Score::draw(thread.loadNodes());
+        const Int32 drawScore = Score::drawScore(thread.loadNodes());
 
         if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
             alpha = drawScore;
@@ -1004,7 +1021,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : thread.nnue.evaluate(position);
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_);
         }
 
         auto [tTableEntry, tTableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -1023,9 +1040,8 @@ private:
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            rawStaticEval = (tTableHit) ? tTableEntry.staticEval : thread.nnue.evaluate(position);
-            stack.staticEval = history.correctStaticEval(position, rawStaticEval, rootPly);
-
+            rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
+            stack.staticEval = history.correctStaticEval(position, Eval::adjust(rawStaticEval, position), rootPly);
             stack.eval = stack.staticEval;
             if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                 stack.eval = tTableEntry.score;

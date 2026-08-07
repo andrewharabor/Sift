@@ -254,11 +254,11 @@ TUNABLE_CALLBACK(LMR_SCALE, 427, 0, 0, 0, []() { LMR::init(); })
 
 static inline void LMR::init() {
     LMR_TABLE.fill({});
-    static constexpr Float64 BASE = static_cast<Float64>(LMR_BASE);
-    static constexpr Float64 SCALE = static_cast<Float64>(LMR_SCALE);
+    const Float64 base = static_cast<Float64>(LMR_BASE);
+    const Float64 scale = static_cast<Float64>(LMR_SCALE);
     for (USize depth = 1; depth < LMR_TABLE_SIZE_DEPTH; depth++) {
         for (USize moves = 1; moves < LMR_TABLE_SIZE_MOVES; moves++) {
-            LMR_TABLE[depth][moves] = static_cast<Int32>(BASE + SCALE * std::log(static_cast<Float64>(depth)) * std::log(static_cast<Float64>(moves)));
+            LMR_TABLE[depth][moves] = static_cast<Int32>(base + scale * std::log(static_cast<Float64>(depth)) * std::log(static_cast<Float64>(moves)));
         }
     }
 }
@@ -322,7 +322,7 @@ TUNABLE(EVAL_ADJUST_BISHOP_SCALE, 455, 0, 0, 0);
 TUNABLE(EVAL_ADJUST_ROOK_SCALE, 642, 0, 0, 0);
 TUNABLE(EVAL_ADJUST_QUEEN_SCALE, 1217, 0, 0, 0);
 TUNABLE(EVAL_ADJUST_MATERIAL_BASE, 26000, 0, 0, 0);
-TUNABLE(EVAL_ADJUST_MATERIAL_DIVISOR, 32768, 0, 0, 0);
+TUNABLE(EVAL_ADJUST_DIVISOR, 32768, 0, 0, 0);
 TUNABLE(EVAL_ADJUST_HALF_MOVE_SCALE, 200, 0, 0, 0);
 
 inline void TunableList::init() noexcept {

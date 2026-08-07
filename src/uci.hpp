@@ -1,9 +1,7 @@
 #pragma once
 
-#include <cassert>
 #include <chrono>
 #include <cmath>
-#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
@@ -11,156 +9,44 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
-#include <vector>
 
 #include "bench.hpp"
 #include "color.hpp"
+#include "eval.hpp"
 #include "move.hpp"
 #include "move-gen.hpp"
 #include "nnue.hpp"
+#include "options.hpp"
 #include "perft.hpp"
 #include "position.hpp"
 #include "search.hpp"
 #include "time.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
-#include "utils.hpp"
 #include "wdl.hpp"
+
 
 namespace Sift {
 
-enum class OptionType {
-    CHECK,
-    SPIN,
-    STRING,
-    BUTTON,
-    NONE
-};
-
-struct CheckOption {
-    bool value;
-};
-
-struct SpinOption {
-    Int64 value;
-    Int64 defaultValue;
-    Int64 min;
-    Int64 max;
-};
-
-struct StringOption {
-    std::string value;
-    std::string defaultValue;
-};
-
-class Option {
-public:
-    using Callback = std::function<void(const Option &)>;
-
-    static constexpr Int64 DEFAULT_THREADS = 1;
-    static constexpr Int64 MIN_THREADS = 1;
-    static constexpr Int64 MAX_THREADS = 2048;
-
-    static constexpr Int64 DEFAULT_HASH_MB = 64;
-    static constexpr Int64 MIN_HASH_MB = 1;
-    static constexpr Int64 MAX_HASH_MB = 33554432;
-
-    static constexpr Int64 DEFAULT_MULTI_PV = 1;
-    static constexpr Int64 MIN_MULTI_PV = 1;
-    static constexpr Int64 MAX_MULTI_PV = 256;
-
-    static constexpr bool DEFAULT_SHOW_WDL = true;
-
-    static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
-    static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
-    static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 1000;
-
-    static constexpr bool DEFAULT_SOFT_NODES = false;
-
-    Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
-    Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, SpinOption data, Callback callback) : type_(OptionType::SPIN), name_(name), data_(std::in_place_type<SpinOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, StringOption data, Callback callback) : type_(OptionType::STRING), name_(name), data_(std::in_place_type<StringOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, Callback callback) : type_(OptionType::BUTTON), name_(name), data_(std::in_place_type<std::monostate>), callback_(std::move(callback)) {}
-
-    constexpr OptionType type() const noexcept { return type_; }
-    constexpr const std::string &name() const noexcept { return name_; }
-
-    void setCheck(bool value) {
-        assert(type_ == OptionType::CHECK);
-        std::get<CheckOption>(data_).value = value;
-        callback_(*this);
-    }
-
-    void setSpin(Int64 value) {
-        assert(type_ == OptionType::SPIN);
-        SpinOption &spinData = std::get<SpinOption>(data_);
-        if (value < spinData.min) {
-            value = spinData.min;
-        } else if (value > spinData.max) {
-            value = spinData.max;
-        }
-        spinData.value = value;
-        callback_(*this);
-    }
-
-    void setString(const std::string &value) {
-        assert(type_ == OptionType::STRING);
-        std::get<StringOption>(data_).value = value;
-        callback_(*this);
-    }
-
-    void pressButton() {
-        assert(type_ == OptionType::BUTTON);
-        callback_(*this);
-    }
-
-    constexpr bool checkValue() const noexcept {
-        assert(type_ == OptionType::CHECK);
-        return std::get<CheckOption>(data_).value;
-    }
-
-    constexpr Int64 spinValue() const noexcept {
-        assert(type_ == OptionType::SPIN);
-        return std::get<SpinOption>(data_).value;
-    }
-
-    constexpr SpinOption spinData() const noexcept {
-        assert(type_ == OptionType::SPIN);
-        return std::get<SpinOption>(data_);
-    }
-
-    constexpr const std::string &stringValue() const noexcept {
-        assert(type_ == OptionType::STRING);
-        return std::get<StringOption>(data_).value;
-    }
-
-private:
-    OptionType type_;
-    std::string name_;
-    std::variant<std::monostate, CheckOption, SpinOption, StringOption> data_;
-    Callback callback_;
-};
-
 class UCI {
 public:
-    UCI() : position_(), legalMoves_(), search_(Option::DEFAULT_HASH_MB, Option::DEFAULT_MULTI_PV, [this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
-        options_.push_back(Option("Hash", SpinOption(Option::DEFAULT_HASH_MB, Option::DEFAULT_HASH_MB, Option::MIN_HASH_MB, Option::MAX_HASH_MB), [this](const Option &option) { search_.resizeTTable(static_cast<USize>(option.spinValue())); }));
-        options_.push_back(Option("ClearHash", [this]([[maybe_unused]] const Option &option) { search_.newGame(); }));
-        options_.push_back(Option("Threads", SpinOption(Option::DEFAULT_THREADS, Option::DEFAULT_THREADS, Option::MIN_THREADS, Option::MAX_THREADS), [this](const Option &option) { search_.threadCount(static_cast<Int32>(option.spinValue())); }));
-        options_.push_back(Option("MultiPV", SpinOption(Option::DEFAULT_MULTI_PV, Option::DEFAULT_MULTI_PV, Option::MIN_MULTI_PV, Option::MAX_MULTI_PV), [this](const Option &option) { search_.multiPV(static_cast<USize>(option.spinValue())); }));
-        options_.push_back(Option("ShowWDL", CheckOption(Option::DEFAULT_SHOW_WDL), []([[maybe_unused]] const Option &option) {}));
-        options_.push_back(Option("MoveOverhead", SpinOption(Option::DEFAULT_MOVE_OVERHEAD_MS, Option::DEFAULT_MOVE_OVERHEAD_MS, Option::MIN_MOVE_OVERHEAD_MS, Option::MAX_MOVE_OVERHEAD_MS), []([[maybe_unused]] const Option &option) {}));
-        options_.push_back(Option("SoftNodes", CheckOption(Option::DEFAULT_SOFT_NODES), []([[maybe_unused]] const Option &option) {}));
+    UCI() : position_(), legalMoves_(), search_([this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
+        OPTIONS.add(Option("Hash", SpinOption(OptionList::DEFAULT_HASH_MB, OptionList::DEFAULT_HASH_MB, OptionList::MIN_HASH_MB, OptionList::MAX_HASH_MB), [this]() { search_.resizeTTable(); }));
+        OPTIONS.add(Option("ClearHash", [this]() { search_.newGame(); }));
+        OPTIONS.add(Option("Threads", SpinOption(OptionList::DEFAULT_THREADS, OptionList::DEFAULT_THREADS, OptionList::MIN_THREADS, OptionList::MAX_THREADS), [this]() { search_.setThreads(); }));
+        OPTIONS.add(Option("MultiPV", SpinOption(OptionList::DEFAULT_MULTI_PV, OptionList::DEFAULT_MULTI_PV, OptionList::MIN_MULTI_PV, OptionList::MAX_MULTI_PV), []() {}));
+        OPTIONS.add(Option("Contempt", SpinOption(OptionList::DEFAULT_CONTEMPT, OptionList::DEFAULT_CONTEMPT, OptionList::MIN_CONTEMPT, OptionList::MAX_CONTEMPT), []() {}));
+        OPTIONS.add(Option("MoveOverhead", SpinOption(OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::MIN_MOVE_OVERHEAD_MS, OptionList::MAX_MOVE_OVERHEAD_MS), []() {}));
+        OPTIONS.add(Option("SoftNodes", CheckOption(OptionList::DEFAULT_SOFT_NODES), []() {}));
+        OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), []() {}));
 
 #if defined(OPEN_BENCH_TUNE)
         for (Tunable &tunable : TUNABLES) {
-            options_.push_back(Option(tunable.name(), SpinOption(tunable.value(), tunable.value(), tunable.min(), tunable.max()), [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
+            OPTIONS.add(Option(tunable.name(), SpinOption(tunable.value(), tunable.value(), tunable.min(), tunable.max()), [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
         }
 #endif
 
-        legalMoves();
+        genLegalMoves();
     }
 
     void run() {
@@ -171,40 +57,6 @@ public:
                 break;
             }
         }
-    }
-
-private:
-    enum class Command {
-        UCI,
-        IS_READY,
-        NEW_GAME,
-        POSITION,
-        GO,
-        STOP,
-        SET_OPTION,
-        QUIT,
-        BENCH,
-        PERFT,
-        PERFT_TESTS,
-        BOARD,
-        MOVES,
-        EVAL,
-        FEN,
-        HASH,
-        HELP,
-        NONE
-    };
-
-    Position position_;
-    MoveList legalMoves_;
-    Search search_;
-
-    std::vector<Option> options_;
-
-    mutable std::mutex stdoutMutex_;
-
-    std::unique_lock<std::mutex> lockStdout() const {
-        return std::unique_lock<std::mutex>(stdoutMutex_);
     }
 
     bool execute(const std::string &line) {
@@ -262,6 +114,40 @@ private:
         return false;
     }
 
+    bool searching() const noexcept { return search_.running(); }
+
+private:
+    enum class Command {
+        UCI,
+        IS_READY,
+        NEW_GAME,
+        POSITION,
+        GO,
+        STOP,
+        SET_OPTION,
+        QUIT,
+        BENCH,
+        PERFT,
+        PERFT_TESTS,
+        BOARD,
+        MOVES,
+        EVAL,
+        FEN,
+        HASH,
+        HELP,
+        NONE
+    };
+
+    Position position_;
+    MoveList legalMoves_;
+    Search search_;
+
+    mutable std::mutex stdoutMutex_;
+
+    std::unique_lock<std::mutex> lockStdout() const {
+        return std::unique_lock<std::mutex>(stdoutMutex_);
+    }
+
     constexpr Command command(const std::string &token) const noexcept {
         if (token == "uci") {
             return Command::UCI;
@@ -308,7 +194,7 @@ private:
         std::cout << "id name Sift " << TOSTRING(BUILD_VERSION) << std::endl;
         std::cout << "id author andrewharabor" << std::endl;
 
-        for (const auto &option : options_) {
+        for (const auto &option : OPTIONS) {
             std::cout << "option name " << option.name() << " type ";
             if (option.type() == OptionType::CHECK) {
                 std::cout << "check default " << std::boolalpha << option.checkValue() << std::noboolalpha << std::endl;
@@ -329,9 +215,7 @@ private:
         std::cout << "readyok" << std::endl;
     }
 
-    void newGame() {
-        search_.newGame();
-    }
+    void newGame() { search_.newGame(); }
 
     void position(std::istringstream &stream) {
         position_ = Position();
@@ -363,7 +247,7 @@ private:
             return;
         }
 
-        legalMoves();
+        genLegalMoves();
         while (stream >> token) {
             auto compare = [&token](const Move move) { return std::string(move) == token; };
             USize index = legalMoves_.findIf(compare);
@@ -371,15 +255,15 @@ private:
                 return;
             }
             position_.makeMove(legalMoves_[index]);
-            legalMoves();
+            genLegalMoves();
         }
     }
 
     void go(std::istringstream &stream) {
         std::string token;
         SearchLimits limits = SearchLimits();
-        limits.overhead = MS(options_[optionIndex("MoveOverhead")].spinValue());
-        limits.softNodes = options_[optionIndex("SoftNodes")].checkValue();
+        limits.overhead = MS(OPTIONS["MoveOverhead"].spinValue());
+        limits.softNodes = OPTIONS["SoftNodes"].checkValue();
 
         while (stream >> token) {
             if (token == "wtime") {
@@ -420,7 +304,7 @@ private:
                 stream >> moveTime;
                 limits.time = MS(moveTime);
             } else if (token == "searchmoves") {
-                legalMoves();
+                genLegalMoves();
                 while (stream >> token) {
                     auto compare = [&token](const Move move) { return std::string(move) == token; };
                     USize index = legalMoves_.findIf(compare);
@@ -446,6 +330,8 @@ private:
     void searchInfo(const SearchInfo &info) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
+        const Int32 material = position_.materialScore();
+
         std::cout << "info depth " << info.depth;
         std::cout << " seldepth " << info.selDepth;
         std::cout << " multipv " << (info.pvIndex + 1);
@@ -457,10 +343,11 @@ private:
             } else {
                 std::cout << "mate -" << (info.score + Score::MATE) / 2;
             }
-        } else if (info.score >= Score::DRAW_MIN && info.score <= Score::DRAW_MAX) {
+        } else if (Score::draw(info.score)) {
             std::cout << "cp 0";
         } else {
-            std::cout << "cp " << info.score;
+            const Int32 normedScore = WDL::normalize(info.score, material);
+            std::cout << "cp " << normedScore;
         }
         if (info.lowerBound) {
             std::cout << " lowerbound";
@@ -469,7 +356,7 @@ private:
             std::cout << " upperbound";
         }
 
-        if (options_[optionIndex("ShowWDL")].checkValue()) {
+        if (OPTIONS["ShowWDL"].checkValue()) {
             std::cout << " wdl ";
 
             if (Score::mate(info.score)) {
@@ -479,9 +366,7 @@ private:
                     std::cout << "0 0 1000";
                 }
             } else {
-                const auto [winProb, lossProb] = WDL::winLoss(position_.materialScore(), info.score);
-                const Int32 win = static_cast<Int32>(std::round(winProb * 1000.0));
-                const Int32 loss = static_cast<Int32>(std::round(lossProb * 1000.0));
+                const auto [win, loss] = WDL::model(info.score, material);
                 const Int32 draw = 1000 - win - loss;
                 std::cout << win << " " << draw << " " << loss;
             }
@@ -521,11 +406,11 @@ private:
 
         stream >> name;
 
-        if (optionIndex(name) >= options_.size()) {
+        if (!OPTIONS.has(name)) {
             return;
         }
 
-        Option &option = options_[optionIndex(name)];
+        Option &option = OPTIONS[name];
 
         stream >> token;
         if (option.type() != OptionType::BUTTON && token != "value") {
@@ -667,7 +552,7 @@ private:
     void moves() {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        legalMoves();
+        genLegalMoves();
         std::cout << "moves ";
         for (const Move move : legalMoves_) {
             std::cout << std::string(move) << " ";
@@ -684,7 +569,8 @@ private:
         } else {
             NNUE nnue = NNUE();
             nnue.state().set(position_);
-            std::cout << nnue.evaluate(position_) << " cp";
+            const Int32 normedScore = WDL::normalize(Eval::adjusted(position_, nnue, {0, 0}), position_.materialScore());
+            std::cout << normedScore << " cp";
         }
         std::cout << std::endl;
     }
@@ -710,17 +596,9 @@ private:
         std::cout << "info string " << info << std::endl;
     }
 
-    void legalMoves() noexcept {
+    void genLegalMoves() noexcept {
         legalMoves_.clear();
         MoveGen::legal(position_, legalMoves_);
-    }
-
-    USize optionIndex(const std::string &name) const noexcept {
-        auto it = std::find_if(options_.begin(), options_.end(), [&name](const Option &option) { return option.name() == name; });
-        if (it != options_.end()) {
-            return static_cast<USize>(it - options_.begin());
-        }
-        return options_.size();
     }
 };
 
