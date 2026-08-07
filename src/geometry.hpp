@@ -161,7 +161,7 @@ public:
         std::array<Bit, 64> threats = {
             KNIGHT, ORTHOGONAL_NEAR, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL,
             KNIGHT, BLACK_PAWN_NEAR, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL,
-            KNIGHT, ORTHOGONAL_NEAR, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL,
+            KNIGHT, ORTHOGONAL_NEAR, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL,
             KNIGHT, WHITE_PAWN_NEAR, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL,
             KNIGHT, ORTHOGONAL_NEAR, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL, ORTHOGONAL,
             KNIGHT, WHITE_PAWN_NEAR, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL, DIAGONAL,
@@ -223,7 +223,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece.internal())] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) noexcept {
         const auto mask = _mm512_loadu_si512(INCOMING_THREAT_MASK.data());
@@ -237,7 +237,7 @@ public:
 
 #elif defined(USE_AVX2)
 
-    static inline Permutation permuation(Square square) noexcept {
+    static inline Permutation permutation(Square square) noexcept {
         const auto indices = Vec::cast(PERMUTATIONS[static_cast<USize>(square.index())]);
         const Vec valid{{_mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80)), _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80))}};
         return Permutation{indices, valid};
@@ -290,7 +290,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece.internal())] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) noexcept {
         const auto mask = Vec::cast(INCOMING_THREAT_MASK);
@@ -307,7 +307,7 @@ public:
 #elif defined(USE_NEON)
 
     static inline Permutation permutation(Square square) {
-        const auto indices = Vec::load(PERMUTATIONS[static_cast<USize>(square)].data());
+        const auto indices = Vec::load(PERMUTATIONS[static_cast<USize>(square.index())].data());
         const auto valid = Vec{vmvnq_u8(vshrq_n_s8(indices[0], 7)), vmvnq_u8(vshrq_n_s8(indices[1], 7)), vmvnq_u8(vshrq_n_s8(indices[2], 7)), vmvnq_u8(vshrq_n_s8(indices[3], 7))};
         return Permutation{indices, valid};
     }
@@ -321,7 +321,7 @@ public:
 
     static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox) { return permuteMailbox(perm, Vec::load(mailbox.data())); }
 
-    static inline std::tuple<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox, Square ignore) {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox, Square ignore) {
         const auto iota = Vec::cast(
             std::array<UInt8, 64>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
             22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
@@ -346,7 +346,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[static_cast<USize>(piece.internal())] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) {
         const auto mask = Vec::load(INCOMING_THREAT_MASK.data());

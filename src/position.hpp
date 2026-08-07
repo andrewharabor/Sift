@@ -178,6 +178,8 @@ public:
             return false;
         }
 
+        DummyNNUEState dummy;
+
         Int32 index = 56;
         for (char c : board) {
             if (c == '/') {
@@ -190,7 +192,7 @@ public:
                 }
 
                 const Piece piece = Piece(std::string_view(&c, 1));
-                addPiece<true>(piece, Square(static_cast<UInt8>(index)));
+                addPiece<true>(piece, Square(static_cast<UInt8>(index)), dummy);
                 index++;
             }
         }
@@ -393,13 +395,17 @@ public:
         return CASTLING_PATH_BITBOARDS[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
     }
 
-    void makeMove(Move move) {
+    template<typename NNUEState>
+    void makeMove(Move move, NNUEState &nnueState) noexcept {
         assert(move != Move::NULL_MOVE);
         assert(pieceAt(move.from()).color() == sideToMove_);
 
         const bool captureMove = capture(move);
+        const Piece movedPiece = pieceAt(move.from());
+        const Piece finalPiece = (move.type() == MoveType::PROMOTION) ? Piece(move.promotion(), sideToMove_) : movedPiece;
         const Piece capturedPiece = pieceAt(move.to());
-        const PieceType pieceType = pieceAt(move.from()).type();
+        const PieceType pieceType = movedPiece.type();
+        Square kingTo = move.to();
 
         states_.push_back(state());
         state().lastMove = move;
@@ -418,8 +424,6 @@ public:
             state().halfmoveClock = 0;
 
             if (move.type() != MoveType::EN_PASSANT) {
-                removePiece<true>(capturedPiece, move.to());
-
                 if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                     const Square kingSq = kingSquare(~sideToMove_);
                     const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
@@ -455,43 +459,38 @@ public:
             }
         }
 
-        if (move.type() == MoveType::CASTLING) {
-            assert(pieceAt(move.from()).type() == PieceType::KING);
-            assert(pieceAt(move.to()).type() == PieceType::ROOK);
+        nnueState.prepareUpdates();
 
+        if (move.type() == MoveType::CASTLING) {
             const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
             const Square rookTo = CastlingRights::rookTo(castlingSide);
-            const Square kingTo = CastlingRights::kingTo(castlingSide);
-            const Piece king = pieceAt(move.from());
-            const Piece rook = pieceAt(move.to());
+            kingTo = CastlingRights::kingTo(castlingSide);
+            const Piece king = movedPiece;
+            const Piece rook = capturedPiece;
 
             assert(king == Piece(PieceType::KING, sideToMove_));
             assert(rook == Piece(PieceType::ROOK, sideToMove_));
 
-            removePiece<true>(king, move.from());
-            removePiece<true>(rook, move.to());
-            addPiece<true>(king, kingTo);
-            addPiece<true>(rook, rookTo);
-        } else if (move.type() == MoveType::PROMOTION) {
-            const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
-            const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
-            assert(promotionPiece != Piece::NONE);
-
-            removePiece<true>(pawn, move.from());
-            addPiece<true>(promotionPiece, move.to());
+            removePiece<true>(king, move.from(), nnueState);
+            removePiece<true>(rook, move.to(), nnueState);
+            addPiece<true>(king, kingTo, nnueState);
+            addPiece<true>(rook, rookTo, nnueState);
+        } else if (captureMove && !(move.type() == MoveType::EN_PASSANT)) {
+            removePiece<true>(movedPiece, move.from(), nnueState);
+            transmutePiece<true>(capturedPiece, finalPiece, move.to(), nnueState);
         } else {
-            assert(pieceAt(move.from()) != Piece::NONE);
-            assert(pieceAt(move.to()) == Piece::NONE);
-            const Piece movedPiece = pieceAt(move.from());
+            if (move.type() == MoveType::EN_PASSANT) {
+                const Square enPassantSquare = move.to().enPassant();
+                const Piece enPassantPawn = Piece(PieceType::PAWN, ~sideToMove_);
+                assert(pieceAt(enPassantSquare) == enPassantPawn);
 
-            removePiece<true>(movedPiece, move.from());
-            addPiece<true>(movedPiece, move.to());
+                removePiece<true>(enPassantPawn, enPassantSquare, nnueState);
+            }
+            movePiece<true>(movedPiece, finalPiece, move.from(), move.to(), nnueState);
         }
 
-        if (move.type() == MoveType::EN_PASSANT) {
-            assert(pieceAt(move.to().enPassant()) == PieceType::PAWN);
-            Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
-            removePiece<true>(pawn, move.to().enPassant());
+        if (pieceType == PieceType::KING) {
+            nnueState.checkRefresh(move.from(), kingTo, sideToMove_);
         }
 
         sideToMove_ = ~sideToMove_;
@@ -503,7 +502,12 @@ public:
         updateThreats();
     }
 
-    void makeNullMove() {
+    void makeMove(Move move) noexcept {
+        DummyNNUEState dummy;
+        makeMove(move, dummy);
+    }
+
+    void makeNullMove() noexcept {
         states_.push_back(state());
         state().lastMove = Move::NULL_MOVE;
         state().capturedPiece = Piece::NONE;
@@ -527,7 +531,8 @@ public:
         updateThreats();
     }
 
-    void unmakeMove() noexcept {
+    template<typename NNUEState>
+    void unmakeMove(NNUEState &nnueState) noexcept {
         const Move move = state().lastMove;
         const Piece capturedPiece = state().capturedPiece;
 
@@ -539,6 +544,10 @@ public:
             assert(capturedPiece == Piece::NONE);
             return;
         }
+
+        nnueState.unmakeMove();
+
+        DummyNNUEState dummy;
 
         if (move.type() == MoveType::CASTLING) {
             const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), sideToMove_);
@@ -552,22 +561,22 @@ public:
             assert(king == Piece(PieceType::KING, sideToMove_));
             assert(rook == Piece(PieceType::ROOK, sideToMove_));
 
-            removePiece<false>(king, kingTo);
-            removePiece<false>(rook, rookTo);
-            addPiece<false>(king, move.from());
-            addPiece<false>(rook, move.to());
+            removePiece<false>(king, kingTo, dummy);
+            removePiece<false>(rook, rookTo, dummy);
+            addPiece<false>(king, move.from(), dummy);
+            addPiece<false>(rook, move.to(), dummy);
         } else if (move.type() == MoveType::PROMOTION) {
             const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
             const Piece promotionPiece = pieceAt(move.to());
 
             assert(promotionPiece.type() == move.promotion());
 
-            removePiece<false>(promotionPiece, move.to());
-            addPiece<false>(pawn, move.from());
+            removePiece<false>(promotionPiece, move.to(), dummy);
+            addPiece<false>(pawn, move.from(), dummy);
 
             if (capturedPiece != Piece::NONE) {
                 assert(pieceAt(move.to()) == Piece::NONE);
-                addPiece<false>(capturedPiece, move.to());
+                addPiece<false>(capturedPiece, move.to(), dummy);
             }
         } else {
             assert(pieceAt(move.to()) != Piece::NONE);
@@ -575,8 +584,8 @@ public:
 
             const Piece movedPiece = pieceAt(move.to());
 
-            removePiece<false>(movedPiece, move.to());
-            addPiece<false>(movedPiece, move.from());
+            removePiece<false>(movedPiece, move.to(), dummy);
+            addPiece<false>(movedPiece, move.from(), dummy);
 
             if (move.type() == MoveType::EN_PASSANT) {
                 Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
@@ -584,12 +593,17 @@ public:
 
                 assert(pieceAt(pawnSquare) == Piece::NONE);
 
-                addPiece<false>(pawn, pawnSquare);
+                addPiece<false>(pawn, pawnSquare, dummy);
             } else if (capturedPiece != Piece::NONE) {
                 assert(pieceAt(move.to()) == Piece::NONE);
-                addPiece<false>(capturedPiece, move.to());
+                addPiece<false>(capturedPiece, move.to(), dummy);
             }
         }
+    }
+
+    void unmakeMove() noexcept {
+        DummyNNUEState dummy;
+        unmakeMove(dummy);
     }
 
     constexpr UInt64 zobristHash() const noexcept {
@@ -1308,6 +1322,16 @@ private:
         Bitboard winningThreats;
     };
 
+    struct DummyNNUEState {
+        constexpr void prepareUpdates() noexcept {}
+        void addPiece(const Position &, Piece, Square) noexcept {}
+        void removePiece(const Position &, Piece, Square) noexcept {}
+        void movePiece(const Position &, Piece, Piece, Square, Square) noexcept {}
+        void transmutePiece(const Position &, Piece, Piece, Square) noexcept {}
+        constexpr void checkRefresh(Square, Square, Color) noexcept {}
+        constexpr void unmakeMove() noexcept {}
+    };
+
     std::vector<State> states_;
 
     std::array<Bitboard, 6> pieceBitboards_;
@@ -1320,8 +1344,8 @@ private:
     constexpr State &state() noexcept { return states_.back(); }
     constexpr const State &state() const noexcept { return states_.back(); }
 
-    template<bool UPDATE_HASH>
-    void addPiece(Piece piece, Square square) noexcept {
+    template<bool UPDATE_HASH, typename NNUEState>
+    void addPiece(Piece piece, Square square, NNUEState &nnueState) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
         assert(pieceAt(square) == Piece::NONE);
 
@@ -1346,10 +1370,12 @@ private:
         pieceBitboards_[static_cast<USize>(pieceType)].set(index);
         occupancyBitboards_[static_cast<USize>(color)].set(index);
         mailbox_[static_cast<USize>(index)] = piece;
+
+        nnueState.addPiece(*this, piece, square);
     }
 
-    template<bool UPDATE_HASH>
-    void removePiece(Piece piece, Square square) noexcept {
+    template<bool UPDATE_HASH, typename NNUEState>
+    void removePiece(Piece piece, Square square, NNUEState &nnueState) noexcept {
         assert(piece != Piece::NONE && square != Square::NONE);
         assert(pieceAt(square) == piece);
 
@@ -1374,6 +1400,24 @@ private:
         pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
         occupancyBitboards_[static_cast<USize>(color)].clear(index);
         mailbox_[static_cast<USize>(index)] = Piece::NONE;
+
+        nnueState.removePiece(*this, piece, square);
+    }
+
+    template<bool UPDATE_HASH, typename NNUEState>
+    void movePiece(Piece fromPiece, Piece toPiece, Square fromSquare, Square toSquare, NNUEState &nnueState) noexcept {
+        DummyNNUEState dummy;
+        removePiece<UPDATE_HASH, DummyNNUEState>(fromPiece, fromSquare, dummy);
+        addPiece<UPDATE_HASH, DummyNNUEState>(toPiece, toSquare, dummy);
+        nnueState.movePiece(*this, fromPiece, toPiece, fromSquare, toSquare);
+    }
+
+    template<bool UPDATE_HASH, typename NNUEState>
+    void transmutePiece(Piece oldPiece, Piece newPiece, Square square, NNUEState &nnueState) noexcept {
+        DummyNNUEState dummy;
+        removePiece<UPDATE_HASH, DummyNNUEState>(oldPiece, square, dummy);
+        addPiece<UPDATE_HASH, DummyNNUEState>(newPiece, square, dummy);
+        nnueState.transmutePiece(*this, oldPiece, newPiece, square);
     }
 
     constexpr void updateRepetitions() noexcept {

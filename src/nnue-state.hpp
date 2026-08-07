@@ -521,100 +521,10 @@ public:
         return accumulators_[ply_];
     }
 
-    constexpr void checkRefresh(Square kingFrom, Square kingTo, Color color) noexcept {
-        if (accumulators_[ply_ - 1].psqState(color) == AccState::REFRESH || mirror(kingFrom) != mirror(kingTo) || kingBucket(kingFrom, color) != kingBucket(kingTo, color)) {
-            accumulators_[ply_].setPSQState(color, AccState::REFRESH);
-        }
-
-        if (accumulators_[ply_ - 1].tiState(color) == AccState::REFRESH || mirror(kingFrom) != mirror(kingTo)) {
-            accumulators_[ply_].setTIState(color, AccState::REFRESH);
-        }
-    }
-
-    constexpr void makeMove(const Position &position, Move move) noexcept {
+    constexpr void prepareUpdates() noexcept {
         assert(ply_ < MAX_PLY - 1);
         ply_++;
         accumulators_[ply_].prepareUpdates();
-
-        const Color color = position.sideToMove();
-        const Piece moving = position.pieceAt(move.from());
-        const Piece moved = (move.type() == MoveType::PROMOTION) ? Piece(move.promotion(), color) : moving;
-        const Piece captured = position.pieceAt(move.to());
-        const bool capture = (captured != Piece::NONE) && (move.type() != MoveType::CASTLING);
-
-        if (move.type() == MoveType::CASTLING) {
-            const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), move.from(), color);
-            const Square rookTo = CastlingRights::rookTo(castlingSide);
-            const Square kingTo = CastlingRights::kingTo(castlingSide);
-            removePiece(position, moving, move.from());
-            removePiece(position, captured, move.to());
-            addPiece(position, moving, kingTo);
-            addPiece(position, captured, rookTo);
-        } else if (capture) {
-            removePiece(position, moving, move.from());
-            transmutePiece(position, captured, moved, move.to());
-        } else {
-            if (move.type() == MoveType::EN_PASSANT) {
-                const Square epSquare = move.to().enPassant();
-                const Piece epPawn = Piece(PieceType::PAWN, ~color);
-                assert(position.pieceAt(epSquare) == epPawn);
-                removePiece(position, epPawn, epSquare);
-            }
-            movePiece(position, moving, moved, move.from(), move.to());
-        }
-
-        if (moving.type() == PieceType::KING) {
-            checkRefresh(move.from(), move.to(), color);
-        }
-    }
-
-    constexpr void unmakeMove() noexcept {
-        assert(ply_ > 0);
-        ply_--;
-    }
-
-private:
-    const MultiArray<Int16, Arch::KING_BUCKETS, Arch::PSQ_SIZE, Arch::L1_SIZE> &psqWeights_;
-    const MultiArray<Int8, Arch::TI_SIZE, Arch::L1_SIZE> &tiWeights_;
-
-    Accumulator accumulators_[MAX_PLY + 1];
-    USize ply_;
-
-    MultiArray<RefreshEntry, 2, 2, Arch::KING_BUCKETS> refreshTable_;
-
-    void update(const Position &position, Color color) noexcept {
-        const bool mirr = mirror(position.kingSquare(color));
-        const USize kBucket = kingBucket(position.kingSquare(color), color);
-
-        USize cleanIdx = ply_;
-        while (accumulators_[cleanIdx].psqState(color) == AccState::DIRTY) {
-            cleanIdx--;
-        }
-
-        if (accumulators_[cleanIdx].psqState(color) == AccState::REFRESH) {
-            RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
-            refreshEntry.update(psqWeights_[kBucket], position, color, mirr);
-            accumulators_[ply_].setPSQState(color, AccState::REFRESH);
-            accumulators_[ply_].refreshPSQFeatures(refreshEntry, color);
-        } else {
-            while (cleanIdx++ < ply_) {
-                accumulators_[cleanIdx].updatePSQFeatures(accumulators_[cleanIdx - 1], psqWeights_[kBucket], color, mirr);
-            }
-        }
-
-        cleanIdx = ply_;
-        while (accumulators_[cleanIdx].tiState(color) == AccState::DIRTY) {
-            cleanIdx--;
-        }
-
-        if (accumulators_[cleanIdx].tiState(color) == AccState::REFRESH) {
-            accumulators_[ply_].setTIState(color, AccState::REFRESH);
-            accumulators_[ply_].refreshTIFeatures(tiWeights_, position, color, mirr);
-        } else {
-            while (cleanIdx++ < ply_) {
-                accumulators_[cleanIdx].updateTIFeatures(accumulators_[cleanIdx - 1], tiWeights_, color, mirr);
-            }
-        }
     }
 
     void addPiece(const Position &position, Piece piece, Square square) noexcept {
@@ -657,7 +567,7 @@ private:
         pushXRayTIFeatures<true>(toPerm.indices, toRays, toIncomingSliders & toValid, toVictimMask & toValid);
 #else
         const Bitboard occupied = position.occupied();
-        const Bitboard xRayOccupied = occupied & ~Bitboard(toSquare);
+        const Bitboard xRayOccupied = occupied ^ Bitboard(toSquare);
 
         Bitboard fromOutgoing = Attacks::attacks(fromPiece, fromSquare, xRayOccupied) & xRayOccupied;
         Bitboard toOutgoing = Attacks::attacks(toPiece, toSquare, occupied) & occupied;
@@ -796,6 +706,65 @@ private:
             }
         }
 #endif
+    }
+
+    constexpr void checkRefresh(Square kingFrom, Square kingTo, Color color) noexcept {
+        if (accumulators_[ply_ - 1].psqState(color) == AccState::REFRESH || mirror(kingFrom) != mirror(kingTo) || kingBucket(kingFrom, color) != kingBucket(kingTo, color)) {
+            accumulators_[ply_].setPSQState(color, AccState::REFRESH);
+        }
+
+        if (accumulators_[ply_ - 1].tiState(color) == AccState::REFRESH || mirror(kingFrom) != mirror(kingTo)) {
+            accumulators_[ply_].setTIState(color, AccState::REFRESH);
+        }
+    }
+
+    constexpr void unmakeMove() noexcept {
+        assert(ply_ > 0);
+        ply_--;
+    }
+
+private:
+    const MultiArray<Int16, Arch::KING_BUCKETS, Arch::PSQ_SIZE, Arch::L1_SIZE> &psqWeights_;
+    const MultiArray<Int8, Arch::TI_SIZE, Arch::L1_SIZE> &tiWeights_;
+
+    Accumulator accumulators_[MAX_PLY + 1];
+    USize ply_;
+
+    MultiArray<RefreshEntry, 2, 2, Arch::KING_BUCKETS> refreshTable_;
+
+    void update(const Position &position, Color color) noexcept {
+        const bool mirr = mirror(position.kingSquare(color));
+        const USize kBucket = kingBucket(position.kingSquare(color), color);
+
+        USize cleanIdx = ply_;
+        while (accumulators_[cleanIdx].psqState(color) == AccState::DIRTY) {
+            cleanIdx--;
+        }
+
+        if (accumulators_[cleanIdx].psqState(color) == AccState::REFRESH) {
+            RefreshEntry &refreshEntry = refreshTable_[static_cast<USize>(color)][mirr][kBucket];
+            refreshEntry.update(psqWeights_[kBucket], position, color, mirr);
+            accumulators_[ply_].setPSQState(color, AccState::REFRESH);
+            accumulators_[ply_].refreshPSQFeatures(refreshEntry, color);
+        } else {
+            while (cleanIdx++ < ply_) {
+                accumulators_[cleanIdx].updatePSQFeatures(accumulators_[cleanIdx - 1], psqWeights_[kBucket], color, mirr);
+            }
+        }
+
+        cleanIdx = ply_;
+        while (accumulators_[cleanIdx].tiState(color) == AccState::DIRTY) {
+            cleanIdx--;
+        }
+
+        if (accumulators_[cleanIdx].tiState(color) == AccState::REFRESH) {
+            accumulators_[ply_].setTIState(color, AccState::REFRESH);
+            accumulators_[ply_].refreshTIFeatures(tiWeights_, position, color, mirr);
+        } else {
+            while (cleanIdx++ < ply_) {
+                accumulators_[cleanIdx].updateTIFeatures(accumulators_[cleanIdx - 1], tiWeights_, color, mirr);
+            }
+        }
     }
 
     template<bool ADD>
