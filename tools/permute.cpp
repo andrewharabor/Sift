@@ -71,8 +71,11 @@ int main(void) {
 
     for (USize b = 0; b < Arch::KING_BUCKETS; b++) {
         for (USize i = 0; i < Arch::PSQ_SIZE; i++) {
-            permuteArray(originalParams->l0Weights[b][i].data(), permutedParams->l0Weights[b][i].data());
+            permuteArray(originalParams->l0PSQWeights[b][i].data(), permutedParams->l0PSQWeights[b][i].data());
         }
+    }
+    for (USize i = 0; i < Arch::TI_SIZE; i++) {
+        permuteArray(originalParams->l0TIWeights[i].data(), permutedParams->l0TIWeights[i].data());
     }
     permuteArray(originalParams->l0Biases.data(), permutedParams->l0Biases.data());
 

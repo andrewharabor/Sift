@@ -131,15 +131,17 @@ private:
 
 class NNUE {
 public:
-    NNUE() : params_(loadParams()), state_(params_->l0Weights, params_->l0Biases) {}
+    NNUE() : params_(loadParams()), state_(params_->l0PSQWeights, params_->l0TIWeights, params_->l0Biases) {}
 
     constexpr NNUEState &state() noexcept { return state_; }
 
     inline Int32 forward(const Position &position) noexcept {
         const Color color = position.sideToMove();
         const Accumulator &acc = state_.topAccumulator(position);
-        const std::array<Int16, Arch::L1_SIZE> &friendlyAcc = acc.data(color);
-        const std::array<Int16, Arch::L1_SIZE> &enemyAcc = acc.data(~color);
+        const std::array<Int16, Arch::L1_SIZE> &friendlyPSQAcc = acc.psqData(color);
+        const std::array<Int16, Arch::L1_SIZE> &friendlyTIAcc = acc.tiData(color);
+        const std::array<Int16, Arch::L1_SIZE> &enemyPSQAcc = acc.psqData(~color);
+        const std::array<Int16, Arch::L1_SIZE> &enemyTIAcc = acc.tiData(~color);
 
         static constexpr USize OUTPUT_BUCKET_DIV = (32 + Arch::OUTPUT_BUCKETS - 1) / Arch::OUTPUT_BUCKETS;
         const USize outputBucket = (position.occupied().count() - 2) / OUTPUT_BUCKET_DIV;
@@ -149,8 +151,8 @@ public:
         alignas(64) std::array<UInt8, Arch::L1_SIZE> l0Out;
         alignas(64) std::array<Int32, Arch::L2_SIZE> l1Out;
 
-        forwardL0Half(l0Out, 0, friendlyAcc, sparsityIter);
-        forwardL0Half(l0Out, Arch::L1_SIZE / 2, enemyAcc, sparsityIter);
+        forwardL0Half(l0Out, 0, friendlyPSQAcc, friendlyTIAcc, sparsityIter);
+        forwardL0Half(l0Out, Arch::L1_SIZE / 2, enemyPSQAcc, enemyTIAcc, sparsityIter);
         forwardL1(l1Out, l0Out, outputBucket, sparsityIter);
         Int64 score = forwardL2L3(l1Out, outputBucket);
 
@@ -271,7 +273,7 @@ private:
     static inline UInt64 totalCalls = 0;
 #endif
 
-    inline void forwardL0Half(std::array<UInt8, Arch::L1_SIZE> &l0Out, USize offset, const std::array<Int16, Arch::L1_SIZE> &acc, [[maybe_unused]] SparsityIterator &sparsityIter) noexcept {
+    inline void forwardL0Half(std::array<UInt8, Arch::L1_SIZE> &l0Out, USize offset, const std::array<Int16, Arch::L1_SIZE> &psqAcc, const std::array<Int16, Arch::L1_SIZE> &tiAcc, [[maybe_unused]] SparsityIterator &sparsityIter) noexcept {
 #if defined(USE_SIMD)
         static_assert((Arch::L1_SIZE / 2) % (SIMD::WIDTH16 * 4) == 0);
         static constexpr USize ITERS = (Arch::L1_SIZE / 2) / SIMD::WIDTH16;
@@ -279,14 +281,30 @@ private:
         const VecInt16 zero = SIMD::zeroInt16();
         const VecInt16 quant = SIMD::setInt16(static_cast<Int16>(Arch::QUANT_A));
         for (USize i = 0; i < ITERS; i += 4) {
-            const VecInt16 clamp0Vec0 = SIMD::clampInt16(SIMD::loadInt16(&acc[(i + 0) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp0Vec1 = SIMD::clampInt16(SIMD::loadInt16(&acc[(i + 1) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp0Vec2 = SIMD::clampInt16(SIMD::loadInt16(&acc[(i + 2) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp0Vec3 = SIMD::clampInt16(SIMD::loadInt16(&acc[(i + 3) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp1Vec0 = SIMD::clampInt16(SIMD::loadInt16(&acc[Arch::L1_SIZE / 2 + (i + 0) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp1Vec1 = SIMD::clampInt16(SIMD::loadInt16(&acc[Arch::L1_SIZE / 2 + (i + 1) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp1Vec2 = SIMD::clampInt16(SIMD::loadInt16(&acc[Arch::L1_SIZE / 2 + (i + 2) * SIMD::WIDTH16]), zero, quant);
-            const VecInt16 clamp1Vec3 = SIMD::clampInt16(SIMD::loadInt16(&acc[Arch::L1_SIZE / 2 + (i + 3) * SIMD::WIDTH16]), zero, quant);
+            const VecInt16 clamp0PSQ0 = SIMD::loadInt16(&psqAcc[(i + 0) * SIMD::WIDTH16]);
+            const VecInt16 clamp0PSQ1 = SIMD::loadInt16(&psqAcc[(i + 1) * SIMD::WIDTH16]);
+            const VecInt16 clamp0PSQ2 = SIMD::loadInt16(&psqAcc[(i + 2) * SIMD::WIDTH16]);
+            const VecInt16 clamp0PSQ3 = SIMD::loadInt16(&psqAcc[(i + 3) * SIMD::WIDTH16]);
+            const VecInt16 clamp0TI0 = SIMD::loadInt16(&tiAcc[(i + 0) * SIMD::WIDTH16]);
+            const VecInt16 clamp0TI1 = SIMD::loadInt16(&tiAcc[(i + 1) * SIMD::WIDTH16]);
+            const VecInt16 clamp0TI2 = SIMD::loadInt16(&tiAcc[(i + 2) * SIMD::WIDTH16]);
+            const VecInt16 clamp0TI3 = SIMD::loadInt16(&tiAcc[(i + 3) * SIMD::WIDTH16]);
+            const VecInt16 clamp0Vec0 = SIMD::clampInt16(SIMD::addInt16(clamp0PSQ0, clamp0TI0), zero, quant);
+            const VecInt16 clamp0Vec1 = SIMD::clampInt16(SIMD::addInt16(clamp0PSQ1, clamp0TI1), zero, quant);
+            const VecInt16 clamp0Vec2 = SIMD::clampInt16(SIMD::addInt16(clamp0PSQ2, clamp0TI2), zero, quant);
+            const VecInt16 clamp0Vec3 = SIMD::clampInt16(SIMD::addInt16(clamp0PSQ3, clamp0TI3), zero, quant);
+            const VecInt16 clamp1PSQ0 = SIMD::loadInt16(&psqAcc[Arch::L1_SIZE / 2 + (i + 0) * SIMD::WIDTH16]);
+            const VecInt16 clamp1PSQ1 = SIMD::loadInt16(&psqAcc[Arch::L1_SIZE / 2 + (i + 1) * SIMD::WIDTH16]);
+            const VecInt16 clamp1PSQ2 = SIMD::loadInt16(&psqAcc[Arch::L1_SIZE / 2 + (i + 2) * SIMD::WIDTH16]);
+            const VecInt16 clamp1PSQ3 = SIMD::loadInt16(&psqAcc[Arch::L1_SIZE / 2 + (i + 3) * SIMD::WIDTH16]);
+            const VecInt16 clamp1TI0 = SIMD::loadInt16(&tiAcc[Arch::L1_SIZE / 2 + (i + 0) * SIMD::WIDTH16]);
+            const VecInt16 clamp1TI1 = SIMD::loadInt16(&tiAcc[Arch::L1_SIZE / 2 + (i + 1) * SIMD::WIDTH16]);
+            const VecInt16 clamp1TI2 = SIMD::loadInt16(&tiAcc[Arch::L1_SIZE / 2 + (i + 2) * SIMD::WIDTH16]);
+            const VecInt16 clamp1TI3 = SIMD::loadInt16(&tiAcc[Arch::L1_SIZE / 2 + (i + 3) * SIMD::WIDTH16]);
+            const VecInt16 clamp1Vec0 = SIMD::clampInt16(SIMD::addInt16(clamp1PSQ0, clamp1TI0), zero, quant);
+            const VecInt16 clamp1Vec1 = SIMD::clampInt16(SIMD::addInt16(clamp1PSQ1, clamp1TI1), zero, quant);
+            const VecInt16 clamp1Vec2 = SIMD::clampInt16(SIMD::addInt16(clamp1PSQ2, clamp1TI2), zero, quant);
+            const VecInt16 clamp1Vec3 = SIMD::clampInt16(SIMD::addInt16(clamp1PSQ3, clamp1TI3), zero, quant);
             const VecInt16 prodVec0 = SIMD::lShiftMulHiInt16(clamp0Vec0, clamp1Vec0, 7);
             const VecInt16 prodVec1 = SIMD::lShiftMulHiInt16(clamp0Vec1, clamp1Vec1, 7);
             const VecInt16 prodVec2 = SIMD::lShiftMulHiInt16(clamp0Vec2, clamp1Vec2, 7);
@@ -299,8 +317,8 @@ private:
         }
 #else
         for (USize i = 0; i < Arch::L1_SIZE / 2; i++) {
-            const Int32 clamp0 = std::clamp(static_cast<Int32>(acc[i]), 0, Arch::QUANT_A);
-            const Int32 clamp1 = std::clamp(static_cast<Int32>(acc[i + Arch::L1_SIZE / 2]), 0, Arch::QUANT_A);
+            const Int32 clamp0 = std::clamp(static_cast<Int32>(psqAcc[i]) + static_cast<Int32>(tiAcc[i]), 0, Arch::QUANT_A);
+            const Int32 clamp1 = std::clamp(static_cast<Int32>(psqAcc[i + Arch::L1_SIZE / 2]) + static_cast<Int32>(tiAcc[i + Arch::L1_SIZE / 2]), 0, Arch::QUANT_A);
             l0Out[offset + i] = static_cast<UInt8>(((clamp0 << 7) * clamp1) >> 16);
         }
 #endif

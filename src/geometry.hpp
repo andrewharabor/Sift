@@ -196,19 +196,19 @@ public:
         return Permutation{Vec{indices}, valid};
     };
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox) noexcept {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox) noexcept {
         const auto pieceBits = _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i *>(PIECE_BITS.data())));
         const auto maskedMailbox = _mm512_loadu_si512(mailbox.data());
-        const auto permuted = _mm512_permutexvar_epi8(permutation.indices.raw, maskedMailbox);
-        const auto bits = _mm512_maskz_shuffle_epi8(permutation.valid, pieceBits, permuted);
+        const auto permuted = _mm512_permutexvar_epi8(perm.indices.raw, maskedMailbox);
+        const auto bits = _mm512_maskz_shuffle_epi8(perm.valid, pieceBits, permuted);
         return {Vec{permuted}, Vec{bits}};
     }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox, Square ignore) noexcept {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox, Square ignore) noexcept {
         const auto pieceBits = _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i *>(PIECE_BITS.data())));
         const auto maskedMailbox = _mm512_mask_blend_epi8(static_cast<UInt64>(ignore.index()), _mm512_loadu_si512(mailbox.data()), _mm512_set1_epi8(static_cast<UInt8>(Piece::NONE)));
-        const auto permuted = _mm512_permutexvar_epi8(permutation.indices.raw, maskedMailbox);
-        const auto bits = _mm512_maskz_shuffle_epi8(permutation.valid, pieceBits, permuted);
+        const auto permuted = _mm512_permutexvar_epi8(perm.indices.raw, maskedMailbox);
+        const auto bits = _mm512_maskz_shuffle_epi8(perm.valid, pieceBits, permuted);
         return {Vec{permuted}, Vec{bits}};
     }
 
@@ -243,7 +243,7 @@ public:
         return Permutation{indices, valid};
     }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, Vec maskedMailbox) noexcept {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, Vec maskedMailbox) noexcept {
         const auto pieceBits = _mm256_broadcastsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i *>(PIECE_BITS.data())));
 
         const auto halfSwizzler = [](__m256i bytes0, __m256i bytes1, __m256i indices) {
@@ -258,14 +258,14 @@ public:
             return _mm256_blendv_epi8(x, y, mask0);
         };
 
-        const Vec permuted{{halfSwizzler(maskedMailbox.raw[0], maskedMailbox.raw[1], permutation.indices.raw[0]), halfSwizzler(maskedMailbox.raw[0], maskedMailbox.raw[1], permutation.indices.raw[1])}};
-        const Vec bits{{_mm256_andnot_si256(permutation.invalid.raw[0], _mm256_shuffle_epi8(pieceBits, permuted.raw[0])), _mm256_andnot_si256(permutation.invalid.raw[1], _mm256_shuffle_epi8(pieceBits, permuted.raw[1]))}};
+        const Vec permuted{{halfSwizzler(maskedMailbox.raw[0], maskedMailbox.raw[1], perm.indices.raw[0]), halfSwizzler(maskedMailbox.raw[0], maskedMailbox.raw[1], perm.indices.raw[1])}};
+        const Vec bits{{_mm256_andnot_si256(perm.invalid.raw[0], _mm256_shuffle_epi8(pieceBits, permuted.raw[0])), _mm256_andnot_si256(perm.invalid.raw[1], _mm256_shuffle_epi8(pieceBits, permuted.raw[1]))}};
         return {permuted, bits};
     }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox) noexcept { return permuteMailbox(permutation, Vec::load(mailbox.data())); }
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox) noexcept { return permuteMailbox(perm, Vec::load(mailbox.data())); }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox, Square ignore) noexcept {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox, Square ignore) noexcept {
         const auto iota = Vec::cast(
             std::array<UInt8, 64>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
             22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
@@ -275,7 +275,7 @@ public:
         const auto noneVec = _mm256_set1_epi8(static_cast<Int8>(Piece::NONE));
         const auto mailboxVec = Vec::load(mailbox.data());
         const Vec maskedMailbox{{_mm256_blendv_epi8(mailboxVec.raw[0], noneVec, _mm256_cmpeq_epi8(iota.raw[0], ignoreVec)), _mm256_blendv_epi8(mailboxVec.raw[1], noneVec, _mm256_cmpeq_epi8(iota.raw[1], ignoreVec))}};
-        return permuteMailbox(permutation, maskedMailbox);
+        return permuteMailbox(perm, maskedMailbox);
     }
 
     static inline BitRays closestOccupied(Vec bits) noexcept {
@@ -312,16 +312,16 @@ public:
         return Permutation{indices, valid};
     }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, Vec mailbox) {
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, Vec mailbox) {
         const auto pieceBits = vld1q_u8(reinterpret_cast<const UInt8 *>(PIECE_BITS.data()));
-        const Vec permuted = Vec{vqtbl4q_u8(mailbox.raw, permutation.indices[0]), vqtbl4q_u8(mailbox.raw, permutation.indices[1]), vqtbl4q_u8(mailbox.raw, permutation.indices[2]), vqtbl4q_u8(mailbox.raw, permutation.indices[3])};
-        const Vec bits = Vec{vandq_u8(vqtbl1q_u8(pieceBits, permuted[0]), permutation.valid[0]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[1]), permutation.valid[1]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[2]), permutation.valid[2]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[3]), permutation.valid[3])};
+        const Vec permuted = Vec{vqtbl4q_u8(mailbox.raw, perm.indices[0]), vqtbl4q_u8(mailbox.raw, perm.indices[1]), vqtbl4q_u8(mailbox.raw, perm.indices[2]), vqtbl4q_u8(mailbox.raw, perm.indices[3])};
+        const Vec bits = Vec{vandq_u8(vqtbl1q_u8(pieceBits, permuted[0]), perm.valid[0]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[1]), perm.valid[1]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[2]), perm.valid[2]), vandq_u8(vqtbl1q_u8(pieceBits, permuted[3]), perm.valid[3])};
         return {permuted, bits};
     }
 
-    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox) { return permuteMailbox(permutation, Vec::load(mailbox.data())); }
+    static inline std::pair<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox) { return permuteMailbox(perm, Vec::load(mailbox.data())); }
 
-    static inline std::tuple<Vec, Vec> permuteMailbox(const Permutation &permutation, const std::span<const Piece, 64> mailbox, Square ignore) {
+    static inline std::tuple<Vec, Vec> permuteMailbox(const Permutation &perm, const std::span<const Piece, 64> mailbox, Square ignore) {
         const auto iota = Vec::cast(
             std::array<UInt8, 64>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
             22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
@@ -331,7 +331,7 @@ public:
         const auto noneVec = vdupq_n_u8(static_cast<UInt8>(Piece::NONE));
         const auto mailboxVec = Vec::load(mailbox.data());
         const Vec maskedMailbox{vbslq_u8(vceqq_u8(iota[0], ignoreVec), noneVec, mailboxVec[0]), vbslq_u8(vceqq_u8(iota[1], ignoreVec), noneVec, mailboxVec[1]), vbslq_u8(vceqq_u8(iota[2], ignoreVec), noneVec, mailboxVec[2]), vbslq_u8(vceqq_u8(iota[3], ignoreVec), noneVec, mailboxVec[3])};
-        return permuteMailbox(permutation, maskedMailbox);
+        return permuteMailbox(perm, maskedMailbox);
     }
 
     static inline BitRays closestOccupied(Vec bits) {

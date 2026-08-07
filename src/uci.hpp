@@ -701,8 +701,7 @@ private:
 
     void help() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "Sift " << TOSTRING(BUILD_VERSION) << " by andrewharabor," << std::endl;
-        std::cout << "a strong UCI chess engine" << std::endl;
+        std::cout << "Sift " << TOSTRING(BUILD_VERSION) << ", a strong UCI chess engine by andrewharabor" << std::endl;
         std::cout << "https://github.com/andrewharabor/Sift" << std::endl;
     }
 

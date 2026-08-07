@@ -727,6 +727,11 @@ public:
         return pieceBitboards_[static_cast<USize>(pieceType)] & occupancyBitboards_[static_cast<USize>(color)];
     }
 
+    constexpr Bitboard pieces(Piece piece) const noexcept {
+        assert(piece != Piece::NONE);
+        return pieces(piece.type(), piece.color());
+    }
+
     constexpr Square kingSquare(Color color) const noexcept {
         assert(color != Color::NONE);
         return pieces(PieceType::KING, color).lsb();

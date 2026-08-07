@@ -2,6 +2,7 @@
 
 #include <array>
 #include <functional>
+#include <mutex>
 #if defined(USE_PEXT)
 #include <immintrin.h>
 #endif
@@ -54,14 +55,17 @@ public:
     }
 
     static void init() {
-        BISHOP_TABLE[0].attacks = BISHOP_ATTACKS;
-        ROOK_TABLE[0].attacks = ROOK_ATTACKS;
-        for (UInt8 i = 0; i < 64; i++) {
-            initSliders(Square(i), BISHOP_TABLE, BISHOP_MAGICS[i], sliderSlow<PieceType::BISHOP>);
-            initSliders(Square(i), ROOK_TABLE, ROOK_MAGICS[i], sliderSlow<PieceType::ROOK>);
-        }
+        static std::once_flag onceFlag;
+        std::call_once(onceFlag, []() {
+            BISHOP_TABLE[0].attacks = BISHOP_ATTACKS;
+            ROOK_TABLE[0].attacks = ROOK_ATTACKS;
+            for (UInt8 i = 0; i < 64; i++) {
+                initSliders(Square(i), BISHOP_TABLE, BISHOP_MAGICS[i], sliderSlow<PieceType::BISHOP>);
+                initSliders(Square(i), ROOK_TABLE, ROOK_MAGICS[i], sliderSlow<PieceType::ROOK>);
+            }
 
-        std::tie(SQUARES_BETWEEN_BITBOARDS, SQUARES_ALIGNED_BITBOARDS) = initSquarePaths();
+            std::tie(SQUARES_BETWEEN_BITBOARDS, SQUARES_ALIGNED_BITBOARDS) = initSquarePaths();
+        });
     }
 
     template<Color::ColorEnum COLOR_ENUM>

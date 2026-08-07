@@ -268,13 +268,13 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += add1[i];
         }
 #endif
-}
+    }
 
     static inline void sub1(std::array<Int16, Arch::L1_SIZE> &data, const std::array<Int16, Arch::L1_SIZE> &sub1) noexcept {
 #if defined(USE_SIMD)
@@ -293,13 +293,13 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] -= sub1[i];
         }
 #endif
-}
+    }
 
     static inline void add2(std::array<Int16, Arch::L1_SIZE> &data, const std::array<Int16, Arch::L1_SIZE> &add1, const std::array<Int16, Arch::L1_SIZE> &add2) noexcept {
 #if defined(USE_SIMD)
@@ -322,7 +322,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += add1[i] + add2[i];
@@ -351,7 +351,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] -= sub1[i] + sub2[i];
@@ -380,7 +380,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += add1[i] - sub1[i];
@@ -413,7 +413,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += add1[i] - sub1[i] - sub2[i];
@@ -450,7 +450,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += add1[i] + add2[i] - sub1[i] - sub2[i];
@@ -475,7 +475,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += static_cast<Int16>(add1[i]);
@@ -500,7 +500,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] -= static_cast<Int16>(sub1[i]);
@@ -537,7 +537,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] += static_cast<Int16>(add1[i]) + static_cast<Int16>(add2[i]) + static_cast<Int16>(add3[i]) + static_cast<Int16>(add4[i]);
@@ -574,7 +574,7 @@ public:
             SIMD::storeInt16(&data[(i + 1) * SIMD::WIDTH16], dataVec1);
             SIMD::storeInt16(&data[(i + 2) * SIMD::WIDTH16], dataVec2);
             SIMD::storeInt16(&data[(i + 3) * SIMD::WIDTH16], dataVec3);
-    }
+        }
 #else
         for (USize i = 0; i < Arch::L1_SIZE; i++) {
             data[i] -= static_cast<Int16>(sub1[i]) + static_cast<Int16>(sub2[i]) + static_cast<Int16>(sub3[i]) + static_cast<Int16>(sub4[i]);
@@ -583,4 +583,4 @@ public:
     }
 };
 
-}
+    }
