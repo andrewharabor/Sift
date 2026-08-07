@@ -137,8 +137,11 @@ endif
 $(MAIN_EXEC): info __perm $(MAIN_OBJS)
 	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
 
-$(PERM_EXEC): $(PERM_OBJS)
+$(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
 	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
+
+$(NETWORK_FILE):
+	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_FILE)/$(NETWORK_FILE).nnue
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
@@ -152,7 +155,6 @@ main: $(MAIN_EXEC)
 .PHONY: __perm
 __perm: $(PERM_EXEC)
 	./$(PERM_EXEC)
-	$(RM_FILE) $(PERM_EXEC)
 
 .PHONY: info
 info:
