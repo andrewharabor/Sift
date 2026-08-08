@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstdlib>
 #include <limits>
 #include <thread>
@@ -36,27 +37,27 @@ struct TTableEntry {
 
 class TTable {
 public:
-    TTable(USize sizeMB) : table_(nullptr), size_(0), age_(0) { resize(sizeMB, 1); }
+    explicit TTable(USize sizeMB) noexcept : table_(nullptr), size_(0), capacity_(0), age_(0) { resize(sizeMB, 1); }
 
-    ~TTable() {
+    ~TTable() noexcept {
         if (table_) {
             std::free(table_);
         }
     }
 
-    void resize(USize sizeMB, USize numThreads) {
+    void resize(USize sizeMB, USize numThreads) noexcept {
         assert(sizeMB > 0);
 
-        USize buckets = (sizeMB * 1024 * 1024) / sizeof(Bucket);
-        if (table_) {
-            std::free(table_);
+        const USize newSize = (sizeMB * 1024 * 1024) / sizeof(Bucket);
+
+        if (newSize > capacity_ || newSize <= capacity_ / 2) {
+            deallocate();
+            allocate(newSize);
         }
-        table_ = static_cast<Bucket *>(std::aligned_alloc(64, buckets * sizeof(Bucket)));
-        size_ = buckets;
         reset(numThreads);
     }
 
-    void reset(USize numThreads) {
+    void reset(USize numThreads) noexcept {
         age_ = 0;
         std::vector<std::jthread> threads;
         threads.reserve(numThreads);
@@ -69,7 +70,7 @@ public:
         }
     }
 
-    std::pair<TTableEntry, bool> probe(UInt64 key, Int32 ply) const {
+    std::pair<TTableEntry, bool> probe(UInt64 key, Int32 ply) const noexcept {
         const Bucket &bucket = table_[index(key)];
         USize entryIndex = 0;
         bool found = false;
@@ -97,7 +98,7 @@ public:
         return {result, true};
     }
 
-    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 depth, bool pv, TTableEntry::Bound bound) {
+    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 depth, bool pv, TTableEntry::Bound bound) noexcept {
         const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
         Bucket &bucket = table_[index(key)];
         Int32 bestQuality = std::numeric_limits<Int32>::max();
@@ -129,9 +130,9 @@ public:
         }
     }
 
-    void prefetch(UInt64 key) const { Utils::prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
+    void prefetch(UInt64 key) const noexcept { Utils::prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
 
-    USize hashfull() const {
+    USize hashfull() const noexcept {
         USize count = 0;
         USize sampleSize = std::min(size_, static_cast<USize>(1000));
         for (USize i = 0; i < sampleSize; i++) {
@@ -145,7 +146,7 @@ public:
         return (count * 1000) / (sampleSize * ENTRIES);
     }
 
-    void incrementAge() { age_ = (age_ + 1) % GENERATIONS; }
+    void incrementAge() noexcept { age_ = (age_ + 1) % GENERATIONS; }
 
 private:
     static constexpr USize ENTRIES = 3;
@@ -171,15 +172,16 @@ private:
     };
 
     struct alignas(32) Bucket {
-        std::array<RawEntry, ENTRIES> entries;
+        RawEntry entries[ENTRIES];
         UInt8 padding[2];
     };
 
     Bucket *table_;
     USize size_;
+    USize capacity_;
     Int32 age_;
 
-    Int32 quality(Int32 age, Int32 depth) const {
+    Int32 quality(Int32 age, Int32 depth) const noexcept {
         Int32 ageDiff = (age_ - age) % GENERATIONS;
         if (ageDiff < 0) {
             ageDiff += GENERATIONS;
@@ -187,21 +189,58 @@ private:
         return depth - (2 * ageDiff);
     }
 
-    Int32 retrieve(Int16 score, Int32 ply) const {
+    Int32 retrieve(Int16 score, Int32 ply) const noexcept {
         if (Score::mate(score)) {
             return (score < 0) ? (score + ply) : (score - ply);
         }
         return score;
     }
 
-    Int16 store(Int32 score, Int32 ply) const {
+    Int16 store(Int32 score, Int32 ply) const noexcept {
         if (Score::mate(score)) {
             return (score < 0) ? static_cast<Int16>(score - ply) : static_cast<Int16>(score + ply);
         }
         return static_cast<Int16>(score);
     }
 
-    USize index(UInt64 key) const { return Utils::mulHi64(key, size_); }
+    USize index(UInt64 key) const noexcept { return Utils::mulHi64(key, size_); }
+
+    void allocate(USize newSize) noexcept {
+        assert(table_ == nullptr);
+        assert(size_ == 0);
+        assert(capacity_ == 0);
+
+#if defined(__linux__)
+        static constexpr USize PAGE_SIZE = 2 * 1024 * 1024;
+#else
+        static constexpr USize PAGE_SIZE = 4096;
+#endif
+
+        const USize trueNewSize = ((newSize * sizeof(Bucket) + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+
+        table_ = static_cast<Bucket *>(Utils::alignedAlloc(trueNewSize, PAGE_SIZE));
+
+#if defined(__linux__)
+        madvise(table_, trueNewSize, MADV_HUGEPAGE);
+#endif
+
+        size_ = newSize;
+        capacity_ = trueNewSize / sizeof(Bucket);
+    }
+
+    void deallocate() noexcept {
+        if (table_ == nullptr) {
+            return;
+        }
+
+        assert(size_ > 0);
+        assert(capacity_ > 0);
+
+        Utils::alignedFree(table_);
+        table_ = nullptr;
+        size_ = 0;
+        capacity_ = 0;
+    }
 };
 
 }

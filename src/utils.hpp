@@ -2,8 +2,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <string_view>
 #include <vector>
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <mmintrin.h>
+#endif
 
 #include "types.hpp"
 
@@ -65,6 +70,30 @@ public:
         U64 c2 = aHi * bLo + c1;
         U64 c3 = aLo * bHi + (c2 & 0xFFFFFFFF);
         return aHi * bHi + (c2 >> 32) + (c3 >> 32);
+    }
+
+#endif
+
+#if defined(_WIN32)
+
+    static void *alignedAlloc(USize size, USize alignment) { return _aligned_malloc(size, alignment); }
+
+    static void alignedFree(void *ptr) {
+        if (ptr == nullptr) {
+            return;
+        }
+        _aligned_free(ptr);
+    }
+
+#else
+
+    static void *alignedAlloc(USize size, USize alignment) { return std::aligned_alloc(alignment, size); }
+
+    static void alignedFree(void *ptr) {
+        if (ptr == nullptr) {
+            return;
+        }
+        std::free(ptr);
     }
 
 #endif
