@@ -540,7 +540,7 @@ private:
 
         stack.pv.clear();
 
-        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), static_cast<Int32>(threads_.size()))) {
+        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), threads_.size())) {
             setTimeUp(true);
             return alpha;
         }
@@ -992,7 +992,7 @@ private:
 
         stack.pv.clear();
 
-        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), static_cast<Int32>(threads_.size()))) {
+        if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), threads_.size())) {
             setTimeUp(true);
             return alpha;
         }

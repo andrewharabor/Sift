@@ -37,7 +37,6 @@ public:
         OPTIONS.add(Option("MultiPV", SpinOption(OptionList::DEFAULT_MULTI_PV, OptionList::DEFAULT_MULTI_PV, OptionList::MIN_MULTI_PV, OptionList::MAX_MULTI_PV), []() {}));
         OPTIONS.add(Option("Contempt", SpinOption(OptionList::DEFAULT_CONTEMPT, OptionList::DEFAULT_CONTEMPT, OptionList::MIN_CONTEMPT, OptionList::MAX_CONTEMPT), []() {}));
         OPTIONS.add(Option("MoveOverhead", SpinOption(OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::MIN_MOVE_OVERHEAD_MS, OptionList::MAX_MOVE_OVERHEAD_MS), []() {}));
-        OPTIONS.add(Option("SoftNodes", CheckOption(OptionList::DEFAULT_SOFT_NODES), []() {}));
         OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), []() {}));
 
 #if defined(OPEN_BENCH_TUNE)
@@ -263,7 +262,6 @@ private:
         std::string token;
         SearchLimits limits = SearchLimits();
         limits.overhead = MS(OPTIONS["MoveOverhead"].spinValue());
-        limits.softNodes = OPTIONS["SoftNodes"].checkValue();
 
         while (stream >> token) {
             if (token == "wtime") {

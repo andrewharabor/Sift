@@ -20,7 +20,6 @@ using MS = std::chrono::milliseconds;
 struct SearchLimits {
     Int32 depth = std::numeric_limits<Int32>::max();
     UInt64 nodes = std::numeric_limits<UInt64>::max();
-    bool softNodes = false;
     MS time = MS::max();
     bool infinite = false;
     MoveList moves;
@@ -70,15 +69,11 @@ public:
             return true;
         }
 
-        if (limits.softNodes && nodes >= limits.nodes) {
-            return true;
-        }
-
         return false;
     }
 
-    bool stopHard(const SearchLimits &limits, UInt64 nodes, Int32 numThreads) noexcept {
-        if (!limits.softNodes && nodes * static_cast<UInt64>(numThreads) >= limits.nodes) {
+    bool stopHard(const SearchLimits &limits, UInt64 nodes, USize numThreads) noexcept {
+        if (nodes * static_cast<UInt64>(numThreads) >= limits.nodes) {
             return true;
         }
 
@@ -123,11 +118,11 @@ private:
             return floatDiv100(TIME_MATE_SCORE_SCALE);
         }
 
-        if (score >= Score::KNOWN_WIN) {
+        if (Score::winning(score)) {
             return floatDiv100(TIME_WIN_SCORE_SCALE);
         }
 
-        if (score <= Score::KNOWN_LOSS) {
+        if (Score::losing(score)) {
             return floatDiv100(TIME_LOSS_SCORE_SCALE);
         }
 
