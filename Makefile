@@ -137,10 +137,10 @@ endif
 $(MAIN_EXEC): info __perm $(MAIN_OBJS)
 	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
 
-$(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
+$(PERM_EXEC): $(NETWORK_FILE).nnue $(PERM_OBJS)
 	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
 
-$(NETWORK_FILE):
+$(NETWORK_FILE).nnue:
 	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_FILE)/$(NETWORK_FILE).nnue
 
 $(BUILD_DIR)/%.o: %.cpp
