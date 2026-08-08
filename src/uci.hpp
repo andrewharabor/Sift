@@ -16,7 +16,7 @@
 #include "move.hpp"
 #include "move-gen.hpp"
 #include "nnue.hpp"
-#include "options.hpp"
+#include "option.hpp"
 #include "perft.hpp"
 #include "position.hpp"
 #include "search.hpp"

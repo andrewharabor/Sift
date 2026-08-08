@@ -17,7 +17,7 @@
 #include "move-order.hpp"
 #include "move.hpp"
 #include "nnue.hpp"
-#include "options.hpp"
+#include "option.hpp"
 #include "position.hpp"
 #include "score.hpp"
 #include "time.hpp"
