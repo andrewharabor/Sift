@@ -171,7 +171,7 @@ private:
         }
     };
 
-    struct alignas(32) Bucket {
+    struct alignas(64) Bucket {
         RawEntry entries[ENTRIES];
         UInt8 padding[2];
     };
