@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cctype>
 #include <string_view>
 #include <vector>
 
@@ -26,6 +28,8 @@ public:
         }
         return result;
     }
+
+    static void stringToLower(std::string &string) { std::transform(string.begin(), string.end(), string.begin(), [](unsigned char c) { return std::tolower(c); }); }
 
     static constexpr UInt64 murmurHash3(UInt64 value) noexcept {
         value ^= value >> 33;

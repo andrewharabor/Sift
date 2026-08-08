@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "types.hpp"
+#include "utils.hpp"
 
 namespace Sift {
 
@@ -39,14 +40,15 @@ class Option {
 public:
     using Callback = std::function<void()>;
 
-    Option() noexcept : type_(OptionType::NONE), name_(), data_(), callback_() {}
-    Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, SpinOption data, Callback callback) : type_(OptionType::SPIN), name_(name), data_(std::in_place_type<SpinOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, StringOption data, Callback callback) : type_(OptionType::STRING), name_(name), data_(std::in_place_type<StringOption>, data), callback_(std::move(callback)) {}
-    Option(std::string_view name, Callback callback) : type_(OptionType::BUTTON), name_(name), data_(std::in_place_type<std::monostate>), callback_(std::move(callback)) {}
+    Option() noexcept : type_(OptionType::NONE), name_(), id_(), data_(), callback_() {}
+    Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), id_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) { Utils::stringToLower(id_); }
+    Option(std::string_view name, SpinOption data, Callback callback) : type_(OptionType::SPIN), name_(name), id_(name), data_(std::in_place_type<SpinOption>, data), callback_(std::move(callback)) { Utils::stringToLower(id_); }
+    Option(std::string_view name, StringOption data, Callback callback) : type_(OptionType::STRING), name_(name), id_(name), data_(std::in_place_type<StringOption>, data), callback_(std::move(callback)) { Utils::stringToLower(id_); }
+    Option(std::string_view name, Callback callback) : type_(OptionType::BUTTON), name_(name), id_(name), data_(std::in_place_type<std::monostate>), callback_(std::move(callback)) { Utils::stringToLower(id_); }
 
     constexpr OptionType type() const noexcept { return type_; }
     constexpr const std::string &name() const noexcept { return name_; }
+    constexpr const std::string &id() const noexcept { return id_; }
 
     void setCheck(bool value) {
         assert(type_ == OptionType::CHECK);
@@ -100,6 +102,7 @@ public:
 private:
     OptionType type_;
     std::string name_;
+    std::string id_;
     std::variant<std::monostate, CheckOption, SpinOption, StringOption> data_;
     Callback callback_;
 };
@@ -138,13 +141,17 @@ public:
     constexpr std::vector<Option>::const_iterator end() const noexcept { return options_.end(); }
 
     Option &operator[](const std::string &name) noexcept {
-        auto it = std::find_if(options_.begin(), options_.end(), [&name](const Option &option) { return option.name() == name; });
+        std::string id = name;
+        Utils::stringToLower(id);
+        auto it = std::find_if(options_.begin(), options_.end(), [&id](const Option &option) { return option.id() == id; });
         assert(it != options_.end());
         return *it;
     }
 
     bool has(const std::string &name) noexcept {
-        auto it = std::find_if(options_.begin(), options_.end(), [&name](const Option &option) { return option.name() == name; });
+        std::string id = name;
+        Utils::stringToLower(id);
+        auto it = std::find_if(options_.begin(), options_.end(), [&id](const Option &option) { return option.id() == id; });
         return it != options_.end();
     }
 
