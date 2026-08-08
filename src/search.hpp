@@ -34,8 +34,6 @@ struct SearchStack {
 
     Move excludedMove;
 
-    std::array<Move, 2> killerMoves;
-
     Int32 staticEval;
     Int32 eval;
 
@@ -131,7 +129,6 @@ struct SearchThread {
         for (USize i = 0; i <= MAX_PLY; i++) {
             stack[i].pv.clear();
             stack[i].excludedMove = Move::NULL_MOVE;
-            stack[i].killerMoves[0] = stack[i].killerMoves[1] = Move::NULL_MOVE;
             stack[i].staticEval = Score::NONE;
             stack[i].eval = Score::NONE;
             stack[i].failHighCount = 0;
@@ -622,8 +619,6 @@ private:
         const bool noisyTTableMove = tTableMove != Move::NULL_MOVE && position.noisy(tTableMove);
         const bool tTablePV = PV_NODE || (tTableHit && tTableEntry.pv);
 
-        nextStack.killerMoves[0] = nextStack.killerMoves[1] = Move::NULL_MOVE;
-
         const bool winningThreats = bool(position.winningThreats());
 
         bool improving = [&]() {
@@ -731,7 +726,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, history, tTableMove, stack.killerMoves, rootPly);
+        MoveOrder moveOrder = MoveOrder(position, history, tTableMove, rootPly);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -756,7 +751,7 @@ private:
             const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
-                if (moveScore < MoveScore::KILLER2 && bestScore > Score::LOSS) {
+                if (moveScore <= MoveScore::BAD_NOISY && bestScore > Score::LOSS) {
                     const Int32 lmrDepth = std::max(depth - baseLMR / LMR_BASE_DIVISOR, 0);
                     const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
@@ -828,7 +823,7 @@ private:
             Int32 newDepth = depth - 1 + extension;
             Int32 score = 0;
 
-            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tTablePV || moveScore <= MoveScore::KILLER1)) {
+            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tTablePV || moveScore <= MoveScore::BAD_NOISY)) {
                 Int32 reduction = baseLMR;
                 reduction += LMR_NON_IMPROVING_SCALE * !improving;
                 reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
@@ -927,11 +922,6 @@ private:
                 if (bestScore >= beta) {
                     bound = TTableEntry::Bound::LOWER;
                     stack.failHighCount++;
-
-                    if (quiet && stack.killerMoves[0] != move) {
-                        stack.killerMoves[1] = stack.killerMoves[0];
-                        stack.killerMoves[0] = move;
-                    }
 
                     Int32 historyDepth = depth + ((bestScore > beta) + HISTORY_BETA_MARGIN);
                     Int32 bonus = history.bonus(historyDepth);
@@ -1070,7 +1060,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, tTableMove, stack.killerMoves, rootPly) : MoveOrder(position, history, tTableMove);
+        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, tTableMove, rootPly) : MoveOrder(position, history, tTableMove);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {

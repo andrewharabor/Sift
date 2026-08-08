@@ -53,9 +53,6 @@ static constexpr Int32 BAD_NOISY = GOOD_NOISY - 50001;
 static constexpr Int32 PROMOTION_BONUS = 10000;
 static constexpr Int32 QSEARCH_PROMOTION_BONUS = 1000000;
 
-static constexpr Int32 KILLER1 = 300001;
-static constexpr Int32 KILLER2 = 300000;
-
 static constexpr Int32 NONE = -8000000;
 
 };

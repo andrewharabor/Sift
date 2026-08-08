@@ -24,8 +24,6 @@ enum class MoveOrderStage : UInt8 {
     TTABLE,
     GEN_NOISY,
     GOOD_NOISY,
-    KILLER1,
-    KILLER2,
     GEN_QUIET,
     BAD_NOISY_QUIET,
     QSEARCH_TTABLE,
@@ -42,8 +40,8 @@ inline MoveOrderStage operator++(MoveOrderStage &type, int) {
 
 class MoveOrder {
 public:
-    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove, const std::array<Move, 2> &killerMoves, USize ply) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), killerMoves_(killerMoves), rootPly_(ply) {}
-    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), killerMoves_(), rootPly_(0) {}
+    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove, USize ply) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(ply) {}
+    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(0) {}
 
     ScoredMove next() noexcept {
         if (moveOrderStage_ == MoveOrderStage::TTABLE) {
@@ -77,28 +75,6 @@ public:
             moveOrderStage_++;
         }
 
-        if (moveOrderStage_ == MoveOrderStage::KILLER1) {
-            moveOrderStage_++;
-            if (killerMoves_[0] != Move::NULL_MOVE && position_.legal(killerMoves_[0]) && position_.quiet(killerMoves_[0])) {
-                if (killerMoves_[0] != tTableMove_) {
-                    return ScoredMove(killerMoves_[0], MoveScore::KILLER1);
-                }
-            } else {
-                killerMoves_[0] = Move::NULL_MOVE;
-            }
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::KILLER2) {
-            moveOrderStage_++;
-            if (killerMoves_[1] != Move::NULL_MOVE && position_.legal(killerMoves_[1]) && position_.quiet(killerMoves_[1])) {
-                if (killerMoves_[1] != tTableMove_) {
-                    return ScoredMove(killerMoves_[1], MoveScore::KILLER2);
-                }
-            } else {
-                killerMoves_[1] = Move::NULL_MOVE;
-            }
-        }
-
         if (moveOrderStage_ == MoveOrderStage::GEN_QUIET) {
             moveOrderStage_++;
             MoveGen::legal<MoveGenType::QUIET>(position_, moves_);
@@ -110,7 +86,7 @@ public:
         if (moveOrderStage_ == MoveOrderStage::BAD_NOISY_QUIET) {
             while (moveIndex_ < moves_.size()) {
                 ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == tTableMove_ || scoredMove.move == killerMoves_[0] || scoredMove.move == killerMoves_[1]) {
+                if (scoredMove.move == tTableMove_) {
                     continue;
                 }
                 return scoredMove;
@@ -163,7 +139,6 @@ private:
     USize firstQuietIndex_;
 
     Move tTableMove_;
-    std::array<Move, 2> killerMoves_;
 
     USize rootPly_;
 
