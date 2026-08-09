@@ -118,11 +118,11 @@ private:
             return floatDiv100(TIME_MATE_SCORE_SCALE);
         }
 
-        if (Score::winning(score)) {
+        if (Score::win(score)) {
             return floatDiv100(TIME_WIN_SCORE_SCALE);
         }
 
-        if (Score::losing(score)) {
+        if (Score::loss(score)) {
             return floatDiv100(TIME_LOSS_SCORE_SCALE);
         }
 

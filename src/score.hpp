@@ -34,8 +34,8 @@ static constexpr bool mate(Int32 score) noexcept { return score >= MATE_IN_MAX |
 static constexpr Int32 mateIn(Int32 ply) noexcept { return MATE - ply; }
 static constexpr Int32 matedIn(Int32 ply) noexcept { return MATED + ply; }
 
-static constexpr bool winning(Int32 score) noexcept { return score >= WIN; }
-static constexpr bool losing(Int32 score) noexcept { return score <= LOSS; }
+static constexpr bool win(Int32 score) noexcept { return score >= WIN; }
+static constexpr bool loss(Int32 score) noexcept { return score <= LOSS; }
 static constexpr bool decisive(Int32 score) noexcept { return score >= WIN || score <= LOSS; }
 
 static constexpr bool draw(Int32 score) noexcept { return score >= DRAW_MIN && score <= DRAW_MAX; }

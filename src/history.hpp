@@ -97,7 +97,7 @@ using MinorPieceCorrHistTable = CorrHistTable;
 using MajorPieceCorrHistTable = CorrHistTable;
 using ContCorrHistTable = MultiArray<ContCorrHistEntry, 12, 64>;
 
-struct HistoryStack {
+struct HistoryStackEntry {
     Move playedMove;
     Piece movedPiece;
 
@@ -111,7 +111,7 @@ class History {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    std::array<HistoryStack, MAX_PLY + 1> stack;
+    std::array<HistoryStackEntry, MAX_PLY + 1> stack;
 
     History() noexcept : mainHistTable_(), pawnHistTable_(), contHistTable_(), captureHistTable_(), pawnCorrHistTable_(), nonPawnCorrHistTable_(), threatCorrHistTable_(), minorPieceCorrHistTable_(), majorPieceCorrHistTable_(), contCorrHistTable_() { reset(); }
 
