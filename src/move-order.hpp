@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <span>
 
 #include "history.hpp"
 #include "position.hpp"
@@ -40,8 +41,8 @@ inline MoveOrderStage operator++(MoveOrderStage &type, int) {
 
 class MoveOrder {
 public:
-    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove, USize ply) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(ply) {}
-    constexpr MoveOrder(const Position &position, const History &history, const Move tTableMove) noexcept : position_(position), history_(history), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(0) {}
+    constexpr MoveOrder(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, const Move tTableMove, USize ply) noexcept : position_(position), history_(history), historyStack_(historyStack), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(ply) {}
+    constexpr MoveOrder(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, const Move tTableMove) noexcept : position_(position), history_(history), historyStack_(historyStack), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(0) {}
 
     ScoredMove next() noexcept {
         if (moveOrderStage_ == MoveOrderStage::TTABLE) {
@@ -129,6 +130,7 @@ public:
 private:
     const Position &position_;
     const History &history_;
+    std::span<const HistoryStackEntry> historyStack_;
 
     MoveOrderStage moveOrderStage_;
 
@@ -183,7 +185,7 @@ private:
 
     constexpr Int32 scoreQuiet(const Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
-        return history_.quietScore(position_, move, rootPly_);
+        return history_.quietScore(position_, historyStack_, move, rootPly_);
     }
 
     constexpr Int32 scoreQSearchNoisy(const Move move) const noexcept {

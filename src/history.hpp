@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <span>
 
 #include "color.hpp"
 #include "bitboard.hpp"
@@ -20,26 +21,24 @@ namespace Sift {
 class HistEntry {
 public:
     HistEntry() noexcept : value_(0) {}
-    HistEntry(Int32 value) noexcept : value_(value) {}
+    HistEntry(Int32 value) noexcept : value_(static_cast<Int16>(value)) {}
 
     constexpr void update(Int32 bonus) noexcept {
         update(bonus, value_);
     }
 
     constexpr void update(Int32 bonus, Int32 base) noexcept {
-        Int32 newValue = value_ + bonus - base * std::abs(bonus) / MAX;
-        value_ = std::clamp(newValue, MIN, MAX);
+        Int32 newValue = static_cast<Int32>(value_) + bonus - base * std::abs(bonus) / MAX;
+        value_ = static_cast<Int16>(std::clamp(newValue, MIN, MAX));
     }
 
-    constexpr Int32 value() const noexcept {
-        return value_;
-    }
+    constexpr Int32 value() const noexcept { return static_cast<Int32>(value_); }
 
 private:
     static constexpr Int32 MAX = 16384;
     static constexpr Int32 MIN = -MAX;
 
-    Int32 value_;
+    Int16 value_;
 };
 
 using ContHistEntry = MultiArray<HistEntry, 12, 64>;
@@ -111,8 +110,6 @@ class History {
 public:
     static constexpr USize MAX_PLY = static_cast<USize>(Score::MAX_PLY);
 
-    std::array<HistoryStackEntry, MAX_PLY + 1> stack;
-
     History() noexcept : mainHistTable_(), pawnHistTable_(), contHistTable_(), captureHistTable_(), pawnCorrHistTable_(), nonPawnCorrHistTable_(), threatCorrHistTable_(), minorPieceCorrHistTable_(), majorPieceCorrHistTable_(), contCorrHistTable_() { reset(); }
 
     void reset() noexcept {
@@ -126,17 +123,9 @@ public:
         minorPieceCorrHistTable_ = {};
         majorPieceCorrHistTable_ = {};
         contCorrHistTable_.fill({});
-
-        for (USize i = 0; i <= MAX_PLY; i++) {
-            stack[i].playedMove = Move::NULL_MOVE;
-            stack[i].movedPiece = Piece::NONE;
-            stack[i].contCorrHistEntry = nullptr;
-            stack[i].contHistEntry = nullptr;
-            stack[i].score = 0;
-        }
     }
 
-    Int32 correctStaticEval(const Position &position, Int32 staticEval, USize rootPly) const noexcept {
+    Int32 correctStaticEval(const Position &position, std::span<const HistoryStackEntry> stack, Int32 staticEval, USize rootPly) const noexcept {
         if (staticEval >= Score::KNOWN_WIN || staticEval <= Score::KNOWN_LOSS) {
             return staticEval;
         }
@@ -176,7 +165,7 @@ public:
         return std::clamp(correctedStaticEval, Score::KNOWN_LOSS + 1, Score::KNOWN_WIN - 1);
     }
 
-    void updateCorrHist(const Position &position, Int32 depth, USize rootPly, Int32 bonus) noexcept {
+    void updateCorrHist(const Position &position, std::span<const HistoryStackEntry> stack, Int32 depth, USize rootPly, Int32 bonus) noexcept {
         const Color color = position.sideToMove();
         const UInt64 threatHash = Utils::murmurHash3((position.threats() & position.friendly(color)).bits());
         const Int32 scaledBonus = bonus * CorrHistEntry::SCALE;
@@ -202,7 +191,7 @@ public:
         }
     }
 
-    Int32 quietScore(const Position &position, const Move move, USize rootPly) const noexcept {
+    Int32 quietScore(const Position &position, std::span<const HistoryStackEntry> stack, const Move move, USize rootPly) const noexcept {
         assert(move != Move::NULL_MOVE);
         const Piece movedPiece = position.moved(move);
         Int32 score = mainHist(move, position.threats(), movedPiece.color());
@@ -224,14 +213,14 @@ public:
         return captureHist(move, position.threats(), position.moved(move), position.captured(move));
     }
 
-    void updateQuietHists(const Position &position, const Move move, USize rootPly, Int32 bonus) noexcept {
+    void updateQuietHists(const Position &position, std::span<const HistoryStackEntry> stack, const Move move, USize rootPly, Int32 bonus) noexcept {
         assert(move != Move::NULL_MOVE);
         updateMainHist(move, position.threats(), position.sideToMove(), bonus);
         updatePawnHist(move, position.moved(move), position.pawnHash(), bonus);
-        updateContHist(position, move, rootPly, bonus);
+        updateContHist(position, stack, move, rootPly, bonus);
     }
 
-    void updateContHist(const Position &position, const Move move, USize rootPly, Int32 bonus) noexcept {
+    void updateContHist(const Position &position, std::span<const HistoryStackEntry> stack, const Move move, USize rootPly, Int32 bonus) noexcept {
         assert(move != Move::NULL_MOVE);
         const Piece movedPiece = position.moved(move);
         Int32 base = 0;

@@ -108,6 +108,7 @@ struct SearchThread {
     std::vector<RootMove> rootMoves;
 
     std::array<SearchStackEntry, MAX_PLY + 1> stack;
+    std::array<HistoryStackEntry, MAX_PLY + 1> historyStack;
 
     History history;
 
@@ -135,11 +136,11 @@ struct SearchThread {
             stack[i].eval = Score::NONE;
             stack[i].failHighCount = 0;
 
-            history.stack[i].playedMove = Move::NULL_MOVE;
-            history.stack[i].movedPiece = Piece::NONE;
-            history.stack[i].contCorrHistEntry = nullptr;
-            history.stack[i].contHistEntry = nullptr;
-            history.stack[i].score = 0;
+            historyStack[i].playedMove = Move::NULL_MOVE;
+            historyStack[i].movedPiece = Piece::NONE;
+            historyStack[i].contCorrHistEntry = nullptr;
+            historyStack[i].contHistEntry = nullptr;
+            historyStack[i].score = 0;
         }
     }
 
@@ -551,6 +552,7 @@ private:
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         SearchStackEntry &stack = thread.stack[rootPly];
+        std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
 
         stack.pv.clear();
@@ -624,7 +626,7 @@ private:
                 stack.eval = Score::NONE;
             } else {
                 rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-                stack.staticEval = history.correctStaticEval(position, Eval::adjust(rawStaticEval, position), rootPly);
+                stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
                 stack.eval = stack.staticEval;
                 if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
@@ -656,7 +658,7 @@ private:
 
         if constexpr (!PV_NODE) {
             if (!inCheck && !excludedMove) {
-                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (thread.history.stack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
+                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (historyStack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
                 if (depth <= RFP_MAX_DEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
                     return stack.eval;
                 }
@@ -694,7 +696,7 @@ private:
 
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
                 if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.depth + PROBCUT_TTABLE_DEPTH_MARGIN < depth)) {
-                    MoveOrder moveOrder = MoveOrder(position, history, tTableMove);
+                    MoveOrder moveOrder = MoveOrder(position, history, historyStack, tTableMove);
                     ScoredMove scoredMove;
                     Int32 seeMargin = probcutBeta - stack.staticEval;
                     Int32 probcutDepth = depth - PROBCUT_REDUCTION;
@@ -744,7 +746,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, history, tTableMove, rootPly);
+        MoveOrder moveOrder = MoveOrder(position, history, historyStack, tTableMove, rootPly);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -765,7 +767,7 @@ private:
             }
 
             const bool quiet = position.quiet(move);
-            const Int32 historyScore = (quiet) ? history.quietScore(position, move, rootPly) : history.noisyScore(position, move);
+            const Int32 historyScore = (quiet) ? history.quietScore(position, historyStack, move, rootPly) : history.noisyScore(position, move);
             const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
@@ -867,7 +869,7 @@ private:
 
                     if (quiet && (score <= alpha || score >= beta)) {
                         Int32 bonus = (score >= beta) ? history.bonus(depth) : history.penalty(depth);
-                        history.updateContHist(position, move, rootPly, bonus);
+                        history.updateContHist(position, historyStack, move, rootPly, bonus);
                     }
                 }
             } else if (!PV_NODE || movesTried > 1) {
@@ -946,10 +948,10 @@ private:
                     Int32 penalty = history.penalty(historyDepth);
 
                     if (quiet) {
-                        history.updateQuietHists(position, move, rootPly, bonus);
+                        history.updateQuietHists(position, historyStack, move, rootPly, bonus);
                         for (const Move quietMove : quietsTried) {
                             if (quietMove != move) {
-                                history.updateQuietHists(position, quietMove, rootPly, penalty);
+                                history.updateQuietHists(position, historyStack, quietMove, rootPly, penalty);
                             }
                         }
                     } else {
@@ -977,7 +979,7 @@ private:
 
         if (!excludedMove) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
-                history.updateCorrHist(position, depth, rootPly, bestScore - stack.staticEval);
+                history.updateCorrHist(position, historyStack, depth, rootPly, bestScore - stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
@@ -996,6 +998,7 @@ private:
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         SearchStackEntry &stack = thread.stack[rootPly];
+        std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
 
         stack.pv.clear();
@@ -1049,7 +1052,7 @@ private:
             stack.eval = Score::NONE;
         } else {
             rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-            stack.staticEval = history.correctStaticEval(position, Eval::adjust(rawStaticEval, position), rootPly);
+            stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
             stack.eval = stack.staticEval;
             if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                 stack.eval = tTableEntry.score;
@@ -1078,7 +1081,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, tTableMove, rootPly) : MoveOrder(position, history, tTableMove);
+        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, historyStack, tTableMove, rootPly) : MoveOrder(position, history, historyStack, tTableMove);
 
         ScoredMove scoredMove;
         while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
@@ -1157,7 +1160,7 @@ private:
     void makeMove(SearchThread &thread, Move move, Int32 historyScore) noexcept {
         assert(move != Move::NULL_MOVE);
 
-        HistoryStackEntry &historyStack = thread.history.stack[thread.rootPly];
+        HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.playedMove = move;
         historyStack.movedPiece = thread.position.moved(move);
         historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, move);
@@ -1174,7 +1177,7 @@ private:
         thread.rootPly--;
         thread.position.unmakeMove(thread.nnue.state());
 
-        HistoryStackEntry &historyStack = thread.history.stack[thread.rootPly];
+        HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.playedMove = Move::NULL_MOVE;
         historyStack.movedPiece = Piece::NONE;
         historyStack.contCorrHistEntry = nullptr;
@@ -1184,7 +1187,7 @@ private:
     }
 
     void makeNullMove(SearchThread &thread) noexcept {
-        HistoryStackEntry &historyStack = thread.history.stack[thread.rootPly];
+        HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, Move::NULL_MOVE);
 
         thread.position.makeNullMove();
@@ -1196,7 +1199,7 @@ private:
         thread.rootPly--;
         thread.position.unmakeMove();
 
-        HistoryStackEntry &historyStack = thread.history.stack[thread.rootPly];
+        HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.contCorrHistEntry = nullptr;
     }
 
