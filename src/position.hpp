@@ -340,14 +340,14 @@ public:
 
     constexpr Color sideToMove() const noexcept { return sideToMove_; }
     constexpr USize ply() const noexcept { return ply_; }
-    constexpr UInt32 fullMoveNumber() const noexcept { return ply_ / 2 + 1; }
+    constexpr USize fullMoveNumber() const noexcept { return ply_ / 2 + 1; }
 
     constexpr CastlingRights castlingRights() const noexcept { return state().castlingRights; }
     constexpr Square enPassantSquare() const noexcept { return state().enPassantSquare; }
-    constexpr UInt16 halfmoveClock() const noexcept { return state().halfmoveClock; }
-    constexpr UInt16 nullPly() const noexcept { return state().nullPly; }
-    constexpr UInt16 repetitionPly() const noexcept { return state().repetitionPly; }
-    constexpr UInt16 repetitions() const noexcept { return state().repetitions; }
+    constexpr USize halfmoveClock() const noexcept { return state().halfmoveClock; }
+    constexpr USize nullPly() const noexcept { return state().nullPly; }
+    constexpr USize repetitionPly() const noexcept { return state().repetitionPly; }
+    constexpr UInt8 repetitions() const noexcept { return state().repetitions; }
 
     constexpr UInt64 hash() const noexcept { return state().hash; }
     constexpr UInt64 pawnHash() const noexcept { return state().pawnHash; }
@@ -1078,7 +1078,7 @@ public:
         return pieces(PieceType::PAWN).count() + (3 * pieces(PieceType::KNIGHT).count()) + (3 * pieces(PieceType::BISHOP).count()) + (5 * pieces(PieceType::ROOK).count()) + (9 * pieces(PieceType::QUEEN).count());
     }
 
-    bool repetition3Fold(USize searchPly) const noexcept { return state().repetitions > 1 || (state().repetitions == 1 && static_cast<USize>(state().repetitionPly) < searchPly); }
+    bool repetition3Fold(USize searchPly) const noexcept { return state().repetitions > 1 || (state().repetitions == 1 && state().repetitionPly < searchPly); }
 
     bool upcomingRepetition(USize searchPly) const noexcept {
         if (states_.size() <= 3) {
@@ -1088,7 +1088,7 @@ public:
         UInt64 currHash = state().hash;
         UInt64 diff = currHash ^ states_[states_.size() - 2].hash ^ Zobrist::sideToMove();
 
-        USize reversible = static_cast<USize>(std::min(state().halfmoveClock, state().nullPly));
+        USize reversible = std::min(state().halfmoveClock, state().nullPly);
         for (USize i = 3; i <= reversible; i += 2) {
             const State &pastState = states_[states_.size() - i - 1];
             diff ^= states_[states_.size() - i].hash ^ pastState.hash ^ Zobrist::sideToMove();
@@ -1299,10 +1299,9 @@ private:
 
         CastlingRights castlingRights;
         Square enPassantSquare;
-        UInt16 halfmoveClock;
-        UInt16 nullPly;
-
-        UInt16 repetitionPly;
+        USize halfmoveClock;
+        USize nullPly;
+        USize repetitionPly;
         UInt8 repetitions;
 
         UInt64 hash;
@@ -1428,11 +1427,11 @@ private:
             return;
         }
 
-        USize reversible = static_cast<USize>(std::min(state().halfmoveClock, state().nullPly));
+        USize reversible = std::min(state().halfmoveClock, state().nullPly);
         for (USize i = 4; i <= reversible; i += 2) {
             State &pastState = states_[states_.size() - i - 1];
             if (pastState.hash == state().hash) {
-                state().repetitionPly = static_cast<UInt16>(i);
+                state().repetitionPly = i;
                 state().repetitions = pastState.repetitions + 1;
                 return;
             }
