@@ -4,6 +4,7 @@
 
 #include "attacks.hpp"
 #include "cuckoo.hpp"
+#include "numa.hpp"
 #include "tunable.hpp"
 #include "uci.hpp"
 
@@ -14,6 +15,7 @@ int main(int argc, const char *argv[]) {
     Attacks::init();
     CuckooTable::init();
     TunableList::init();
+    NUMA::init();
 
     UCI uci = UCI();
 
@@ -24,7 +26,7 @@ int main(int argc, const char *argv[]) {
         if (args == "obconfig") {
             TUNABLES.openBenchConfig();
             return 0;
-        }
+    }
 #endif
 
         for (int i = 2; i < argc; i++) {
@@ -38,7 +40,7 @@ int main(int argc, const char *argv[]) {
         }
 
         return 0;
-    }
+}
 
 
     uci.run();

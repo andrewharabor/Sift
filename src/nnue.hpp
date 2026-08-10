@@ -3,9 +3,12 @@
 #include <array>
 #include <bit>
 #include <cassert>
+#include <exception>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string_view>
+#include <string>
 
 #define INCBIN_PREFIX
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -247,9 +250,12 @@ private:
     const NetParams *params_;
     NNUEState state_;
 
-    const NetParams *loadParams() noexcept {
-        assert(64 * ((sizeof(NetParams) + 63) / 64) == EMBEDDED_NETWORK_size);
-        assert(reinterpret_cast<uintptr_t>(EMBEDDED_NETWORK_data) % alignof(NetParams) == 0);
+    const NetParams *loadParams() {
+        constexpr USize PADDED_SIZE = 64 * ((sizeof(NetParams) + 63) / 64);
+        if (PADDED_SIZE != EMBEDDED_NETWORK_size) {
+            throw std::runtime_error("Embedded network file size mismatch: expected " + std::to_string(PADDED_SIZE) + "B, got " + std::to_string(EMBEDDED_NETWORK_size) + "B");
+            std::terminate();
+        }
         return reinterpret_cast<const NetParams *>(EMBEDDED_NETWORK_data);
     }
 

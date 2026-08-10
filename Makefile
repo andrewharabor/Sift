@@ -1,6 +1,7 @@
 ARCH  ?= native
 BUILD ?= engine
 MODE  ?= release
+NUMA ?= off
 
 BUILD_DIR := build
 
@@ -131,6 +132,11 @@ else ifeq ($(MODE),debug)
 	LD_FLAGS  += -fsanitize=undefined,address
 endif
 
+ifeq ($(NUMA),on)
+	CXX_FLAGS += -DUSE_NUMA
+	LD_FLAGS  += -lnuma
+endif
+
 -include $(MAIN_DEPS)
 -include $(PERM_DEPS)
 
@@ -164,6 +170,7 @@ info:
 	@echo Build architecture: $(ARCH)
 	@echo Build mode: $(MODE)
 	@echo Network file: $(NETWORK_FILE)
+	@echo NUMA support: $(NUMA)
 
 .PHONY: clean
 clean:
@@ -173,7 +180,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|avx2|avx2-pext|avx512|neon|generic]> <MODE=[release|tune|sparsity|debug]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx2|avx2-pext|avx512|neon|generic]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"

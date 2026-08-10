@@ -18,6 +18,7 @@
 #include "move-order.hpp"
 #include "move.hpp"
 #include "nnue.hpp"
+#include "numa.hpp"
 #include "option.hpp"
 #include "position.hpp"
 #include "score.hpp"
@@ -420,6 +421,8 @@ private:
     }
 
     void threadLoop(SearchThread &thread) noexcept {
+        NUMA::bindThread(thread.id);
+
         while (true) {
             std::unique_lock<std::mutex> lock(thread.mutex);
             thread.condition.notify_one();
