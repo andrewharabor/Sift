@@ -29,12 +29,13 @@ public:
         update(bonus, value_);
     }
 
-    constexpr void update(Int32 bonus, Int32 base) noexcept { value_ += static_cast<Int16>(bonus - base * std::abs(bonus) / MAX); }
+    constexpr void update(Int32 bonus, Int32 base) noexcept { value_ = static_cast<Int16>(std::clamp(static_cast<Int32>(value_) + bonus - base * std::abs(bonus) / MAX, MIN, MAX)); }
 
     constexpr Int32 value() const noexcept { return static_cast<Int32>(value_); }
 
 private:
     static constexpr Int32 MAX = 16384;
+    static constexpr Int32 MIN = -MAX;
 
     Int16 value_;
 };
@@ -53,7 +54,7 @@ public:
 
     constexpr void update(Int32 bonus) noexcept {
         Int16 value = value_.load(std::memory_order_relaxed);
-        value += static_cast<Int16>(bonus - value * std::abs(bonus) / MAX);
+        value = static_cast<Int16>(std::clamp(static_cast<Int32>(value) + bonus - value * std::abs(bonus) / MAX, MIN, MAX));
         value_.store(value, std::memory_order_relaxed);
     }
 
@@ -61,6 +62,7 @@ public:
 
 private:
     static constexpr Int32 MAX = 1024;
+    static constexpr Int32 MIN = -MAX;
 
     std::atomic<Int16> value_;
 };
