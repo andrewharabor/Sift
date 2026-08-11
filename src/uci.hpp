@@ -436,7 +436,6 @@ private:
         }
     }
 
-
     void bench(std::istringstream &stream) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
@@ -450,6 +449,8 @@ private:
 
             SearchLimits limits = SearchLimits();
             limits.depth = depth;
+
+            search_.newGame();
 
             const auto start = std::chrono::high_resolution_clock::now();
             const UInt64 testNodes = search_.bench(position, limits);

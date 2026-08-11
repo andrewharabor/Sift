@@ -111,6 +111,7 @@ struct SearchThread {
     std::array<HistoryStackEntry, MAX_PLY + 1> historyStack;
 
     History history;
+    SharedHistory *sharedHistory;
 
     NNUE nnue;
 
@@ -138,8 +139,8 @@ struct SearchThread {
 
             historyStack[i].playedMove = Move::NULL_MOVE;
             historyStack[i].movedPiece = Piece::NONE;
-            historyStack[i].contCorrHistEntry = nullptr;
-            historyStack[i].contHistEntry = nullptr;
+            historyStack[i].contHistSubtable = nullptr;
+            historyStack[i].contCorrHistSubtable = nullptr;
             historyStack[i].score = 0;
         }
     }
@@ -259,6 +260,10 @@ public:
             thread->history.reset();
         }
         tTable_.reset(threads_.size());
+
+        for (USize node = 0; node < NUMA::nodeCount(); node++) {
+            sharedHistory_.getForNode(node)->reset();
+        }
     }
 
     void run(const Position &position, const SearchLimits &limits) noexcept {
@@ -284,12 +289,12 @@ public:
         contempt_[static_cast<USize>(~position.sideToMove())] = -contemptVal;
 
         setTimeUp(false);
-
         timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
         timeManager_.start();
 
         for (auto &thread : threads_) {
             thread->reset();
+            thread->sharedHistory = sharedHistory_.get(thread->id);
             thread->position = position;
             thread->nnue.state().set(position);
             thread->limits = limits;
@@ -309,7 +314,6 @@ public:
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
 
-        tTable_.reset(threads_.size());
         tTable_.incrementAge();
 
         multiPV_ = static_cast<USize>(OptionList::DEFAULT_MULTI_PV);
@@ -323,7 +327,7 @@ public:
         UInt64 nodes = 0;
         for (auto &thread : threads_) {
             thread->reset();
-            thread->history.reset();
+            thread->sharedHistory = sharedHistory_.get(thread->id);
             thread->position = position;
             thread->nnue.state().set(position);
             thread->limits = limits;
@@ -401,6 +405,7 @@ private:
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
     TTable tTable_;
+    NUMAUniqueAllocation<SharedHistory> sharedHistory_;
 
     USize multiPV_;
 
@@ -554,6 +559,7 @@ private:
         SearchStackEntry &stack = thread.stack[rootPly];
         std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
+        SharedHistory *sharedHistory = thread.sharedHistory;
 
         stack.pv.clear();
 
@@ -626,7 +632,7 @@ private:
                 stack.eval = Score::NONE;
             } else {
                 rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-                stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
+                stack.staticEval = sharedHistory->correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
                 complexity = std::abs(stack.staticEval - rawStaticEval);
                 stack.eval = stack.staticEval;
                 if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
@@ -979,7 +985,7 @@ private:
 
         if (!excludedMove) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
-                history.updateCorrHist(position, historyStack, depth, rootPly, bestScore - stack.staticEval);
+                sharedHistory->updateCorrHist(position, historyStack, depth, rootPly, bestScore - stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
@@ -1000,6 +1006,7 @@ private:
         SearchStackEntry &stack = thread.stack[rootPly];
         std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
+        SharedHistory *sharedHistory = thread.sharedHistory;
 
         stack.pv.clear();
 
@@ -1052,7 +1059,7 @@ private:
             stack.eval = Score::NONE;
         } else {
             rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-            stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
+            stack.staticEval = sharedHistory->correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
             stack.eval = stack.staticEval;
             if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                 stack.eval = tTableEntry.score;
@@ -1163,8 +1170,8 @@ private:
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.playedMove = move;
         historyStack.movedPiece = thread.position.moved(move);
-        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, move);
-        historyStack.contHistEntry = &thread.history.contHistEntry(thread.position, move);
+        historyStack.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
+        historyStack.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
         historyStack.score = historyScore;
 
         thread.position.makeMove(move, thread.nnue.state());
@@ -1180,15 +1187,15 @@ private:
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.playedMove = Move::NULL_MOVE;
         historyStack.movedPiece = Piece::NONE;
-        historyStack.contCorrHistEntry = nullptr;
-        historyStack.contHistEntry = nullptr;
+        historyStack.contHistSubtable = nullptr;
+        historyStack.contCorrHistSubtable = nullptr;
         historyStack.score = 0;
 
     }
 
     void makeNullMove(SearchThread &thread) noexcept {
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
-        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, Move::NULL_MOVE);
+        historyStack.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, Move::NULL_MOVE);
 
         thread.position.makeNullMove();
         thread.rootPly++;
@@ -1200,7 +1207,7 @@ private:
         thread.position.unmakeMove();
 
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
-        historyStack.contCorrHistEntry = nullptr;
+        historyStack.contCorrHistSubtable = nullptr;
     }
 
     const SearchThread &selectThread() const noexcept {
