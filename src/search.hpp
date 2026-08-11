@@ -111,7 +111,6 @@ struct SearchThread {
     std::array<HistoryStackEntry, MAX_PLY + 1> historyStack;
 
     History history;
-    SharedHistory *sharedHistory;
 
     NNUE nnue;
 
@@ -139,8 +138,8 @@ struct SearchThread {
 
             historyStack[i].playedMove = Move::NULL_MOVE;
             historyStack[i].movedPiece = Piece::NONE;
-            historyStack[i].contHistEntry = nullptr;
             historyStack[i].contCorrHistEntry = nullptr;
+            historyStack[i].contHistEntry = nullptr;
             historyStack[i].score = 0;
         }
     }
@@ -260,10 +259,6 @@ public:
             thread->history.reset();
         }
         tTable_.reset(threads_.size());
-
-        for (USize node = 0; node < NUMA::nodeCount(); node++) {
-            sharedHistory_.getForNode(node)->reset();
-        }
     }
 
     void run(const Position &position, const SearchLimits &limits) noexcept {
@@ -295,7 +290,6 @@ public:
 
         for (auto &thread : threads_) {
             thread->reset();
-            thread->sharedHistory = sharedHistory_.get(thread->id);
             thread->position = position;
             thread->nnue.state().set(position);
             thread->limits = limits;
@@ -407,8 +401,6 @@ private:
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
     TTable tTable_;
-
-    NUMAUniqueAllocation<SharedHistory> sharedHistory_;
 
     USize multiPV_;
 
@@ -562,7 +554,6 @@ private:
         SearchStackEntry &stack = thread.stack[rootPly];
         std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
-        SharedHistory *sharedHistory = thread.sharedHistory;
 
         stack.pv.clear();
 
@@ -606,7 +597,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, thread.sharedHistory->correction(position, historyStack, rootPly));
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_);
         }
 
         SearchStackEntry &nextStack = thread.stack[rootPly + 1];
@@ -635,9 +626,8 @@ private:
                 stack.eval = Score::NONE;
             } else {
                 rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-                const Int32 correction = thread.sharedHistory->correction(position, historyStack, rootPly);
-                stack.staticEval = Eval::adjust(rawStaticEval, position, correction);
-                complexity = std::abs(correction);
+                stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
+                complexity = std::abs(stack.staticEval - rawStaticEval);
                 stack.eval = stack.staticEval;
                 if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                     stack.eval = tTableEntry.score;
@@ -989,7 +979,7 @@ private:
 
         if (!excludedMove) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
-                sharedHistory->updateCorrHist(position, historyStack, rootPly, depth, bestScore, stack.staticEval);
+                history.updateCorrHist(position, historyStack, depth, rootPly, bestScore - stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
@@ -1042,7 +1032,7 @@ private:
         }
 
         if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, thread.sharedHistory->correction(position, historyStack, rootPly));
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_);
         }
 
         auto [tTableEntry, tTableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
@@ -1062,7 +1052,7 @@ private:
             stack.eval = Score::NONE;
         } else {
             rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-            stack.staticEval = Eval::adjust(rawStaticEval, position, thread.sharedHistory->correction(position, historyStack, rootPly));
+            stack.staticEval = history.correctStaticEval(position, historyStack, Eval::adjust(rawStaticEval, position), rootPly);
             stack.eval = stack.staticEval;
             if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
                 stack.eval = tTableEntry.score;
@@ -1173,8 +1163,8 @@ private:
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
         historyStack.playedMove = move;
         historyStack.movedPiece = thread.position.moved(move);
+        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, move);
         historyStack.contHistEntry = &thread.history.contHistEntry(thread.position, move);
-        historyStack.contCorrHistEntry = &thread.sharedHistory->contCorrHistEntry(thread.position, move);
         historyStack.score = historyScore;
 
         thread.position.makeMove(move, thread.nnue.state());
@@ -1198,7 +1188,7 @@ private:
 
     void makeNullMove(SearchThread &thread) noexcept {
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
-        historyStack.contCorrHistEntry = &thread.sharedHistory->contCorrHistEntry(thread.position, Move::NULL_MOVE);
+        historyStack.contCorrHistEntry = &thread.history.contCorrHistEntry(thread.position, Move::NULL_MOVE);
 
         thread.position.makeNullMove();
         thread.rootPly++;
