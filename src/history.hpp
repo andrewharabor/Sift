@@ -128,15 +128,9 @@ public:
         Int32 score = 0;
         score += mainHistScore(move, position.threats(), movedPiece.color());
         score += pawnHistScore(move, movedPiece, position.pawnHash());
-        if (rootPly > 0 && stack[rootPly - 1].contHistSubtable != nullptr) {
-            score += contHistScore(*stack[rootPly - 1].contHistSubtable, move, movedPiece);
-        }
-        if (rootPly > 1 && stack[rootPly - 2].contHistSubtable != nullptr) {
-            score += contHistScore(*stack[rootPly - 2].contHistSubtable, move, movedPiece);
-        }
-        if (rootPly > 3 && stack[rootPly - 4].contHistSubtable != nullptr) {
-            score += contHistScore(*stack[rootPly - 4].contHistSubtable, move, movedPiece);
-        }
+        score += contHistScore(stack, rootPly, 1, move, movedPiece);
+        score += contHistScore(stack, rootPly, 2, move, movedPiece);
+        score += contHistScore(stack, rootPly, 4, move, movedPiece);
         return score;
     }
 
@@ -157,25 +151,13 @@ public:
         const Piece movedPiece = position.moved(move);
         Int32 base = 0;
         base += mainHistScore(move, position.threats(), movedPiece.color()) / 2;
-        if (rootPly > 0 && stack[rootPly - 1].contHistSubtable != nullptr) {
-            base += contHistScore(*stack[rootPly - 1].contHistSubtable, move, movedPiece);
-        }
-        if (rootPly > 1 && stack[rootPly - 2].contHistSubtable != nullptr) {
-            base += contHistScore(*stack[rootPly - 2].contHistSubtable, move, movedPiece);
-        }
-        if (rootPly > 3 && stack[rootPly - 4].contHistSubtable != nullptr) {
-            base += contHistScore(*stack[rootPly - 4].contHistSubtable, move, movedPiece);
-        }
+        base += contHistScore(stack, rootPly, 1, move, movedPiece);
+        base += contHistScore(stack, rootPly, 2, move, movedPiece);
+        base += contHistScore(stack, rootPly, 4, move, movedPiece);
 
-        if (rootPly > 0 && stack[rootPly - 1].contHistSubtable != nullptr) {
-            updateContHist(*stack[rootPly - 1].contHistSubtable, move, movedPiece, bonus, base);
-        }
-        if (rootPly > 1 && stack[rootPly - 2].contHistSubtable != nullptr) {
-            updateContHist(*stack[rootPly - 2].contHistSubtable, move, movedPiece, bonus, base);
-        }
-        if (rootPly > 3 && stack[rootPly - 4].contHistSubtable != nullptr) {
-            updateContHist(*stack[rootPly - 4].contHistSubtable, move, movedPiece, bonus, base);
-        }
+        updateContHist(stack, rootPly, 1, move, movedPiece, bonus, base);
+        updateContHist(stack, rootPly, 2, move, movedPiece, bonus, base);
+        updateContHist(stack, rootPly, 4, move, movedPiece, bonus, base);
     }
 
     constexpr void updateNoisyHists(const Position &position, const Move move, Int32 bonus) noexcept {
@@ -234,9 +216,11 @@ private:
         return pawnHistTable_[hash % PAWN_HIST_SIZE][static_cast<USize>(movedPiece)][move.to().index()].value();
     }
 
-    constexpr Int32 contHistScore(const ContHistSubtable &contHistSubtable, const Move move, Piece movedPiece) const noexcept {
-        assert(move != Move::NULL_MOVE);
-        return contHistSubtable[static_cast<USize>(movedPiece)][move.to().index()].value();
+    constexpr Int32 contHistScore(std::span<const HistoryStackEntry> stack, USize rootPly, USize ply, const Move move, Piece movedPiece) const noexcept {
+        if (rootPly >= ply && stack[rootPly - ply].contHistSubtable != nullptr) {
+            return (*stack[rootPly - ply].contHistSubtable)[static_cast<USize>(movedPiece)][move.to().index()].value();
+        }
+        return 0;
     }
 
     constexpr Int32 captureHistScore(const Move move, Bitboard threats, Piece movedPiece, Piece capturedPiece) const noexcept {
@@ -258,9 +242,10 @@ private:
         pawnHistTable_[hash % PAWN_HIST_SIZE][static_cast<USize>(movedPiece)][move.to().index()].update(bonus);
     }
 
-    constexpr void updateContHist(ContHistSubtable &contHistSubtable, const Move move, Piece movedPiece, Int32 bonus, Int32 base) noexcept {
-        assert(move != Move::NULL_MOVE);
-        contHistSubtable[static_cast<USize>(movedPiece)][move.to().index()].update(bonus, base);
+    constexpr void updateContHist(std::span<const HistoryStackEntry> stack, USize rootPly, USize ply, const Move move, Piece movedPiece, Int32 bonus, Int32 base) noexcept {
+        if (rootPly >= ply && stack[rootPly - ply].contHistSubtable != nullptr) {
+            (*stack[rootPly - ply].contHistSubtable)[static_cast<USize>(movedPiece)][move.to().index()].update(bonus, base);
+        }
     }
 
     constexpr void updateCaptureHist(const Move move, Bitboard threats, Piece movedPiece, Piece capturedPiece, Int32 bonus) noexcept {
@@ -301,9 +286,7 @@ public:
         }
 
         for (USize ply = MIN_CONT_CORR_HIST_PLY; ply <= MAX_CONT_CORR_HIST_PLY; ply++) {
-            if (rootPly >= ply && stack[rootPly - ply].contCorrHistSubtable != nullptr) {
-                correction += CONT_CORR_HIST_WEIGHTS[ply] * contCorrHistScore(*stack[rootPly - ply].contCorrHistSubtable, prevMove, prevPiece);
-            }
+            correction += CONT_CORR_HIST_WEIGHTS[ply] * contCorrHistScore(stack, rootPly, ply, prevMove, prevPiece);
         }
 
         return correction / CORR_HIST_CORRECTION_DIVISOR;
@@ -328,9 +311,7 @@ public:
         }
 
         for (USize ply = MIN_CONT_CORR_HIST_PLY; ply <= MAX_CONT_CORR_HIST_PLY; ply++) {
-            if (rootPly >= ply && stack[rootPly - ply].contCorrHistSubtable != nullptr) {
-                updateContCorrHist(*stack[rootPly - ply].contCorrHistSubtable, prevMove, prevPiece, bonus);
-            }
+            updateContCorrHist(stack, rootPly, ply, prevMove, prevPiece, bonus);
         }
     }
 
@@ -368,8 +349,11 @@ private:
         return threatCorrHistTable_[static_cast<USize>(color)][threatHash % CORR_HIST_SIZE].value();
     }
 
-    constexpr Int32 contCorrHistScore(const ContCorrHistSubtable &contCorrHistSubtable, const Move move, Piece movedPiece) const noexcept {
-        return contCorrHistSubtable[static_cast<USize>(movedPiece)][move.to().index()].value();
+    constexpr Int32 contCorrHistScore(std::span<const HistoryStackEntry> stack, USize rootPly, USize ply, const Move move, Piece movedPiece) const noexcept {
+        if (rootPly >= ply && stack[rootPly - ply].contCorrHistSubtable != nullptr) {
+            return (*stack[rootPly - ply].contCorrHistSubtable)[static_cast<USize>(movedPiece)][move.to().index()].value();
+        }
+        return 0;
     }
 
     constexpr void updatePawnCorrHist(const Position &position, Color color, Int32 bonus) noexcept {
@@ -397,8 +381,10 @@ private:
         threatCorrHistTable_[static_cast<USize>(color)][threatHash % CORR_HIST_SIZE].update(bonus);
     }
 
-    constexpr void updateContCorrHist(ContCorrHistSubtable &contCorrHistSubtable, const Move move, Piece movedPiece, Int32 bonus) noexcept {
-        contCorrHistSubtable[static_cast<USize>(movedPiece)][move.to().index()].update(bonus);
+    constexpr void updateContCorrHist(std::span<const HistoryStackEntry> stack, USize rootPly, USize ply, const Move move, Piece movedPiece, Int32 bonus) noexcept {
+        if (rootPly >= ply && stack[rootPly - ply].contCorrHistSubtable != nullptr) {
+            (*stack[rootPly - ply].contCorrHistSubtable)[static_cast<USize>(movedPiece)][move.to().index()].update(bonus);
+        }
     }
 };
 
