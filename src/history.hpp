@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstring>
 #include <span>
 #include <string>
 
@@ -42,45 +43,44 @@ private:
 
 using ContHistSubtable = MultiArray<HistEntry, 12, 64>;
 
-class ContCorrHistEntry {
-public:
-    static constexpr Int32 SCALE = 256;
-
-    ContCorrHistEntry() noexcept : value_(0) {}
-    ContCorrHistEntry(Int32 value) noexcept : value_(value) {}
-
-    void update(Int32 target, Int32 weight) noexcept {
-        Int32 newValue = (value_ * (SCALE - weight) + target * weight) / SCALE;
-        newValue = std::clamp(newValue, value_ - CORR_HIST_UPDATE_MAX, value_ + CORR_HIST_UPDATE_MAX);
-        value_ = std::clamp(newValue, -CORR_HIST_MAX, CORR_HIST_MAX);
-    }
-
-    constexpr Int32 value() const noexcept { return value_; }
-
-private:
-    Int32 value_;
-};
-
-using ContCorrHistSubtable = MultiArray<ContCorrHistEntry, 12, 64>;
-
 class CorrHistEntry {
 public:
-    static constexpr Int32 SCALE = 256;
+    CorrHistEntry() noexcept : value_(0) {}
+    CorrHistEntry(Int32 value) noexcept : value_(static_cast<Int16>(value)) {}
 
-    CorrHistEntry() noexcept { value_.store(0, std::memory_order_relaxed); }
-    CorrHistEntry(Int32 value) noexcept { value_.store(value, std::memory_order_relaxed); }
-
-    void update(Int32 target, Int32 weight) noexcept {
-        Int32 value = value_.load(std::memory_order_relaxed);
-        Int32 newValue = (value * (SCALE - weight) + target * weight) / SCALE;
-        newValue = std::clamp(newValue, value - CORR_HIST_UPDATE_MAX, value + CORR_HIST_UPDATE_MAX);
-        value_.store(std::clamp(newValue, -CORR_HIST_MAX, CORR_HIST_MAX), std::memory_order_relaxed);
+    constexpr void update(Int32 bonus) noexcept {
+        Int32 v = static_cast<Int32>(value_);
+        value_ = static_cast<Int16>(std::clamp(v + bonus - v * std::abs(bonus) / MAX, MIN, MAX));
     }
 
-    constexpr Int32 value() const noexcept { return value_.load(std::memory_order_relaxed); }
+    constexpr Int32 value() const noexcept { return static_cast<Int32>(value_); }
 
 private:
-    std::atomic<Int32> value_;
+    static constexpr Int32 MAX = 1024;
+    static constexpr Int32 MIN = -MAX;
+
+    Int16 value_;
+};
+
+using ContCorrHistSubtable = MultiArray<CorrHistEntry, 12, 64>;
+
+class SharedCorrHistEntry {
+public:
+    SharedCorrHistEntry() noexcept { (value_.store(0, std::memory_order_relaxed)); }
+    SharedCorrHistEntry(Int32 value) noexcept { value_.store(static_cast<Int16>(value), std::memory_order_relaxed); }
+
+    constexpr void update(Int32 bonus) noexcept {
+        Int32 v = static_cast<Int32>(value_.load(std::memory_order_relaxed));
+        value_.store(static_cast<Int16>(std::clamp(v + bonus - v * std::abs(bonus) / MAX, MIN, MAX)), std::memory_order_relaxed);
+    }
+
+    constexpr Int32 value() const noexcept { return static_cast<Int32>(value_.load(std::memory_order_relaxed)); }
+
+private:
+    static constexpr Int32 MAX = 1024;
+    static constexpr Int32 MIN = -MAX;
+
+    std::atomic<Int16> value_;
 };
 
 using MainHistTable = MultiArray<HistEntry, 2, 4096, 2, 2>;
@@ -89,29 +89,29 @@ using CaptureHistTable = MultiArray<HistEntry, 7, 12, 64, 2, 2>;
 using ContHistTable = MultiArray<ContHistSubtable, 12, 64>;
 using ContCorrHistTable = MultiArray<ContCorrHistSubtable, 12, 64>;
 
-class CorrHistTable {
+class SharedCorrHistTable {
 public:
-    CorrHistTable() noexcept : data() {}
+    SharedCorrHistTable() noexcept : data() {}
 
-    CorrHistEntry &entry(Color color, UInt64 key) noexcept {
+    SharedCorrHistEntry &entry(Color color, UInt64 key) noexcept {
         return data[static_cast<USize>(color)][key % SIZE];
     }
 
-    const CorrHistEntry &entry(Color color, UInt64 key) const noexcept {
+    const SharedCorrHistEntry &entry(Color color, UInt64 key) const noexcept {
         return data[static_cast<USize>(color)][key % SIZE];
     }
 
 private:
     static constexpr USize SIZE = 16384;
 
-    MultiArray<CorrHistEntry, 2, SIZE> data;
+    MultiArray<SharedCorrHistEntry, 2, SIZE> data;
 };
 
-using PawnCorrHistTable = CorrHistTable;
-using NonPawnCorrHistTable = std::array<CorrHistTable, 2>;
-using ThreatCorrHistTable = CorrHistTable;
-using MinorPieceCorrHistTable = CorrHistTable;
-using MajorPieceCorrHistTable = CorrHistTable;
+using PawnCorrHistTable = SharedCorrHistTable;
+using NonPawnCorrHistTable = std::array<SharedCorrHistTable, 2>;
+using ThreatCorrHistTable = SharedCorrHistTable;
+using MinorPieceCorrHistTable = SharedCorrHistTable;
+using MajorPieceCorrHistTable = SharedCorrHistTable;
 
 struct HistoryStackEntry {
     Move playedMove;
@@ -218,12 +218,12 @@ public:
     }
 
     static Int32 bonus(Int32 depth) noexcept {
-        Int32 result = (HISTORY_BONUS_QUADRATIC * depth * depth / HISTORY_BONUS_SCALE) + (HISTORY_BONUS_LINEAR * depth) - HISTORY_BONUS_OFFSET;
+        Int32 result = (HISTORY_BONUS_QUADRATIC_SCALE * depth * depth / HISTORY_BONUS_QUADRATIC_DIVISOR) + (HISTORY_BONUS_LINEAR_SCALE * depth) - HISTORY_BONUS_OFFSET;
         return std::min(result, HISTORY_BONUS_MAX);
     }
 
     static Int32 penalty(Int32 depth) noexcept {
-        Int32 result = (HISTORY_PENALTY_QUADRATIC * depth * depth / HISTORY_PENALTY_SCALE) + (HISTORY_PENALTY_LINEAR * depth) - HISTORY_PENALTY_OFFSET;
+        Int32 result = (HISTORY_PENALTY_QUADRATIC_SCALE * depth * depth / HISTORY_PENALTY_QUADRATIC_DIVISOR) + (HISTORY_PENALTY_LINEAR_SCALE * depth) - HISTORY_PENALTY_OFFSET;
         return -std::min(result, HISTORY_PENALTY_MAX);
     }
 
@@ -295,11 +295,7 @@ public:
         std::memset(&majorPieceCorrHistTable_, 0, sizeof(majorPieceCorrHistTable_));
     }
 
-    Int32 correctStaticEval(const Position &position, std::span<const HistoryStackEntry> stack, Int32 staticEval, USize rootPly) const noexcept {
-        if (staticEval >= Score::KNOWN_WIN || staticEval <= Score::KNOWN_LOSS) {
-            return staticEval;
-        }
-
+    Int32 correction(const Position &position, std::span<const HistoryStackEntry> stack, USize rootPly) const noexcept {
         const Color color = position.sideToMove();
         const UInt64 threatHash = Utils::murmurHash3((position.threats() & position.friendly(color)).bits());
 
@@ -331,22 +327,21 @@ public:
             }
         }
 
-        Int32 correctedStaticEval = staticEval + correction / (CorrHistEntry::SCALE * CorrHistEntry::SCALE);
-        return std::clamp(correctedStaticEval, Score::KNOWN_LOSS + 1, Score::KNOWN_WIN - 1);
+        return correction / CORR_HIST_CORRECTION_DIVISOR;
     }
 
-    void updateCorrHist(const Position &position, std::span<const HistoryStackEntry> stack, Int32 depth, USize rootPly, Int32 bonus) noexcept {
+    void updateCorrHist(const Position &position, std::span<const HistoryStackEntry> stack, USize rootPly, Int32 depth, Int32 searchScore, Int32 staticEval) noexcept {
         const Color color = position.sideToMove();
         const UInt64 threatHash = Utils::murmurHash3((position.threats() & position.friendly(color)).bits());
-        const Int32 scaledBonus = bonus * CorrHistEntry::SCALE;
-        const Int32 weight = CORR_HIST_DEPTH_WEIGHT_SCALE * std::min(1 + depth, CORR_HIST_DEPTH_WEIGHT_MAX);
 
-        pawnCorrHistTable_.entry(color, position.pawnHash()).update(scaledBonus, weight);
-        nonPawnCorrHistTable_[static_cast<USize>(color)].entry(color, position.nonPawnHash(color)).update(scaledBonus, weight);
-        nonPawnCorrHistTable_[static_cast<USize>(color)].entry(~color, position.nonPawnHash(~color)).update(scaledBonus, weight);
-        threatCorrHistTable_.entry(color, threatHash).update(scaledBonus, weight);
-        minorPieceCorrHistTable_.entry(color, position.minorPieceHash()).update(scaledBonus, weight);
-        majorPieceCorrHistTable_.entry(color, position.majorPieceHash()).update(scaledBonus, weight);
+        const Int32 bonus = std::clamp((searchScore - staticEval) * depth / BONUS_DIVISOR, -CORR_HIST_PENALTY_MAX, CORR_HIST_BONUS_MAX);
+
+        pawnCorrHistTable_.entry(color, position.pawnHash()).update(bonus);
+        nonPawnCorrHistTable_[static_cast<USize>(color)].entry(color, position.nonPawnHash(color)).update(bonus);
+        nonPawnCorrHistTable_[static_cast<USize>(color)].entry(~color, position.nonPawnHash(~color)).update(bonus);
+        threatCorrHistTable_.entry(color, threatHash).update(bonus);
+        minorPieceCorrHistTable_.entry(color, position.minorPieceHash()).update(bonus);
+        majorPieceCorrHistTable_.entry(color, position.majorPieceHash()).update(bonus);
 
         const Move prevMove = (rootPly > 0) ? stack[rootPly - 1].playedMove : Move::NULL_MOVE;
         Piece prevPiece = (rootPly > 0) ? stack[rootPly - 1].movedPiece : Piece::NONE;
@@ -356,14 +351,13 @@ public:
 
         for (USize ply = MIN_CONT_CORR_HIST_PLY; ply <= MAX_CONT_CORR_HIST_PLY; ply++) {
             if (rootPly >= ply && stack[rootPly - ply].contCorrHistSubtable != nullptr) {
-                (*stack[rootPly - ply].contCorrHistSubtable)[static_cast<USize>(prevPiece)][prevMove.to().index()].update(scaledBonus, weight);
+                (*stack[rootPly - ply].contCorrHistSubtable)[static_cast<USize>(prevPiece)][prevMove.to().index()].update(bonus);
             }
         }
     }
 
 private:
-    static constexpr Int32 CORR_HIST_DEPTH_WEIGHT_SCALE = 2;
-    static constexpr Int32 CORR_HIST_DEPTH_WEIGHT_MAX = 16;
+    static constexpr Int32 BONUS_DIVISOR = 8;
 
     PawnCorrHistTable pawnCorrHistTable_;
     NonPawnCorrHistTable nonPawnCorrHistTable_;
