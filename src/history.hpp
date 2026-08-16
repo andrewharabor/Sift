@@ -131,6 +131,7 @@ public:
         score += contHistScore(stack, rootPly, 1, move, movedPiece);
         score += contHistScore(stack, rootPly, 2, move, movedPiece);
         score += contHistScore(stack, rootPly, 4, move, movedPiece);
+        score += contHistScore(stack, rootPly, 6, move, movedPiece);
         return score;
     }
 
@@ -150,14 +151,16 @@ public:
         assert(move != Move::NULL_MOVE);
         const Piece movedPiece = position.moved(move);
         Int32 base = 0;
-        base += mainHistScore(move, position.threats(), movedPiece.color()) / 2;
+        base += mainHistScore(move, position.threats(), movedPiece.color());
         base += contHistScore(stack, rootPly, 1, move, movedPiece);
         base += contHistScore(stack, rootPly, 2, move, movedPiece);
         base += contHistScore(stack, rootPly, 4, move, movedPiece);
+        base += contHistScore(stack, rootPly, 6, move, movedPiece);
 
         updateContHist(stack, rootPly, 1, move, movedPiece, bonus, base);
         updateContHist(stack, rootPly, 2, move, movedPiece, bonus, base);
         updateContHist(stack, rootPly, 4, move, movedPiece, bonus, base);
+        updateContHist(stack, rootPly, 6, move, movedPiece, bonus, base);
     }
 
     constexpr void updateNoisyHists(const Position &position, const Move move, Int32 bonus) noexcept {
