@@ -628,7 +628,7 @@ public:
         return key;
     }
 
-    UInt64 hashAfter(const Move move) const noexcept {
+    UInt64 hashAfter(Move move) const noexcept {
         UInt64 key = state().hash;
 
         key ^= Zobrist::sideToMove();
@@ -787,22 +787,22 @@ public:
     constexpr bool inCheck() const noexcept { return state().checks > 0; }
     constexpr bool givesCheck() const noexcept { return attacked(kingSquare(~sideToMove_), sideToMove_); }
 
-    constexpr bool capture(const Move move) const noexcept {
+    constexpr bool capture(Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         return (pieceAt(move.to()) != Piece::NONE && move.type() != MoveType::CASTLING) || move.type() == MoveType::EN_PASSANT;
     }
 
-    constexpr bool noisy(const Move move) const noexcept {
+    constexpr bool noisy(Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         return capture(move) || move.type() == MoveType::PROMOTION;
     }
 
-    constexpr bool quiet(const Move move) const noexcept {
+    constexpr bool quiet(Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         return !noisy(move);
     }
 
-    constexpr bool check(const Move move) const noexcept {
+    constexpr bool check(Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         const auto findSniper = [this](Square kingSq, Bitboard occ) {
             const Bitboard bishops = Attacks::bishop(kingSq, occ) & (pieces(PieceType::BISHOP, sideToMove_) | pieces(PieceType::QUEEN, sideToMove_));
@@ -888,7 +888,7 @@ public:
         }
     }
 
-    constexpr bool legal(const Move move) const noexcept {
+    constexpr bool legal(Move move) const noexcept {
         if (move == Move::NULL_MOVE) {
             return false;
         }
@@ -1053,11 +1053,11 @@ public:
         return false;
     }
 
-    constexpr Piece moved(const Move move) const noexcept {
+    constexpr Piece moved(Move move) const noexcept {
         return pieceAt(move.from());
     }
 
-    constexpr Piece captured(const Move move) const noexcept {
+    constexpr Piece captured(Move move) const noexcept {
         if (move.type() == MoveType::EN_PASSANT) {
             return Piece(PieceType::PAWN, ~sideToMove_);
         }
@@ -1157,7 +1157,7 @@ public:
         return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(searchPly);
     }
 
-    bool see(const Move move, Int32 margin) const noexcept {
+    bool see(Move move, Int32 margin) const noexcept {
         assert(move != Move::NULL_MOVE);
 
         if (move.type() == MoveType::CASTLING) {
@@ -1275,7 +1275,7 @@ public:
         return bool(favorable);
     }
 
-    Int32 mvv(const Move move) const noexcept {
+    Int32 mvv(Move move) const noexcept {
         assert(move != Move::NULL_MOVE);
         assert(capture(move));
 

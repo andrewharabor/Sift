@@ -151,7 +151,7 @@ public:
         std::stable_sort(moveList_.begin(), moveList_.begin() + size_, compare);
     }
 
-    constexpr USize find(const Move move) const noexcept {
+    constexpr USize find(Move move) const noexcept {
         auto it = std::find(moveList_.begin(), moveList_.begin() + size_, move);
         return static_cast<USize>(it - moveList_.begin());
     }

@@ -30,7 +30,7 @@ namespace Sift {
 
 class UCI {
 public:
-    UCI() : position_(), legalMoves_(), search_([this](const SearchInfo &info) { searchInfo(info); }, [this](const Move move) { bestMove(move); }, [this](const Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
+    UCI() : position_(), legalMoves_(), search_([this](const SearchInfo &info) { searchInfo(info); }, [this](Move move) { bestMove(move); }, [this](Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
         OPTIONS.add(Option("Hash", SpinOption(OptionList::DEFAULT_HASH_MB, OptionList::DEFAULT_HASH_MB, OptionList::MIN_HASH_MB, OptionList::MAX_HASH_MB), [this]() { search_.resizeTTable(); }));
         OPTIONS.add(Option("ClearHash", [this]() { search_.newGame(); }));
         OPTIONS.add(Option("Threads", SpinOption(OptionList::DEFAULT_THREADS, OptionList::DEFAULT_THREADS, OptionList::MIN_THREADS, OptionList::MAX_THREADS), [this]() { search_.setThreads(); }));
@@ -248,7 +248,7 @@ private:
 
         genLegalMoves();
         while (stream >> token) {
-            auto compare = [&token](const Move move) { return std::string(move) == token; };
+            auto compare = [&token](Move move) { return std::string(move) == token; };
             USize index = legalMoves_.findIf(compare);
             if (index >= legalMoves_.size()) {
                 return;
@@ -304,7 +304,7 @@ private:
             } else if (token == "searchmoves") {
                 genLegalMoves();
                 while (stream >> token) {
-                    auto compare = [&token](const Move move) { return std::string(move) == token; };
+                    auto compare = [&token](Move move) { return std::string(move) == token; };
                     USize index = legalMoves_.findIf(compare);
                     if (index >= legalMoves_.size()) {
                         continue;
@@ -383,12 +383,12 @@ private:
         std::cout << std::endl;
     }
 
-    void currMove(const Move move, Int32 moveNum, Int32 depth) const {
+    void currMove(Move move, Int32 moveNum, Int32 depth) const {
         std::unique_lock<std::mutex> lock = lockStdout();
         std::cout << "info depth " << depth << " currmove " << std::string(move) << " currmovenumber " << moveNum << std::endl;
     }
 
-    void bestMove(const Move bestMove) const {
+    void bestMove(Move bestMove) const {
         std::unique_lock<std::mutex> lock = lockStdout();
         std::cout << "bestmove " << std::string(bestMove) << std::endl;
     }

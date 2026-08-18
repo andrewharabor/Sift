@@ -221,8 +221,8 @@ struct SearchThread {
 class Search {
 public:
     using SearchInfoCallback = std::function<void(const SearchInfo &)>;
-    using BestMoveCallback = std::function<void(const Move)>;
-    using CurrMoveCallback = std::function<void(const Move, Int32, Int32)>;
+    using BestMoveCallback = std::function<void(Move)>;
+    using CurrMoveCallback = std::function<void(Move, Int32, Int32)>;
 
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
@@ -609,7 +609,7 @@ private:
         SearchStackEntry &nextStack = thread.stack[rootPly + 1];
 
         if (depth <= 0) {
-            return quiescenceSearch<PV_NODE>(thread, alpha, beta);
+            return qsearch<PV_NODE>(thread, alpha, beta);
         }
 
         TTableEntry tTableEntry = TTableEntry();
@@ -672,7 +672,7 @@ private:
 
 
                 if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
-                    const Int32 score = quiescenceSearch<PV_NODE>(thread, alpha, beta);
+                    const Int32 score = qsearch<PV_NODE>(thread, alpha, beta);
                     if (score <= alpha) {
                         return score;
                     }
@@ -718,7 +718,7 @@ private:
 
                         makeMove(thread, move, history.noisyScore(position, move));
 
-                        Int32 score = -quiescenceSearch<false>(thread, -probcutBeta, -probcutBeta + 1);
+                        Int32 score = -qsearch<false>(thread, -probcutBeta, -probcutBeta + 1);
                         if (score >= probcutBeta && probcutDepth >= 0) {
                             score = -search<false, false>(thread, probcutDepth, -probcutBeta, -probcutBeta + 1, !cutNode);
                         }
@@ -875,7 +875,7 @@ private:
                     score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
 
                     if (quiet && (score <= alpha || score >= beta)) {
-                        Int32 bonus = (score >= beta) ? history.bonus(depth) : history.penalty(depth);
+                        Int32 bonus = (score >= beta) ? History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(depth) : -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(depth);
                         history.updateContHist(position, historyStack, move, rootPly, bonus);
                     }
                 }
@@ -950,9 +950,9 @@ private:
                     bound = TTableEntry::Bound::LOWER;
                     stack.failHighCount++;
 
-                    Int32 historyDepth = depth + ((bestScore > beta) + HISTORY_BETA_MARGIN);
-                    Int32 bonus = history.bonus(historyDepth);
-                    Int32 penalty = history.penalty(historyDepth);
+                    Int32 historyDepth = depth + (bestScore > beta + HISTORY_BETA_MARGIN);
+                    Int32 bonus = History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(historyDepth);
+                    Int32 penalty = -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(historyDepth);
 
                     if (quiet) {
                         history.updateQuietHists(position, historyStack, move, rootPly, bonus);
@@ -998,7 +998,7 @@ private:
     }
 
     template<bool PV_NODE = false>
-    Int32 quiescenceSearch(SearchThread &thread, Int32 alpha, Int32 beta) noexcept {
+    Int32 qsearch(SearchThread &thread, Int32 alpha, Int32 beta) noexcept {
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
 
@@ -1113,7 +1113,7 @@ private:
             makeMove(thread, move, 0);
             movesTried++;
 
-            const Int32 score = -quiescenceSearch<PV_NODE>(thread, -beta, -alpha);
+            const Int32 score = -qsearch<PV_NODE>(thread, -beta, -alpha);
 
             unmakeMove(thread);
 
