@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <compare>
 #include <limits>
 #include <span>
 
@@ -16,195 +17,295 @@
 
 namespace Sift {
 
-struct ScoredMove {
-    Move move;
-    Int32 score;
-};
-
 enum class MoveOrderStage : UInt8 {
     TTABLE,
     GEN_NOISY,
     GOOD_NOISY,
     GEN_QUIET,
-    BAD_NOISY_QUIET,
+    QUIET,
+    BAD_NOISY,
     QSEARCH_TTABLE,
     QSEARCH_GEN_NOISY,
-    QSEARCH_NOISY
+    QSEARCH_NOISY,
+    QSEARCH_EVASIONS_TTABLE,
+    QSEARCH_EVASIONS_GEN_NOISY,
+    QSEARCH_EVASIONS_NOISY,
+    QSEARCH_EVASIONS_GEN_QUIET,
+    QSEARCH_EVASIONS_QUIET,
+    PROBCUT_TTABLE,
+    PROBCUT_GEN_NOISY,
+    PROBCUT_NOISY,
+    END,
 };
 
-inline MoveOrderStage operator++(MoveOrderStage &type, int) {
-    assert(type != MoveOrderStage::QSEARCH_NOISY);
-    MoveOrderStage old = type;
-    type = static_cast<MoveOrderStage>(static_cast<UInt8>(type) + 1);
-    return old;
+inline MoveOrderStage &operator++(MoveOrderStage &stage) {
+    assert(stage != MoveOrderStage::END);
+    stage = static_cast<MoveOrderStage>(static_cast<UInt8>(stage) + 1);
+    return stage;
 }
+
+inline std::strong_ordering operator<=>(MoveOrderStage stage1, MoveOrderStage stage2) { return static_cast<UInt8>(stage1) <=> static_cast<UInt8>(stage2); }
 
 class MoveOrder {
 public:
-    constexpr MoveOrder(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, const Move tTableMove, USize ply) noexcept : position_(position), history_(history), historyStack_(historyStack), moveOrderStage_(MoveOrderStage::TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(ply) {}
-    constexpr MoveOrder(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, const Move tTableMove) noexcept : position_(position), history_(history), historyStack_(historyStack), moveOrderStage_(MoveOrderStage::QSEARCH_TTABLE), moves_(), moveScores_(), moveIndex_(0), firstQuietIndex_(0), tTableMove_(tTableMove), rootPly_(0) {}
+    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TTABLE, position, history, historyStack, tTableMove, rootPly); }
 
-    ScoredMove next() noexcept {
-        if (moveOrderStage_ == MoveOrderStage::TTABLE) {
-            moveOrderStage_++;
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
-                return ScoredMove(tTableMove_, MoveScore::TTABLE);
-            }
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::GEN_NOISY) {
-            moveOrderStage_++;
-            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
-            for (USize i = 0; i < moves_.size(); i++) {
-                moveScores_[i] = scoreNoisy(moves_[i]);
-            }
-            firstQuietIndex_ = moves_.size();
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::GOOD_NOISY) {
-            while (moveIndex_ < moves_.size()) {
-                ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == tTableMove_) {
-                    continue;
-                }
-                if (scoredMove.score <= MoveScore::BAD_NOISY) {
-                    moveIndex_--;
-                    break;
-                }
-                return scoredMove;
-            }
-            moveOrderStage_++;
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::GEN_QUIET) {
-            moveOrderStage_++;
-            MoveGen::legal<MoveGenType::QUIET>(position_, moves_);
-            for (USize i = firstQuietIndex_; i < moves_.size(); i++) {
-                moveScores_[i] = scoreQuiet(moves_[i]);
-            }
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::BAD_NOISY_QUIET) {
-            while (moveIndex_ < moves_.size()) {
-                ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == tTableMove_) {
-                    continue;
-                }
-                return scoredMove;
-            }
-            return ScoredMove(Move::NULL_MOVE, MoveScore::NONE);
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::QSEARCH_TTABLE) {
-            moveOrderStage_++;
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_) && !position_.quiet(tTableMove_)) {
-                return ScoredMove(tTableMove_, MoveScore::TTABLE);
-            }
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::QSEARCH_GEN_NOISY) {
-            moveOrderStage_++;
-            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
-            for (USize i = 0; i < moves_.size(); i++) {
-                moveScores_[i] = scoreQSearchNoisy(moves_[i]);
-            }
-        }
-
-        if (moveOrderStage_ == MoveOrderStage::QSEARCH_NOISY) {
-            while (moveIndex_ < moves_.size()) {
-                ScoredMove scoredMove = findHighest();
-                if (scoredMove.move == tTableMove_) {
-                    continue;
-                }
-                return scoredMove;
-            }
-            return ScoredMove(Move::NULL_MOVE, MoveScore::NONE);
-        }
-
-        if (moveIndex_ >= moves_.size()) {
-            return ScoredMove(Move::NULL_MOVE, MoveScore::NONE);
-        }
-        return findHighest();
+    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly, bool forceEvasions) {
+        const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TTABLE) : (MoveOrderStage::QSEARCH_TTABLE);
+        return MoveOrder(stage, position, history, historyStack, tTableMove, rootPly);
     }
 
+    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TTABLE, position, history, historyStack, tTableMove, rootPly); }
+
+    Move next() noexcept {
+        if (stage_ == MoveOrderStage::TTABLE) {
+            ++stage_;
+
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
+                return tTableMove_;
+            }
+        }
+
+        if (stage_ == MoveOrderStage::GEN_NOISY) {
+            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
+            end_ = moves_.size();
+            scoreNoisies();
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::GOOD_NOISY) {
+            while (idx_ < end_) {
+                const USize i = findNext();
+                const Move move = moves_[i];
+                const Int32 score = moveScores_[i];
+
+                if (move == tTableMove_) {
+                    continue;
+                }
+
+                const Int32 margin = -score / MOVE_ORDER_GOOD_NOISY_SCORE_DIVISOR + MOVE_ORDER_GOOD_NOISY_SEE_OFFSET;
+                if (!position_.see(move, margin)) {
+                    moves_[badNoisyEnd_] = moves_[i];
+                    moveScores_[badNoisyEnd_] = moveScores_[i];
+                    badNoisyEnd_++;
+                } else {
+                    return move;
+                }
+            }
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::GEN_QUIET) {
+            if (!skipQuiets_) {
+                MoveGen::legal<MoveGenType::QUIET>(position_, moves_);
+                end_ = moves_.size();
+                scoreQuiets();
+            }
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::QUIET) {
+            if (!skipQuiets_) {
+                if (const Move move = selectNext<true>(); move != Move::NULL_MOVE) {
+                    return move;
+                }
+            }
+
+            idx_ = 0;
+            end_ = badNoisyEnd_;
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::BAD_NOISY) {
+            if (const Move move = selectNext<false>(); move != Move::NULL_MOVE) {
+                return move;
+            }
+
+            stage_ = MoveOrderStage::END;
+            return Move::NULL_MOVE;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_TTABLE) {
+            ++stage_;
+
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
+                return tTableMove_;
+            }
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_GEN_NOISY) {
+            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
+            end_ = moves_.size();
+            scoreNoisies();
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_NOISY) {
+            if (const Move move = selectNext<true>(); move != Move::NULL_MOVE) {
+                return move;
+            }
+
+            stage_ = MoveOrderStage::END;
+            return Move::NULL_MOVE;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_TTABLE) {
+            ++stage_;
+
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
+                return tTableMove_;
+            }
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_GEN_NOISY) {
+            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
+            end_ = moves_.size();
+            scoreNoisies();
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_NOISY) {
+            if (const Move move = selectNext<true>(); move != Move::NULL_MOVE) {
+                return move;
+            }
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_GEN_QUIET) {
+            MoveGen::legal<MoveGenType::QUIET>(position_, moves_);
+            end_ = moves_.size();
+            scoreQuiets();
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_QUIET) {
+            if (!skipQuiets_) {
+                if (const Move move = selectNext<true>(); move != Move::NULL_MOVE) {
+                    return move;
+                }
+            }
+
+            stage_ = MoveOrderStage::END;
+            return Move::NULL_MOVE;
+        }
+
+        if (stage_ == MoveOrderStage::PROBCUT_TTABLE) {
+            ++stage_;
+
+            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
+                return tTableMove_;
+            }
+        }
+
+        if (stage_ == MoveOrderStage::PROBCUT_GEN_NOISY) {
+            MoveGen::legal<MoveGenType::NOISY>(position_, moves_);
+            end_ = moves_.size();
+            scoreNoisies();
+
+            ++stage_;
+        }
+
+        if (stage_ == MoveOrderStage::PROBCUT_NOISY) {
+            if (const Move move = selectNext<true>(); move != Move::NULL_MOVE) {
+                return move;
+            }
+
+            stage_ = MoveOrderStage::END;
+            return Move::NULL_MOVE;
+        }
+
+        return Move::NULL_MOVE;
+    }
+
+    constexpr void skipQuiets() noexcept { skipQuiets_ = true; }
+
+    constexpr MoveOrderStage stage() const noexcept { return stage_; }
+
 private:
+    MoveOrderStage stage_;
+
     const Position &position_;
     const History &history_;
     std::span<const HistoryStackEntry> historyStack_;
-
-    MoveOrderStage moveOrderStage_;
-
-    MoveList moves_;
-    std::array<Int32, MoveList::MAX_MOVES> moveScores_;
-
-    USize moveIndex_;
-    USize firstQuietIndex_;
 
     Move tTableMove_;
 
     USize rootPly_;
 
-    ScoredMove findHighest() noexcept {
-        Int32 bestScore = std::numeric_limits<Int32>::min();
-        USize bestIndex = moveIndex_;
-        for (USize i = moveIndex_; i < moves_.size(); i++) {
-            if (moveScores_[i] > bestScore) {
-                bestScore = moveScores_[i];
-                bestIndex = i;
+    MoveList moves_;
+    std::array<Int32, MoveList::MAX_MOVES> moveScores_;
+
+    USize idx_;
+    USize end_;
+    USize badNoisyEnd_;
+
+    bool skipQuiets_;
+
+    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), historyStack_(historyStack), tTableMove_(tTableMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
+
+    USize findNext() noexcept {
+        const auto castUSize = [](Int32 value) -> USize {
+            Int64 widened = static_cast<Int64>(value);
+            widened -= std::numeric_limits<Int32>::min();
+            return static_cast<USize>(widened) << 32;
+        };
+
+        USize best = castUSize(moveScores_[idx_]) | (MoveList::MAX_MOVES - idx_);
+        for (USize i = idx_ + 1; i < end_; i++) {
+            const USize curr = castUSize(moveScores_[i]) | (MoveList::MAX_MOVES - i);
+            best = std::max(best, curr);
+        }
+
+        const USize bestIdx = MoveList::MAX_MOVES - (best & 0xFFFFFFFF);
+        if (bestIdx != idx_) {
+            std::swap(moves_[idx_], moves_[bestIdx]);
+            std::swap(moveScores_[idx_], moveScores_[bestIdx]);
+        }
+
+        return idx_++;
+    }
+
+    template<bool SORT>
+    inline Move selectNext() noexcept {
+        while (idx_ < end_) {
+            const USize i = (SORT) ? findNext() : idx_++;
+            const Move move = moves_[i];
+            if (move != tTableMove_) {
+                return move;
             }
         }
-
-        std::swap(moves_[moveIndex_], moves_[bestIndex]);
-        std::swap(moveScores_[moveIndex_], moveScores_[bestIndex]);
-
-        return ScoredMove(moves_[moveIndex_], moveScores_[moveIndex_++]);
+        return Move::NULL_MOVE;
     }
 
-    constexpr Int32 scoreNoisy(const Move move) const noexcept {
-        assert(move != Move::NULL_MOVE);
+    constexpr void scoreNoisies() noexcept {
+        for (USize i = idx_; i < end_; i++) {
+            const Move move = moves_[i];
+            Int32 &score = moveScores_[i];
 
-        const bool capture = position_.capture(move);
-        const bool promotion = (move.type() == MoveType::PROMOTION);
-
-        Int32 score = history_.noisyScore(position_, move);
-
-        if (promotion) {
-            score += (move.promotion() == PieceType::QUEEN) ? MoveScore::PROMOTION_BONUS : 0;
+            score += history_.noisyScore(position_, move) / MOVE_ORDER_NOISY_SCORE_DIVISOR;
+            score += SEE_PIECE_VALUES[static_cast<USize>(position_.captured(move).type())];
+            if (move.type() == MoveType::PROMOTION) {
+                score += SEE_PIECE_VALUES[static_cast<USize>(move.promotion())] - SEE_PIECE_VALUES[static_cast<USize>(PieceType::PAWN)];
+            }
         }
-
-        if (capture) {
-            score += position_.mvv(move);
-        }
-
-        if (promotion || position_.see(move, -score / NOISY_MOVE_SEE_THRESHOLD_SCALE)) {
-            score += MoveScore::GOOD_NOISY;
-        }
-
-        return score;
     }
 
-    constexpr Int32 scoreQuiet(const Move move) const noexcept {
-        assert(move != Move::NULL_MOVE);
-        return history_.quietScore(position_, historyStack_, move, rootPly_);
-    }
+    constexpr void scoreQuiets() noexcept {
+        for (USize i = idx_; i < end_; i++) {
+            const Move move = moves_[i];
+            Int32 &score = moveScores_[i];
 
-    constexpr Int32 scoreQSearchNoisy(const Move move) const noexcept {
-        assert(move != Move::NULL_MOVE);
-
-        const bool capture = position_.capture(move);
-        const bool promotion = (move.type() == MoveType::PROMOTION);
-
-        Int32 score = history_.noisyScore(position_, move);
-
-        if (promotion) {
-            score += (move.promotion() == PieceType::QUEEN) ? MoveScore::QSEARCH_PROMOTION_BONUS : 0;
+            score += history_.quietScore(position_, historyStack_, move, rootPly_);
+            score += MOVE_ORDER_DIRECT_CHECK_BONUS * (position_.directCheck(move) && position_.see(move, MOVE_ORDER_DIRECT_CHECK_SEE_MARGIN));
         }
-
-        if (capture) {
-            score += position_.mvv(move);
-        }
-
-        return score;
     }
 
 };

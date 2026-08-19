@@ -291,7 +291,7 @@ public:
     void updateCorrHist(const Position &position, std::span<const HistoryStackEntry> stack, USize rootPly, Int32 depth, Int32 searchScore, Int32 staticEval) noexcept {
         const Color color = position.sideToMove();
 
-        const Int32 bonus = std::clamp((searchScore - staticEval) * depth / BONUS_DIVISOR, -CORR_HIST_PENALTY_MAX, CORR_HIST_BONUS_MAX);
+        const Int32 bonus = std::clamp((searchScore - staticEval) * depth / CORR_HIST_BONUS_DIVISOR, -CORR_HIST_PENALTY_MAX, CORR_HIST_BONUS_MAX);
 
         updatePawnCorrHist(position, color, bonus);
         updateFriendlyNonPawnCorrHist(position, color, bonus);
@@ -312,8 +312,6 @@ public:
     }
 
 private:
-    static constexpr Int32 BONUS_DIVISOR = 8;
-
     PawnCorrHistTable pawnCorrHistTable_;
     NonPawnCorrHistTable nonPawnCorrHistTable_;
     MinorPieceCorrHistTable minorPieceCorrHistTable_;

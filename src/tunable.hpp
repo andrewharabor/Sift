@@ -98,6 +98,49 @@ inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 m
     TUNABLE_CALLBACK(name, val, min, max, step, []() {})
 
 
+static constexpr UInt8 TTABLE_REPLACE_DEPTH_MARGIN = 2;
+static constexpr UInt8 TTABLE_REPLACE_DEPTH_PV_SCALE = 2;
+
+// FIXME
+static constexpr Int32 WINDOW_MIN_DEPTH = 6;
+static constexpr Int32 WINDOW_MAX_DEPTH_REDUCTION = 5;
+
+static constexpr Int32 RFP_MAX_DEPTH = 8;
+
+static constexpr Int32 RAZORING_MAX_DEPTH = 3;
+
+static constexpr Int32 NMP_MIN_DEPTH = 2;
+static constexpr Int32 NMP_NO_VERIFICATION_MAX_DEPTH = 15;
+static constexpr Int32 NMP_MIN_PLY_DEPTH_SCALE = 3;
+static constexpr Int32 NMP_MIN_PLY_DEPTH_DIVISOR = 4;
+
+static constexpr Int32 PROBCUT_MIN_DEPTH = 5;
+static constexpr Int32 PROBCUT_TTABLE_DEPTH_MARGIN = 3;
+static constexpr Int32 PROBCUT_REDUCTION = 4;
+
+static constexpr Int32 IIR_MIN_DEPTH = 4;
+static constexpr Int32 IIR_TTABLE_DEPTH_MARGIN = 5;
+
+static constexpr Int32 LMR_MIN_DEPTH = 3;
+static constexpr Int32 LMR_MIN_MOVES_PV = 4;
+static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
+
+static constexpr Int32 FP_MAX_DEPTH = 8;
+
+static constexpr Int32 NOISY_FP_MAX_DEPTH = 5;
+
+static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
+
+static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
+static constexpr Int32 SE_MIN_DEPTH = 5;
+static constexpr Int32 SE_TABLE_DEPTH_MARGIN = 3;
+
+static constexpr Int32 QSEARCH_MAX_MOVES = 2;
+// FIXME
+
+static constexpr Int32 MOVE_ORDER_GOOD_NOISY_SCORE_DIVISOR = 4;
+static constexpr Int32 MOVE_ORDER_NOISY_SCORE_DIVISOR = 8;
+
 using MVVTable = std::array<Int32, 7>;
 
 static inline MVVTable MVV_PIECE_VALUES;
@@ -126,11 +169,11 @@ static void init();
 
 }
 
-TUNABLE_CALLBACK(SEE_PAWN_VALUE, 100, 0, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 450, 0, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 450, 0, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_ROOK_VALUE, 675, 0, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1300, 0, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_PAWN_VALUE, 97, 0, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 434, 0, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 464, 0, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_ROOK_VALUE, 646, 0, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1289, 0, 0, 0, []() { SEE::init(); });
 
 static inline void SEE::init() { SEE_PIECE_VALUES = {SEE_PAWN_VALUE, SEE_KNIGHT_VALUE, SEE_BISHOP_VALUE, SEE_ROOK_VALUE, SEE_QUEEN_VALUE, 0, 0}; }
 
@@ -164,7 +207,6 @@ TUNABLE(TIME_SCORE_SCALE_NEG_SCALE, 104, 0, 0, 0);
 TUNABLE(TIME_SCALE_MIN, 7, 0, 0, 0);
 
 static constexpr Int32 HIST_DIVISOR = 1024;
-static constexpr Int32 CORR_HIST_DIVISOR = 1024;
 
 TUNABLE(HISTORY_BONUS_DEPTH_SCALE, 339, 0, 0, 0);
 TUNABLE(HISTORY_BONUS_OFFSET, 313, 0, 0, 0);
@@ -196,6 +238,9 @@ TUNABLE(CONT_HIST_BASE_CONT1_HIST_WEIGHT, 929, 0, 0, 0);
 TUNABLE(CONT_HIST_BASE_CONT2_HIST_WEIGHT, 917, 0, 0, 0);
 TUNABLE(CONT_HIST_BASE_CONT4_HIST_WEIGHT, 553, 0, 0, 0);
 TUNABLE(CONT_HIST_BASE_CONT6_HIST_WEIGHT, 320, 0, 0, 0);
+
+static constexpr Int32 CORR_HIST_DIVISOR = 1024;
+static constexpr Int32 CORR_HIST_BONUS_DIVISOR = 8;
 
 TUNABLE(CORR_HIST_BONUS_MAX, 256, 0, 0, 0);
 TUNABLE(CORR_HIST_PENALTY_MAX, 256, 0, 0, 0);
@@ -319,6 +364,10 @@ TUNABLE(SE_DOUBLE_EXT_MARGIN, 10, 0, 0, 0);
 TUNABLE(SE_TRIPLE_EXT_MARGIN, 124, 0, 0, 0);
 
 TUNABLE(QSEARCH_FP_MARGIN, 78, 0, 0, 0);
+
+TUNABLE(MOVE_ORDER_GOOD_NOISY_SEE_OFFSET, 72, 0, 0, 0);
+TUNABLE(MOVE_ORDER_DIRECT_CHECK_BONUS, 5257, 0, 0, 0);
+TUNABLE(MOVE_ORDER_DIRECT_CHECK_SEE_MARGIN, -37, 0, 0, 0);
 
 TUNABLE(EVAL_ADJUST_PAWN_SCALE, 48, 0, 0, 0);
 TUNABLE(EVAL_ADJUST_KNIGHT_SCALE, 435, 0, 0, 0);

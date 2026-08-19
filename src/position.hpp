@@ -251,6 +251,7 @@ public:
         updateChecks();
         updatePins();
         updateThreats();
+        updateCheckZones();
 
         return true;
     }
@@ -500,6 +501,7 @@ public:
         updateChecks();
         updatePins();
         updateThreats();
+        updateCheckZones();
     }
 
     void makeMove(Move move) noexcept {
@@ -529,6 +531,7 @@ public:
         updateChecks();
         updatePins();
         updateThreats();
+        updateCheckZones();
     }
 
     template<typename NNUEState>
@@ -886,6 +889,33 @@ public:
             assert(false);
             return false;
         }
+    }
+
+    constexpr bool directCheck(Move move) const noexcept {
+        assert(move != Move::NULL_MOVE);
+
+        PieceType pieceType = pieceAt(move.from()).type();
+        Square square = move.to();
+
+        if (move.type() == MoveType::PROMOTION) {
+            pieceType = move.promotion();
+        } else if (move.type() == MoveType::CASTLING) {
+            pieceType = PieceType::ROOK;
+            square = CastlingRights::rookTo(CastlingRights::closestSide(move.to(), move.from(), sideToMove_));
+        }
+
+        if (pieceType == PieceType::KING) {
+            return false;
+        }
+
+        const Bitboard checkZone = [&] {
+            if (pieceType == PieceType::QUEEN) {
+                return state().checkZones[static_cast<USize>(PieceType::BISHOP)] | state().checkZones[static_cast<USize>(PieceType::ROOK)];
+            }
+            return state().checkZones[static_cast<USize>(pieceType)];
+        }();
+
+        return checkZone.get(move.to().index());
     }
 
     constexpr bool legal(Move move) const noexcept {
@@ -1319,6 +1349,8 @@ private:
 
         Bitboard threats;
         Bitboard winningThreats;
+
+        std::array<Bitboard, 4> checkZones;
     };
 
     struct DummyNNUEState {
@@ -1540,6 +1572,16 @@ private:
 
         state().threats = threats;
         state().winningThreats = winningThreats;
+    }
+
+    void updateCheckZones() noexcept {
+        const Square enemyKingSq = kingSquare(~sideToMove_);
+        const Bitboard occ = occupied();
+
+        state().checkZones[static_cast<USize>(PieceType::PAWN)] = Attacks::pawn(enemyKingSq, ~sideToMove_);
+        state().checkZones[static_cast<USize>(PieceType::KNIGHT)] = Attacks::knight(enemyKingSq);
+        state().checkZones[static_cast<USize>(PieceType::BISHOP)] = Attacks::bishop(enemyKingSq, occ);
+        state().checkZones[static_cast<USize>(PieceType::ROOK)] = Attacks::rook(enemyKingSq, occ);
     }
 
     template<Color::ColorEnum COLOR_ENUM, PieceType::PieceTypeEnum PIECE_TYPE_ENUM>

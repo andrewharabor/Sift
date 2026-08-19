@@ -367,41 +367,6 @@ public:
 private:
     static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
 
-    static constexpr Int32 WINDOW_MIN_DEPTH = 6;
-    static constexpr Int32 WINDOW_MAX_DEPTH_REDUCTION = 5;
-
-    static constexpr Int32 RFP_MAX_DEPTH = 8;
-
-    static constexpr Int32 RAZORING_MAX_DEPTH = 3;
-
-    static constexpr Int32 NMP_MIN_DEPTH = 2;
-    static constexpr Int32 NMP_NO_VERIFICATION_MAX_DEPTH = 15;
-    static constexpr Int32 NMP_MIN_PLY_DEPTH_SCALE = 3;
-    static constexpr Int32 NMP_MIN_PLY_DEPTH_DIVISOR = 4;
-
-    static constexpr Int32 PROBCUT_MIN_DEPTH = 5;
-    static constexpr Int32 PROBCUT_TTABLE_DEPTH_MARGIN = 3;
-    static constexpr Int32 PROBCUT_REDUCTION = 4;
-
-    static constexpr Int32 IIR_MIN_DEPTH = 4;
-    static constexpr Int32 IIR_TTABLE_DEPTH_MARGIN = 5;
-
-    static constexpr Int32 LMR_MIN_DEPTH = 3;
-    static constexpr Int32 LMR_MIN_MOVES_PV = 4;
-    static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
-
-    static constexpr Int32 FP_MAX_DEPTH = 8;
-
-    static constexpr Int32 NOISY_FP_MAX_DEPTH = 5;
-
-    static constexpr Int32 HISTORY_PRUNING_MAX_DEPTH = 7;
-
-    static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
-    static constexpr Int32 SE_MIN_DEPTH = 5;
-    static constexpr Int32 SE_TABLE_DEPTH_MARGIN = 3;
-
-    static constexpr Int32 QSEARCH_MAX_MOVES = 2;
-
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
     TTable tTable_;
@@ -703,13 +668,11 @@ private:
 
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
                 if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.depth + PROBCUT_TTABLE_DEPTH_MARGIN < depth)) {
-                    MoveOrder moveOrder = MoveOrder(position, history, historyStack, tTableMove);
-                    ScoredMove scoredMove;
                     Int32 seeMargin = probcutBeta - stack.staticEval;
                     Int32 probcutDepth = depth - PROBCUT_REDUCTION;
-                    while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
-                        auto [move, moveScore] = scoredMove;
-
+                    MoveOrder moveOrder = MoveOrder::probcut(position, history, historyStack, tTableMove, rootPly);
+                    Move move;
+                    while ((move = moveOrder.next()) != Move::NULL_MOVE) {
                         if (!position.see(move, seeMargin)) {
                             continue;
                         }
@@ -753,12 +716,9 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder(position, history, historyStack, tTableMove, rootPly);
-
-        ScoredMove scoredMove;
-        while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
-            const auto [move, moveScore] = scoredMove;
-
+        MoveOrder moveOrder = MoveOrder::search(position, history, historyStack, tTableMove, rootPly);
+        Move move;
+        while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if constexpr (ROOT_NODE) {
                 if (thread.findRootMove(move) >= thread.rootMoves.size()) {
                     continue;
@@ -778,7 +738,7 @@ private:
             const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
-                if (moveScore <= MoveScore::BAD_NOISY && bestScore > Score::LOSS) {
+                if (bestScore > Score::LOSS) {
                     const Int32 lmrDepth = std::max(depth - baseLMR / LMR_BASE_DIVISOR, 0);
                     const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
                     if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
@@ -850,7 +810,7 @@ private:
             Int32 newDepth = depth - 1 + extension;
             Int32 score = 0;
 
-            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && (!tTablePV || moveScore <= MoveScore::BAD_NOISY)) {
+            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && !tTablePV) {
                 Int32 reduction = baseLMR;
                 reduction += LMR_NON_IMPROVING_SCALE * !improving;
                 reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
@@ -1089,15 +1049,12 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = (inCheck) ? MoveOrder(position, history, historyStack, tTableMove, rootPly) : MoveOrder(position, history, historyStack, tTableMove);
-
-        ScoredMove scoredMove;
-        while ((scoredMove = moveOrder.next()).score != MoveScore::NONE) {
+        MoveOrder moveOrder = MoveOrder::qsearch(position, history, historyStack, tTableMove, rootPly, inCheck);
+        Move move;
+        while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if (!inCheck && movesTried >= QSEARCH_MAX_MOVES) {
                 break;
             }
-
-            const auto [move, moveScore] = scoredMove;
 
             if (bestScore > Score::LOSS && !position.see(move, 0)) {
                 continue;

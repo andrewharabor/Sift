@@ -42,18 +42,4 @@ static constexpr Int32 drawScore(UInt64 seed) noexcept { return 2 - static_cast<
 
 }
 
-namespace MoveScore {
-
-static constexpr Int32 TTABLE = 10000000;
-
-static constexpr Int32 GOOD_NOISY = 400000;
-static constexpr Int32 BAD_NOISY = GOOD_NOISY - 50001;
-
-static constexpr Int32 PROMOTION_BONUS = 10000;
-static constexpr Int32 QSEARCH_PROMOTION_BONUS = 1000000;
-
-static constexpr Int32 NONE = -8000000;
-
-}
-
 }
