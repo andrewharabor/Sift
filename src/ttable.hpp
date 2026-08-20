@@ -29,11 +29,11 @@ struct TTableEntry {
     Int32 score;
     Int32 staticEval;
     Move move;
-    Int32 depth;
+    Int32 fdepth;
     bool pv;
     Bound bound;
 
-    constexpr TTableEntry() noexcept : score(Score::NONE), staticEval(Score::NONE), move(Move::NULL_MOVE), depth(0), pv(false), bound(Bound::NONE) {}
+    constexpr TTableEntry() noexcept : score(Score::NONE), staticEval(Score::NONE), move(Move::NULL_MOVE), fdepth(0), pv(false), bound(Bound::NONE) {}
 };
 
 class TTable {
@@ -93,14 +93,15 @@ public:
         result.score = retrieve(entry.score, ply);
         result.staticEval = static_cast<Int32>(entry.staticEval);
         result.move = entry.move;
-        result.depth = static_cast<Int32>(entry.depth);
+        result.fdepth = static_cast<Int32>(entry.depth) * FDEPTH_SCALE;
         result.pv = entry.pv();
         result.bound = entry.bound();
         return {result, true};
     }
 
-    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 depth, bool pv, TTableEntry::Bound bound) noexcept {
+    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTableEntry::Bound bound) noexcept {
         const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
+        const Int32 depth = fdepth / FDEPTH_SCALE;
         Bucket &bucket = table_[index(key)];
         Int32 bestQuality = std::numeric_limits<Int32>::max();
         USize replaceIndex = 0;
@@ -185,7 +186,7 @@ private:
         if (ageDiff < 0) {
             ageDiff += GENERATIONS;
         }
-        return depth - (2 * ageDiff);
+        return depth - (TTABLE_QUALITY_AGE_DIFF_SCALE * ageDiff);
     }
 
     Int32 retrieve(Int16 score, Int32 ply) const noexcept {

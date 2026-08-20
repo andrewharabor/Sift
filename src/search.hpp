@@ -429,7 +429,7 @@ private:
                 Int32 alpha = Score::MIN;
                 Int32 beta = Score::MAX;
                 Int32 delta = WINDOW_INIT_DELTA + (rootMove.windowScore * rootMove.windowScore / ((Score::MAX + 1) / 2));
-                Int32 searchDepth = depth;
+                Int32 fdepth = depth * FDEPTH_SCALE;
 
                 if (depth >= WINDOW_MIN_DEPTH) {
                     alpha = std::max(rootMove.windowScore - delta, Score::MIN);
@@ -437,7 +437,7 @@ private:
                 }
 
                 while (true) {
-                    Int32 score = search<true, true>(thread, searchDepth, alpha, beta, false);
+                    Int32 score = search<true, true>(thread, fdepth, alpha, beta, false);
                     thread.sortRemainingMoves();
 
                     if (timeUp()) {
@@ -451,16 +451,16 @@ private:
                     if (score <= alpha) {
                         beta = (alpha + beta) / 2;
                         alpha = std::max(alpha - delta, Score::MIN);
-                        searchDepth = depth;
+                        fdepth = depth * FDEPTH_SCALE;
                     } else if (score >= beta) {
                         beta = std::min(beta + delta, Score::MAX);
-                        searchDepth = std::max(searchDepth - 1, depth - WINDOW_MAX_DEPTH_REDUCTION);
-                        searchDepth = std::max(searchDepth, 1);
+                        fdepth = std::max(fdepth - WINDOW_FREDUCTION, depth * FDEPTH_SCALE - WINDOW_MAX_FREDUCTION);
+                        fdepth = std::max(fdepth, WINDOW_MIN_FDEPTH);
                     } else {
                         break;
                     }
 
-                    delta += delta * WINDOW_WIDENING_COEFF / WINDOW_WIDENING_SCALE;
+                    delta += delta * WINDOW_WIDENING_COEFF / 256;
                 }
 
                 thread.sortSearchedMoves();
@@ -513,7 +513,7 @@ private:
     }
 
     template<bool PV_NODE = false, bool ROOT_NODE = false>
-    Int32 search(SearchThread &thread, Int32 depth, Int32 alpha, Int32 beta, bool cutNode) noexcept {
+    Int32 search(SearchThread &thread, Int32 fdepth, Int32 alpha, Int32 beta, bool cutNode) noexcept {
         static_assert(PV_NODE || !ROOT_NODE);
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
@@ -541,7 +541,7 @@ private:
             thread.selDepth = static_cast<Int32>(rootPly) + 1;
         }
 
-        depth = std::min(depth, static_cast<Int32>(MAX_PLY - 1));
+        fdepth = std::min(fdepth, static_cast<Int32>(MAX_PLY - 1) * FDEPTH_SCALE);
 
         alpha = std::max(alpha, Score::matedIn(static_cast<Int32>(rootPly)));
         beta = std::min(beta, Score::mateIn(static_cast<Int32>(rootPly)));
@@ -573,7 +573,7 @@ private:
 
         SearchStackEntry &nextStack = thread.stack[rootPly + 1];
 
-        if (depth <= 0) {
+        if (fdepth <= 0) {
             return qsearch<PV_NODE>(thread, alpha, beta);
         }
 
@@ -587,7 +587,7 @@ private:
             std::tie(tTableEntry, tTableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
 
             if constexpr (!PV_NODE) {
-                if (tTableHit && tTableEntry.depth >= depth && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
+                if (tTableHit && tTableEntry.fdepth >= fdepth && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
                     return tTableEntry.score;
                 }
             }
@@ -630,33 +630,34 @@ private:
 
         if constexpr (!PV_NODE) {
             if (!inCheck && !excludedMove) {
-                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * depth - (RFP_OPPONENT_WORSENING * opponentWorsening) + (historyStack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
-                if (depth <= RFP_MAX_DEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
+                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * fdepth / FDEPTH_SCALE - (RFP_OPPONENT_WORSENING * opponentWorsening) + (historyStack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
+                if (fdepth <= RFP_MAX_FDEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
                     return stack.eval;
                 }
 
 
-                if (depth <= RAZORING_MAX_DEPTH && stack.eval <= alpha - RAZORING_MARGIN * depth && alpha < RAZORING_MAX_ALPHA) {
+
+                if (fdepth <= RAZORING_MAX_FDEPTH && stack.eval <= alpha - RAZORING_MARGIN * fdepth / FDEPTH_SCALE && alpha < RAZORING_MAX_ALPHA) {
                     const Int32 score = qsearch<PV_NODE>(thread, alpha, beta);
                     if (score <= alpha) {
                         return score;
                     }
                 }
 
-                if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && depth >= NMP_MIN_DEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * depth && position.nonPawnMaterial(position.sideToMove())) {
-                    const Int32 reduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * depth) / NMP_REDUCTION_DIVISOR + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION);
+                if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && fdepth >= NMP_MIN_FDEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * fdepth / FDEPTH_SCALE && position.nonPawnMaterial(position.sideToMove())) {
+                    const Int32 freduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * fdepth / FDEPTH_SCALE) + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION) * FDEPTH_SCALE;
 
                     makeNullMove(thread);
-                    const Int32 nullMoveScore = -search<false, false>(thread, depth - reduction, -beta, -beta + 1, !cutNode);
+                    const Int32 nullMoveScore = -search<false, false>(thread, fdepth - freduction, -beta, -beta + 1, !cutNode);
                     unmakeNullMove(thread);
 
                     if (nullMoveScore >= beta) {
-                        if ((depth <= NMP_NO_VERIFICATION_MAX_DEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
+                        if ((fdepth <= NMP_NO_VERIFICATION_MAX_FDEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
                             return Score::mate(nullMoveScore) ? beta : nullMoveScore;
                         }
 
-                        thread.nmpMinPly = rootPly + static_cast<USize>((depth - reduction) * NMP_MIN_PLY_DEPTH_SCALE / NMP_MIN_PLY_DEPTH_DIVISOR);
-                        const Int32 verificationScore = search<false, false>(thread, depth - reduction, beta - 1, beta, true);
+                        thread.nmpMinPly = rootPly + static_cast<USize>((fdepth - freduction) * NMP_MIN_PLY_FDEPTH_SCALE / (1024 * FDEPTH_SCALE));
+                        const Int32 verificationScore = search<false, false>(thread, fdepth - freduction, beta - 1, beta, true);
                         thread.nmpMinPly = 0;
 
                         if (verificationScore >= beta) {
@@ -667,9 +668,9 @@ private:
 
 
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
-                if (depth >= PROBCUT_MIN_DEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.depth + PROBCUT_TTABLE_DEPTH_MARGIN < depth)) {
+                if (fdepth >= PROBCUT_MIN_FDEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.fdepth + PROBCUT_TTABLE_FDEPTH_MARGIN < fdepth)) {
                     Int32 seeMargin = probcutBeta - stack.staticEval;
-                    Int32 probcutDepth = depth - PROBCUT_REDUCTION;
+                    Int32 probcutFdepth = fdepth - PROBCUT_FREDUCTION;
                     MoveOrder moveOrder = MoveOrder::probcut(position, history, historyStack, tTableMove, rootPly);
                     Move move;
                     while ((move = moveOrder.next()) != Move::NULL_MOVE) {
@@ -682,8 +683,8 @@ private:
                         makeMove(thread, move, history.noisyScore(position, move));
 
                         Int32 score = -qsearch<false>(thread, -probcutBeta, -probcutBeta + 1);
-                        if (score >= probcutBeta && probcutDepth >= 0) {
-                            score = -search<false, false>(thread, probcutDepth, -probcutBeta, -probcutBeta + 1, !cutNode);
+                        if (score >= probcutBeta && probcutFdepth >= 0) {
+                            score = -search<false, false>(thread, probcutFdepth, -probcutBeta, -probcutBeta + 1, !cutNode);
                         }
 
                         unmakeMove(thread);
@@ -693,7 +694,7 @@ private:
                         }
 
                         if (score >= probcutBeta) {
-                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutDepth + 1, tTablePV, TTableEntry::Bound::LOWER);
+                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth + FDEPTH_SCALE, tTablePV, TTableEntry::Bound::LOWER);
                             return score;
                         }
                     }
@@ -701,8 +702,8 @@ private:
             }
         }
 
-        if (depth >= IIR_MIN_DEPTH && !inCheck && !excludedMove && (!tTableHit || (tTableEntry.move != Move::NULL_MOVE && tTableEntry.depth <= depth - IIR_TTABLE_DEPTH_MARGIN))) {
-            depth--;
+        if (fdepth >= IIR_MIN_FDEPTH && !inCheck && !excludedMove && (!tTableHit || (tTableEntry.move != Move::NULL_MOVE && tTableEntry.fdepth <= fdepth - IIR_TTABLE_FDEPTH_MARGIN))) {
+            fdepth -= IIR_FREDUCTION;
         }
 
         nextStack.failHighCount = 0;
@@ -735,57 +736,57 @@ private:
 
             const bool quiet = position.quiet(move);
             const Int32 historyScore = (quiet) ? history.quietScore(position, historyStack, move, rootPly) : history.noisyScore(position, move);
-            const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(depth), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (LMR_HISTORY_SCALE * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
+            const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(fdepth / FDEPTH_SCALE), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (1024 * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
 
             if constexpr (!ROOT_NODE) {
                 if (bestScore > Score::LOSS) {
-                    const Int32 lmrDepth = std::max(depth - baseLMR / LMR_BASE_DIVISOR, 0);
-                    const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrDepth + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
-                    if (lmrDepth <= FP_MAX_DEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
+                    const Int32 lmrFdepth = std::max(fdepth - baseLMR * FDEPTH_SCALE / 1024, 0);
+                    const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrFdepth / FDEPTH_SCALE + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
+                    if (lmrFdepth <= FP_MAX_FDEPTH && quiet && !inCheck && alpha < Score::WIN && stack.staticEval + fpMargin <= alpha) {
                         continue;
                     }
 
-                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * depth + historyScore / NOISY_FP_HISTORY_DIVISOR, NOISY_FP_MARGIN_MIN);
-                    if (depth <= NOISY_FP_MAX_DEPTH && !quiet && !inCheck && alpha < Score::WIN && stack.staticEval + noisyFPMargin <= alpha) {
+                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / NOISY_FP_HISTORY_DIVISOR, NOISY_FP_MARGIN_MIN);
+                    if (fdepth <= NOISY_FP_MAX_FDEPTH && !quiet && !inCheck && alpha < Score::WIN && stack.staticEval + noisyFPMargin <= alpha) {
                         break;
                     }
 
-                    const Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * depth * depth) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * depth * depth)) / LMP_MARGIN_DIVISOR;
+                    const Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE)) / 256;
                     if (!inCheck && movesTried >= lmpMargin) {
                         break;
                     }
 
-                    const Int32 seeCaptHistoryMax = SEE_CAPT_HISTORY_DEPTH_SCALE * depth;
-                    const Int32 seeMargin = quiet ? (SEE_PRUNING_MARGIN_QUIET * depth) : (SEE_PRUNING_MARGIN_NOISY * depth - std::clamp(historyScore / SEE_CAPT_HISTORY_DIVISOR, -seeCaptHistoryMax, seeCaptHistoryMax));
+                    const Int32 seeCaptHistMax = SEE_CAPT_HIST_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                    const Int32 seeMargin = quiet ? (SEE_PRUNING_MARGIN_QUIET * fdepth / FDEPTH_SCALE) : (SEE_PRUNING_MARGIN_NOISY * fdepth / FDEPTH_SCALE - std::clamp(historyScore / SEE_CAPT_HIST_DIVISOR, -seeCaptHistMax, seeCaptHistMax));
                     if (!position.see(move, seeMargin)) {
                         continue;
                     }
 
-                    if (quiet && depth <= HISTORY_PRUNING_MAX_DEPTH && historyScore < HISTORY_PRUNING_MARGIN * depth) {
+                    if (quiet && fdepth <= HISTORY_PRUNING_MAX_FDEPTH && historyScore < HISTORY_PRUNING_MARGIN * fdepth / FDEPTH_SCALE) {
                         break;
                     }
                 }
             }
 
-            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && depth >= SE_MIN_DEPTH + tTablePV && tTableMove == move && tTableEntry.depth >= depth - SE_TABLE_DEPTH_MARGIN && tTableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tTableEntry.score) < Score::KNOWN_WIN;
-            Int32 extension = 0;
+            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && fdepth >= SE_MIN_FDEPTH + tTablePV && tTableMove == move && tTableEntry.fdepth >= fdepth - SE_TABLE_FDEPTH_MARGIN && tTableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tTableEntry.score) < Score::KNOWN_WIN;
+            Int32 fextension = 0;
 
             if (doSE) {
-                const Int32 seBeta = std::max(Score::MATED, tTableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tTablePV && !PV_NODE)) * depth / SE_BETA_DEPTH_DIVISOR);
-                const Int32 seDepth = (depth - 1) / 2;
+                const Int32 seBeta = std::max(Score::MATED, tTableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tTablePV && !PV_NODE)) * fdepth / (64 * FDEPTH_SCALE));
+                const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
 
                 stack.excludedMove = move;
-                const Int32 score = search<false, false>(thread, seDepth, seBeta - 1, seBeta, cutNode);
+                const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, cutNode);
                 stack.excludedMove = Move::NULL_MOVE;
 
                 if (score < seBeta) {
-                    extension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (2 + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN)) : 1;
+                    fextension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (SE_BASE_DOUBLE_FEXTENSTION + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN) * FDEPTH_SCALE) : SE_SINGLE_FEXTENSION;
                 } else if (seBeta >= beta) {
                     return seBeta;
                 } else if (tTableEntry.score >= beta) {
-                    extension = -2 + PV_NODE;
+                    fextension = -SE_BASE_DOUBLE_NEG_FEXTENSION + PV_NODE * FDEPTH_SCALE;
                 } else if (tTableEntry.score <= alpha && cutNode) {
-                    extension = -1;
+                    fextension = -SE_SINGLE_NEG_FEXTENSION;
                 }
             }
 
@@ -804,48 +805,50 @@ private:
 
             const bool givesCheck = position.givesCheck();
             if (!doSE && givesCheck) {
-                extension = 1;
+                fextension = CHECK_FEXTENSION;
             }
 
-            Int32 newDepth = depth - 1 + extension;
+            Int32 newFdepth = fdepth - FDEPTH_SCALE + fextension;
             Int32 score = 0;
 
-            if (depth >= LMR_MIN_DEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && !tTablePV) {
-                Int32 reduction = baseLMR;
-                reduction += LMR_NON_IMPROVING_SCALE * !improving;
-                reduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
+            if (fdepth >= LMR_MIN_FDEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && !tTablePV) {
+                Int32 freduction = baseLMR;
+                freduction += LMR_NON_IMPROVING_SCALE * !improving;
+                freduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
                 if (tTablePV) {
-                    reduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tTableHit && tTableEntry.score > alpha);
+                    freduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tTableHit && tTableEntry.score > alpha);
                 }
-                reduction -= LMR_GIVES_CHECK_SCALE * givesCheck;
-                reduction -= LMR_IN_CHECK_SCALE * inCheck;
-                reduction -= LMR_HIGH_COMPLEXITY_SCALE * (complexity > HIGH_COMPLEXITY_MARGIN);
-                reduction += LMR_CUTNODE_SCALE * cutNode;
-                reduction += LMR_FAIL_HIGH_COUNT_SCALE * (nextStack.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN);
+                freduction -= LMR_GIVES_CHECK_SCALE * givesCheck;
+                freduction -= LMR_IN_CHECK_SCALE * inCheck;
+                freduction -= LMR_HIGH_COMPLEXITY_SCALE * (complexity > HIGH_COMPLEXITY_MARGIN);
+                freduction += LMR_CUTNODE_SCALE * cutNode;
+                freduction += LMR_FAIL_HIGH_COUNT_SCALE * (nextStack.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN);
+                freduction *= FDEPTH_SCALE;
+                freduction /= 1024;
 
-                const Int32 reducedDepth = std::min(std::max(newDepth - reduction / LMR_REDUCTION_DIVISOR, 1), newDepth);
-                score = -search<false, false>(thread, reducedDepth, -alpha - 1, -alpha, true);
-                if (score > alpha && reducedDepth < newDepth) {
-                    if (score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * depth) / DEEPER_SEARCH_MARGIN_DEPTH_DIVISOR) {
-                        newDepth++;
+                const Int32 reducedFdepth = std::min(std::max(newFdepth - freduction, FDEPTH_SCALE), newFdepth);
+                score = -search<false, false>(thread, reducedFdepth, -alpha - 1, -alpha, true);
+                if (score > alpha && reducedFdepth < newFdepth) {
+                    if (score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE) / 64) {
+                        newFdepth += DEEPER_SEARCH_FEXTENSION;
                     }
                     if (score < bestScore + SHALLOWER_SEARCH_MARGIN) {
-                        newDepth--;
+                        newFdepth -= SHALLOWER_SEARCH_FREDUCTION;
                     }
-                    score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
+                    score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, !cutNode);
 
                     if (quiet && (score <= alpha || score >= beta)) {
-                        Int32 bonus = (score >= beta) ? History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(depth) : -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(depth);
+                        Int32 bonus = (score >= beta) ? History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(fdepth) : -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(fdepth);
                         history.updateContHist(position, historyStack, move, rootPly, bonus);
                     }
                 }
             } else if (!PV_NODE || movesTried > 1) {
-                score = -search<false, false>(thread, newDepth, -alpha - 1, -alpha, !cutNode);
+                score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, !cutNode);
             }
 
             if constexpr (PV_NODE) {
                 if (movesTried == 1 || score > alpha) {
-                    score = -search<true, false>(thread, newDepth, -beta, -alpha, false);
+                    score = -search<true, false>(thread, newFdepth, -beta, -alpha, false);
                 }
             }
 
@@ -910,9 +913,9 @@ private:
                     bound = TTableEntry::Bound::LOWER;
                     stack.failHighCount++;
 
-                    Int32 historyDepth = depth + (bestScore > beta + HISTORY_BETA_MARGIN);
-                    Int32 bonus = History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(historyDepth);
-                    Int32 penalty = -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(historyDepth);
+                    Int32 historyFdepth = fdepth + (bestScore > beta + HISTORY_BETA_MARGIN) * FDEPTH_SCALE;
+                    Int32 bonus = History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(historyFdepth);
+                    Int32 penalty = -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(historyFdepth);
 
                     if (quiet) {
                         history.updateQuietHists(position, historyStack, move, rootPly, bonus);
@@ -946,11 +949,11 @@ private:
 
         if (!excludedMove) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
-                sharedHistory->updateCorrHist(position, historyStack, rootPly, depth, bestScore, stack.staticEval);
+                sharedHistory->updateCorrHist(position, historyStack, rootPly, fdepth, bestScore, stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, depth, tTablePV, bound);
+                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, fdepth, tTablePV, bound);
             }
         }
 
