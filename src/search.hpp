@@ -67,6 +67,8 @@ struct RootMove {
     Int32 score = Score::NONE;
     Int32 prevScore = Score::NONE;
     Int32 windowScore = Score::NONE;
+    Int32 averageScore = Score::NONE;
+    Int32 averageSquaredScore = Score::NONE;
     Int32 displayScore = Score::NONE;
     bool lowerBound = false;
     bool upperBound = false;
@@ -428,15 +430,17 @@ private:
 
                 Int32 alpha = Score::MIN;
                 Int32 beta = Score::MAX;
-                Int32 delta = WINDOW_INIT_DELTA + (rootMove.windowScore * rootMove.windowScore / ((Score::MAX + 1) / 2));
-                Int32 fdepth = depth * FDEPTH_SCALE;
+                Int32 delta = WINDOW_INIT_DELTA;
+                Int32 freduction = 0;
 
                 if (depth >= WINDOW_MIN_DEPTH) {
                     alpha = std::max(rootMove.windowScore - delta, Score::MIN);
                     beta = std::min(rootMove.windowScore + delta, Score::MAX);
+                    delta += static_cast<Int32>(static_cast<Int64>(std::abs(rootMove.averageSquaredScore)) * static_cast<Int64>(WINDOW_SQUARED_SCORE_SCALE) / 1048576);
                 }
 
                 while (true) {
+                    const Int32 fdepth = std::max(depth * FDEPTH_SCALE - freduction, WINDOW_MIN_FDEPTH);
                     Int32 score = search<true, true>(thread, fdepth, alpha, beta, false);
                     thread.sortRemainingMoves();
 
@@ -450,17 +454,16 @@ private:
 
                     if (score <= alpha) {
                         beta = (alpha + beta) / 2;
-                        alpha = std::max(alpha - delta, Score::MIN);
-                        fdepth = depth * FDEPTH_SCALE;
+                        alpha = std::max(score - delta, Score::MIN);
+                        freduction = 0;
                     } else if (score >= beta) {
-                        beta = std::min(beta + delta, Score::MAX);
-                        fdepth = std::max(fdepth - WINDOW_FREDUCTION, depth * FDEPTH_SCALE - WINDOW_MAX_FREDUCTION);
-                        fdepth = std::max(fdepth, WINDOW_MIN_FDEPTH);
+                        beta = std::min(score + delta, Score::MAX);
+                        freduction = std::min(freduction + WINDOW_FREDUCTION, WINDOW_MAX_FREDUCTION);
                     } else {
                         break;
                     }
 
-                    delta += delta * WINDOW_WIDENING_COEFF / 256;
+                    delta += delta * WINDOW_WIDENING_SCALE / 128;
                 }
 
                 thread.sortSearchedMoves();
@@ -881,6 +884,18 @@ private:
                     } else if (score <= alpha) {
                         rootMove.displayScore = alpha;
                         rootMove.upperBound = true;
+                    } else {
+                        if (rootMove.averageScore == Score::NONE) {
+                            rootMove.averageScore = score;
+                        } else {
+                            rootMove.averageScore = (rootMove.averageScore + score) / 2;
+                        }
+
+                        if (rootMove.averageSquaredScore == Score::NONE) {
+                            rootMove.averageSquaredScore = score * std::abs(score);
+                        } else {
+                            rootMove.averageSquaredScore = (rootMove.averageSquaredScore + score * std::abs(score)) / 2;
+                        }
                     }
 
                     rootMove.pv.clear();
