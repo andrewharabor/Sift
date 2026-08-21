@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <concepts>
 #include <cstdlib>
 #include <string_view>
 #include <vector>
@@ -44,6 +45,9 @@ public:
         value ^= value >> 33;
         return value;
     };
+
+    template<std::integral auto K>
+    static constexpr auto linInterp(auto a, auto b, auto t) { return (a * (K - t) + b * t) / K; }
 
 #if defined(__GNUC__) || defined(__clang__)
 

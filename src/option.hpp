@@ -38,7 +38,7 @@ struct StringOption {
 
 class Option {
 public:
-    using Callback = std::function<void()>;
+    using Callback = std::function<void(const Option &)>;
 
     Option() noexcept : type_(OptionType::NONE), name_(), id_(), data_(), callback_() {}
     Option(std::string_view name, CheckOption data, Callback callback) : type_(OptionType::CHECK), name_(name), id_(name), data_(std::in_place_type<CheckOption>, data), callback_(std::move(callback)) { Utils::stringToLower(id_); }
@@ -53,7 +53,7 @@ public:
     void setCheck(bool value) {
         assert(type_ == OptionType::CHECK);
         std::get<CheckOption>(data_).value = value;
-        callback_();
+        callback_(*this);
     }
 
     void setSpin(Int64 value) {
@@ -65,18 +65,18 @@ public:
             value = spinData.max;
         }
         spinData.value = value;
-        callback_();
+        callback_(*this);
     }
 
     void setString(const std::string &value) {
         assert(type_ == OptionType::STRING);
         std::get<StringOption>(data_).value = value;
-        callback_();
+        callback_(*this);
     }
 
     void pressButton() {
         assert(type_ == OptionType::BUTTON);
-        callback_();
+        callback_(*this);
     }
 
     constexpr bool checkValue() const noexcept {

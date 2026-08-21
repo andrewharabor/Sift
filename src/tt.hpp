@@ -18,29 +18,29 @@
 
 namespace Sift {
 
-struct TTableEntry {
-    enum class Bound : UInt8 {
-        NONE,
-        EXACT,
-        LOWER,
-        UPPER
-    };
+enum class TTBound : UInt8 {
+    NONE,
+    EXACT,
+    LOWER,
+    UPPER
+};
 
+struct TTEntry {
     Int32 score;
     Int32 staticEval;
     Move move;
     Int32 fdepth;
     bool pv;
-    Bound bound;
+    TTBound bound;
 
-    constexpr TTableEntry() noexcept : score(Score::NONE), staticEval(Score::NONE), move(Move::NULL_MOVE), fdepth(0), pv(false), bound(Bound::NONE) {}
+    constexpr TTEntry() noexcept : score(Score::NONE), staticEval(Score::NONE), move(Move::NULL_MOVE), fdepth(0), pv(false), bound(TTBound::NONE) {}
 };
 
-class TTable {
+class TT {
 public:
-    explicit TTable(USize sizeMB) noexcept : table_(nullptr), size_(0), capacity_(0), age_(0) { resize(sizeMB, 1); }
+    explicit TT(USize sizeMB) noexcept : table_(nullptr), size_(0), capacity_(0), age_(0) { resize(sizeMB, 1); }
 
-    ~TTable() noexcept {
+    ~TT() noexcept {
         if (table_) {
             std::free(table_);
         }
@@ -71,7 +71,7 @@ public:
         }
     }
 
-    std::pair<TTableEntry, bool> probe(UInt64 key, Int32 ply) const noexcept {
+    std::pair<TTEntry, bool> probe(UInt64 key, Int32 ply) const noexcept {
         const Bucket &bucket = table_[index(key)];
         USize entryIndex = 0;
         bool found = false;
@@ -85,11 +85,11 @@ public:
         }
 
         if (!found) {
-            return {TTableEntry(), false};
+            return {TTEntry(), false};
         }
 
         const RawEntry &entry = bucket.entries[entryIndex];
-        TTableEntry result = TTableEntry();
+        TTEntry result = TTEntry();
         result.score = retrieve(entry.score, ply);
         result.staticEval = static_cast<Int32>(entry.staticEval);
         result.move = entry.move;
@@ -99,7 +99,7 @@ public:
         return {result, true};
     }
 
-    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTableEntry::Bound bound) noexcept {
+    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
         const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
         const Int32 depth = fdepth / FDEPTH_SCALE;
         Bucket &bucket = table_[index(key)];
@@ -119,11 +119,10 @@ public:
         }
 
         RawEntry &replace = bucket.entries[replaceIndex];
-        if (move != Move::NULL_MOVE || replace.key16 != key16) {
-            replace.move = move;
-        }
-
-        if (bound == TTableEntry::Bound::EXACT || replace.key16 != key16 || depth >= replace.depth - TTABLE_REPLACE_DEPTH_MARGIN - (TTABLE_REPLACE_DEPTH_PV_SCALE * pv) || replace.gen() != age_) {
+        if (bound == TTBound::EXACT || replace.key16 != key16 || replace.gen() != age_ || depth + TT_REPLACE_DEPTH_SCALE + (TT_REPLACE_PV_SCALE * pv) > replace.depth) {
+            if (move != Move::NULL_MOVE || replace.key16 != key16) {
+                replace.move = move;
+            }
             replace.key16 = key16;
             replace.score = store(score, ply);
             replace.staticEval = static_cast<Int16>(staticEval);
@@ -140,7 +139,7 @@ public:
         for (USize i = 0; i < sampleSize; i++) {
             for (USize j = 0; j < ENTRIES; j++) {
                 const RawEntry &entry = table_[i].entries[j];
-                if (entry.bound() != TTableEntry::Bound::NONE && entry.gen() == age_) {
+                if (entry.bound() != TTBound::NONE && entry.gen() == age_) {
                     count++;
                 }
             }
@@ -162,11 +161,11 @@ private:
         UInt8 depth;
         UInt8 boundPVGen;
 
-        TTableEntry::Bound bound() const { return static_cast<TTableEntry::Bound>(boundPVGen & 3); }
+        TTBound bound() const { return static_cast<TTBound>(boundPVGen & 3); }
         bool pv() const { return boundPVGen & 4; }
         UInt8 gen() const { return boundPVGen >> 3; }
 
-        void setBoundPVGen(TTableEntry::Bound bound, bool pv, UInt8 gen) {
+        void setBoundPVGen(TTBound bound, bool pv, UInt8 gen) {
             boundPVGen = static_cast<UInt8>(bound) | (static_cast<UInt8>(pv << 2) | static_cast<UInt8>(gen << 3));
         }
     };
@@ -186,7 +185,7 @@ private:
         if (ageDiff < 0) {
             ageDiff += GENERATIONS;
         }
-        return depth - (TTABLE_QUALITY_AGE_DIFF_SCALE * ageDiff);
+        return depth - (TT_QUALITY_AGE_DIFF_SCALE * ageDiff);
     }
 
     Int32 retrieve(Int16 score, Int32 ply) const noexcept {

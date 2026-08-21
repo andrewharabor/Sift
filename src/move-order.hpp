@@ -18,21 +18,21 @@
 namespace Sift {
 
 enum class MoveOrderStage : UInt8 {
-    TTABLE,
+    TT,
     GEN_NOISY,
     GOOD_NOISY,
     GEN_QUIET,
     QUIET,
     BAD_NOISY,
-    QSEARCH_TTABLE,
+    QSEARCH_TT,
     QSEARCH_GEN_NOISY,
     QSEARCH_NOISY,
-    QSEARCH_EVASIONS_TTABLE,
+    QSEARCH_EVASIONS_TT,
     QSEARCH_EVASIONS_GEN_NOISY,
     QSEARCH_EVASIONS_NOISY,
     QSEARCH_EVASIONS_GEN_QUIET,
     QSEARCH_EVASIONS_QUIET,
-    PROBCUT_TTABLE,
+    PROBCUT_TT,
     PROBCUT_GEN_NOISY,
     PROBCUT_NOISY,
     END,
@@ -48,21 +48,21 @@ inline std::strong_ordering operator<=>(MoveOrderStage stage1, MoveOrderStage st
 
 class MoveOrder {
 public:
-    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TTABLE, position, history, historyStack, tTableMove, rootPly); }
+    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TT, position, history, historyStack, ttMove, rootPly); }
 
-    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly, bool forceEvasions) {
-        const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TTABLE) : (MoveOrderStage::QSEARCH_TTABLE);
-        return MoveOrder(stage, position, history, historyStack, tTableMove, rootPly);
+    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly, bool forceEvasions) {
+        const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TT) : (MoveOrderStage::QSEARCH_TT);
+        return MoveOrder(stage, position, history, historyStack, ttMove, rootPly);
     }
 
-    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TTABLE, position, history, historyStack, tTableMove, rootPly); }
+    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, position, history, historyStack, ttMove, rootPly); }
 
     Move next() noexcept {
-        if (stage_ == MoveOrderStage::TTABLE) {
+        if (stage_ == MoveOrderStage::TT) {
             ++stage_;
 
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
-                return tTableMove_;
+            if (ttMove_ != Move::NULL_MOVE && position_.legal(ttMove_)) {
+                return ttMove_;
             }
         }
 
@@ -80,7 +80,7 @@ public:
                 const Move move = moves_[i];
                 const Int32 score = moveScores_[i];
 
-                if (move == tTableMove_) {
+                if (move == ttMove_) {
                     continue;
                 }
 
@@ -129,11 +129,11 @@ public:
             return Move::NULL_MOVE;
         }
 
-        if (stage_ == MoveOrderStage::QSEARCH_TTABLE) {
+        if (stage_ == MoveOrderStage::QSEARCH_TT) {
             ++stage_;
 
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
-                return tTableMove_;
+            if (ttMove_ != Move::NULL_MOVE && position_.legal(ttMove_)) {
+                return ttMove_;
             }
         }
 
@@ -154,11 +154,11 @@ public:
             return Move::NULL_MOVE;
         }
 
-        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_TTABLE) {
+        if (stage_ == MoveOrderStage::QSEARCH_EVASIONS_TT) {
             ++stage_;
 
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
-                return tTableMove_;
+            if (ttMove_ != Move::NULL_MOVE && position_.legal(ttMove_)) {
+                return ttMove_;
             }
         }
 
@@ -197,11 +197,11 @@ public:
             return Move::NULL_MOVE;
         }
 
-        if (stage_ == MoveOrderStage::PROBCUT_TTABLE) {
+        if (stage_ == MoveOrderStage::PROBCUT_TT) {
             ++stage_;
 
-            if (tTableMove_ != Move::NULL_MOVE && position_.legal(tTableMove_)) {
-                return tTableMove_;
+            if (ttMove_ != Move::NULL_MOVE && position_.legal(ttMove_)) {
+                return ttMove_;
             }
         }
 
@@ -236,7 +236,7 @@ private:
     const History &history_;
     std::span<const HistoryStackEntry> historyStack_;
 
-    Move tTableMove_;
+    Move ttMove_;
 
     USize rootPly_;
 
@@ -249,7 +249,7 @@ private:
 
     bool skipQuiets_;
 
-    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move tTableMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), historyStack_(historyStack), tTableMove_(tTableMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
+    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), historyStack_(historyStack), ttMove_(ttMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
 
     USize findNext() noexcept {
         const auto castUSize = [](Int32 value) -> USize {
@@ -278,7 +278,7 @@ private:
         while (idx_ < end_) {
             const USize i = (SORT) ? findNext() : idx_++;
             const Move move = moves_[i];
-            if (move != tTableMove_) {
+            if (move != ttMove_) {
                 return move;
             }
         }

@@ -136,7 +136,7 @@ public:
     static constexpr const std::string_view FEN_STARTPOS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     explicit Position(std::string_view fen = FEN_STARTPOS) {
-        states_.reserve(MAX_STATES);
+        states_.reserve(RESERVED_STATES);
         if (!set(fen)) {
             assert(false);
             reset();
@@ -1314,7 +1314,7 @@ public:
     }
 
 private:
-    static constexpr USize MAX_STATES = 2048;
+    static constexpr USize RESERVED_STATES = 256;
 
     static constexpr std::array<Bitboard, 4> CASTLING_PATH_BITBOARDS = {
         Bitboard(Square::F1) | Bitboard(Square::G1),

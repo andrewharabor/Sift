@@ -31,13 +31,13 @@ namespace Sift {
 class UCI {
 public:
     UCI() : position_(), legalMoves_(), search_([this](const SearchInfo &info) { searchInfo(info); }, [this](Move move) { bestMove(move); }, [this](Move move, Int32 moveNum, Int32 depth) { currMove(move, moveNum, depth); }) {
-        OPTIONS.add(Option("Hash", SpinOption(OptionList::DEFAULT_HASH_MB, OptionList::DEFAULT_HASH_MB, OptionList::MIN_HASH_MB, OptionList::MAX_HASH_MB), [this]() { search_.resizeTTable(); }));
-        OPTIONS.add(Option("ClearHash", [this]() { search_.newGame(); }));
-        OPTIONS.add(Option("Threads", SpinOption(OptionList::DEFAULT_THREADS, OptionList::DEFAULT_THREADS, OptionList::MIN_THREADS, OptionList::MAX_THREADS), [this]() { search_.setThreads(); }));
-        OPTIONS.add(Option("MultiPV", SpinOption(OptionList::DEFAULT_MULTI_PV, OptionList::DEFAULT_MULTI_PV, OptionList::MIN_MULTI_PV, OptionList::MAX_MULTI_PV), []() {}));
-        OPTIONS.add(Option("Contempt", SpinOption(OptionList::DEFAULT_CONTEMPT, OptionList::DEFAULT_CONTEMPT, OptionList::MIN_CONTEMPT, OptionList::MAX_CONTEMPT), []() {}));
-        OPTIONS.add(Option("MoveOverhead", SpinOption(OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::MIN_MOVE_OVERHEAD_MS, OptionList::MAX_MOVE_OVERHEAD_MS), []() {}));
-        OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), []() {}));
+        OPTIONS.add(Option("Hash", SpinOption(OptionList::DEFAULT_HASH_MB, OptionList::DEFAULT_HASH_MB, OptionList::MIN_HASH_MB, OptionList::MAX_HASH_MB), [this](const Option &) { search_.resizeTT(); }));
+        OPTIONS.add(Option("ClearHash", [this](const Option &) { search_.newGame(); }));
+        OPTIONS.add(Option("Threads", SpinOption(OptionList::DEFAULT_THREADS, OptionList::DEFAULT_THREADS, OptionList::MIN_THREADS, OptionList::MAX_THREADS), [this](const Option &) { search_.setThreads(); }));
+        OPTIONS.add(Option("MultiPV", SpinOption(OptionList::DEFAULT_MULTI_PV, OptionList::DEFAULT_MULTI_PV, OptionList::MIN_MULTI_PV, OptionList::MAX_MULTI_PV), [](const Option &) {}));
+        OPTIONS.add(Option("Contempt", SpinOption(OptionList::DEFAULT_CONTEMPT, OptionList::DEFAULT_CONTEMPT, OptionList::MIN_CONTEMPT, OptionList::MAX_CONTEMPT), [](const Option &) {}));
+        OPTIONS.add(Option("MoveOverhead", SpinOption(OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::DEFAULT_MOVE_OVERHEAD_MS, OptionList::MIN_MOVE_OVERHEAD_MS, OptionList::MAX_MOVE_OVERHEAD_MS), [](const Option &) {}));
+        OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), [](const Option &) {}));
 
 #if defined(OPEN_BENCH_TUNE)
         for (Tunable &tunable : TUNABLES) {

@@ -10,6 +10,7 @@
 #include "score.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 
 
 namespace Sift {
@@ -93,9 +94,6 @@ private:
     static constexpr UInt32 CHECK_INTERVAL = 2048;
     static constexpr MS ONE_MOVE_BOUND = MS(500);
 
-    static constexpr Int32 STABILITY_SCALE_MIN_DEPTH = 6;
-    static constexpr Int32 INTERPOLATION_COEFF = 8;
-
     TimePoint startTime_;
     MS softBound_;
     MS hardBound_;
@@ -131,7 +129,7 @@ private:
         const Float64 nodeFraction = static_cast<Float64>(bestMoveNodes) / static_cast<Float64>(nodes + 1);
         scale *= std::max(floatDiv100(TIME_NODE_SCALE_MIN), floatDiv100(TIME_NODE_SCALE_BASE) - (nodeFraction * floatDiv100(TIME_NODE_SCALE_COEFF)));
 
-        if (depth >= STABILITY_SCALE_MIN_DEPTH) {
+        if (depth >= TIME_STABILITY_SCALE_MIN_DEPTH) {
             scale *= std::min(floatDiv100(TIME_STABILITY_SCALE_MAX), floatDiv100(TIME_STABILITY_SCALE_MIN) + (floatDiv100(TIME_STABILITY_SCALE_COEFF) * std::pow(static_cast<Float64>(stability_) + floatDiv100(TIME_STABILITY_SCALE_OFFSET), floatDiv100(TIME_STABILITY_SCALE_POWER))));
         }
 
@@ -139,7 +137,7 @@ private:
         const Float64 scoreScaleSignCoeff = (scoreChange > 0) ? floatDiv100(TIME_SCORE_SCALE_POS_SCALE) : floatDiv100(TIME_SCORE_SCALE_NEG_SCALE);
         const Float64 invScale = (scoreChange * floatDiv100(TIME_SCORE_SCALE_COEFF)) / (std::abs(scoreChange) + floatDiv100(TIME_SCORE_SCALE_OFFSET)) * scoreScaleSignCoeff;
         scale *= std::clamp(1.0 - invScale, floatDiv100(TIME_SCORE_SCALE_MIN), floatDiv100(TIME_SCORE_SCALE_MAX));
-        averageScore_ = (averageScore_ * (INTERPOLATION_COEFF - 1) + score) / INTERPOLATION_COEFF;
+        averageScore_ = Utils::linInterp<8>(averageScore_, score, 1);
 
         scale = std::max(scale, floatDiv100(TIME_SCALE_MIN));
         return scale;

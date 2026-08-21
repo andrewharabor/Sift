@@ -23,9 +23,10 @@
 #include "position.hpp"
 #include "score.hpp"
 #include "time.hpp"
-#include "ttable.hpp"
+#include "tt.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 #include "wdl.hpp"
 
 
@@ -228,10 +229,10 @@ public:
 
     static constexpr USize MAX_PLY = SearchThread::MAX_PLY;
 
-    Search(SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tTable_(1), contempt_({0, 0}), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
+    Search(SearchInfoCallback uciSearchInfo, BestMoveCallback uciBestMove, CurrMoveCallback uciCurrMove) : tt_(1), contempt_({0, 0}), timeManager_(), uciSearchInfo_(std::move(uciSearchInfo)), uciBestMove_(std::move(uciBestMove)), uciCurrMove_(std::move(uciCurrMove)), printInfo_(true) {
         setTimeUp(false);
         setThreads();
-        resizeTTable();
+        resizeTT();
     }
 
     ~Search() noexcept {
@@ -261,7 +262,7 @@ public:
             thread->reset();
             thread->history.reset();
         }
-        tTable_.reset(threads_.size());
+        tt_.reset(threads_.size());
 
         for (USize node = 0; node < NUMA::nodeCount(); node++) {
             sharedHistory_.getForNode(node)->reset();
@@ -275,14 +276,14 @@ public:
 
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
-        if (legalMoves.empty()) {
+        if (legalMoves.empty() || position.draw(0, legalMoves.empty())) {
             if (printInfo_) {
                 uciBestMove_(Move::NULL_MOVE);
             }
             return;
         }
 
-        tTable_.incrementAge();
+        tt_.incrementAge();
 
         multiPV_ = static_cast<USize>(OPTIONS["MultiPV"].spinValue());
 
@@ -316,7 +317,7 @@ public:
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
 
-        tTable_.incrementAge();
+        tt_.incrementAge();
 
         multiPV_ = static_cast<USize>(OptionList::DEFAULT_MULTI_PV);
 
@@ -361,9 +362,9 @@ public:
         }
     }
 
-    void resizeTTable() noexcept {
+    void resizeTT() noexcept {
         USize sizeMB = (OPTIONS.has("Hash")) ? static_cast<USize>(OPTIONS["Hash"].spinValue()) : OptionList::DEFAULT_HASH_MB;
-        tTable_.resize(sizeMB, threads_.size());
+        tt_.resize(sizeMB, threads_.size());
     }
 
 private:
@@ -371,7 +372,7 @@ private:
 
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
-    TTable tTable_;
+    TT tt_;
     NUMAUniqueAllocation<SharedHistory> sharedHistory_;
 
     USize multiPV_;
@@ -515,7 +516,7 @@ private:
         }
     }
 
-    template<bool PV_NODE = false, bool ROOT_NODE = false>
+    template<bool PV_NODE, bool ROOT_NODE>
     Int32 search(SearchThread &thread, Int32 fdepth, Int32 alpha, Int32 beta, bool cutNode) noexcept {
         static_assert(PV_NODE || !ROOT_NODE);
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
@@ -524,10 +525,10 @@ private:
 
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
-        SearchStackEntry &stack = thread.stack[rootPly];
         std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
         SharedHistory *sharedHistory = thread.sharedHistory;
+        SearchStackEntry &stack = thread.stack[rootPly];
 
         stack.pv.clear();
 
@@ -553,7 +554,6 @@ private:
         }
 
         const bool inCheck = position.inCheck();
-        const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
 
         const Int32 drawScore = Score::drawScore(thread.loadNodes());
 
@@ -574,48 +574,71 @@ private:
             return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, historyStack, rootPly));
         }
 
-        SearchStackEntry &nextStack = thread.stack[rootPly + 1];
-
         if (fdepth <= 0) {
             return qsearch<PV_NODE>(thread, alpha, beta);
         }
 
-        TTableEntry tTableEntry = TTableEntry();
-        bool tTableHit = false;
+        SearchStackEntry &nextStack = thread.stack[rootPly + 1];
+
+        const bool excludedMove = stack.excludedMove != Move::NULL_MOVE;
+
+        TTEntry ttEntry = TTEntry();
+        bool ttHit = false;
+
+        if (!excludedMove) {
+            std::tie(ttEntry, ttHit) = tt_.probe(position.hash(), static_cast<Int32>(rootPly));
+
+            if constexpr (!PV_NODE) {
+                if (ttHit && ttEntry.fdepth >= fdepth && (ttEntry.score <= alpha || cutNode) && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= beta) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= alpha))) {
+                    if (ttEntry.score >= beta && ttEntry.move != Move::NULL_MOVE && position.quiet(ttEntry.move) && position.legal(ttEntry.move)) {
+                        const Int32 bonus = History::bonus(fdepth, TT_CUTOFF_BONUS_DEPTH_SCALE, TT_CUTOFF_BONUS_OFFSET, TT_CUTOFF_BONUS_MAX);
+                        history.updateQuietHists(position, historyStack, ttEntry.move, rootPly, bonus);
+                    }
+
+                    if (position.halfmoveClock() < TT_CUTOFF_MAX_HALFMOVES) {
+                        return ttEntry.score;
+                    }
+                }
+            }
+        }
+
+        const Move ttMove = (ROOT_NODE) ? thread.rootMoves[thread.pvIndex].move : ttEntry.move;
+        const bool noisyTTMove = ttMove != Move::NULL_MOVE && position.noisy(ttMove);
+        const bool ttPV = PV_NODE || (ttHit && ttEntry.pv);
+
+        if (fdepth >= IIR_MIN_FDEPTH && !excludedMove && (PV_NODE || cutNode) && (!ttHit || (ttEntry.move != Move::NULL_MOVE && ttEntry.fdepth + IIR_TT_FDEPTH_MARGIN < fdepth))) {
+            fdepth -= IIR_FREDUCTION;
+        }
 
         Int32 rawStaticEval = Score::NONE;
         Int32 complexity = 0;
 
         if (!excludedMove) {
-            std::tie(tTableEntry, tTableHit) = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
-
-            if constexpr (!PV_NODE) {
-                if (tTableHit && tTableEntry.fdepth >= fdepth && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
-                    return tTableEntry.score;
-                }
-            }
-
             if (inCheck) {
                 stack.staticEval = Score::NONE;
                 stack.eval = Score::NONE;
             } else {
-                rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
+                rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
                 const Int32 correction = sharedHistory->correction(position, historyStack, rootPly);
-                stack.staticEval = Eval::adjust(rawStaticEval, position, correction);
                 complexity = std::abs(correction);
+                stack.staticEval = Eval::adjust(rawStaticEval, position, correction);
                 stack.eval = stack.staticEval;
-                if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
-                    stack.eval = tTableEntry.score;
+                if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= stack.staticEval) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= stack.staticEval))) {
+                    stack.eval = ttEntry.score;
+                }
+
+                if (!ttHit) {
+                    tt_.write(position.hash(), 0, Score::NONE, rawStaticEval, Move::NULL_MOVE, 0, ttPV, TTBound::NONE);
                 }
             }
+
+            // FIXME: add eval policy main hist update
         }
 
-        const Move tTableMove = ROOT_NODE ? thread.rootMoves[thread.pvIndex].move : tTableEntry.move;
-        const bool noisyTTableMove = tTableMove != Move::NULL_MOVE && position.noisy(tTableMove);
-        const bool tTablePV = PV_NODE || (tTableHit && tTableEntry.pv);
-
+        // FIXME: remove winning threats
         const bool winningThreats = bool(position.winningThreats());
 
+        // FIXME: improving
         bool improving = [&]() {
             if (inCheck) {
                 return false;
@@ -671,17 +694,17 @@ private:
 
 
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
-                if (fdepth >= PROBCUT_MIN_FDEPTH && !Score::mate(beta) && (!tTableHit || tTableEntry.score >= probcutBeta || tTableEntry.fdepth + PROBCUT_TTABLE_FDEPTH_MARGIN < fdepth)) {
+                if (fdepth >= PROBCUT_MIN_FDEPTH && !Score::mate(beta) && (!ttHit || ttEntry.score >= probcutBeta || ttEntry.fdepth + PROBCUT_TT_FDEPTH_MARGIN < fdepth)) {
                     Int32 seeMargin = probcutBeta - stack.staticEval;
                     Int32 probcutFdepth = fdepth - PROBCUT_FREDUCTION;
-                    MoveOrder moveOrder = MoveOrder::probcut(position, history, historyStack, tTableMove, rootPly);
+                    MoveOrder moveOrder = MoveOrder::probcut(position, history, historyStack, ttMove, rootPly);
                     Move move;
                     while ((move = moveOrder.next()) != Move::NULL_MOVE) {
                         if (!position.see(move, seeMargin)) {
                             continue;
                         }
 
-                        tTable_.prefetch(position.hashAfter(move));
+                        tt_.prefetch(position.hashAfter(move));
 
                         makeMove(thread, move, history.noisyScore(position, move));
 
@@ -697,7 +720,7 @@ private:
                         }
 
                         if (score >= probcutBeta) {
-                            tTable_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth + FDEPTH_SCALE, tTablePV, TTableEntry::Bound::LOWER);
+                            tt_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth + FDEPTH_SCALE, ttPV, TTBound::LOWER);
                             return score;
                         }
                     }
@@ -705,13 +728,9 @@ private:
             }
         }
 
-        if (fdepth >= IIR_MIN_FDEPTH && !inCheck && !excludedMove && (!tTableHit || (tTableEntry.move != Move::NULL_MOVE && tTableEntry.fdepth <= fdepth - IIR_TTABLE_FDEPTH_MARGIN))) {
-            fdepth -= IIR_FREDUCTION;
-        }
-
         nextStack.failHighCount = 0;
 
-        TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
+        TTBound bound = TTBound::UPPER;
 
         MoveList quietsTried;
         MoveList noisiesTried;
@@ -720,7 +739,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
 
-        MoveOrder moveOrder = MoveOrder::search(position, history, historyStack, tTableMove, rootPly);
+        MoveOrder moveOrder = MoveOrder::search(position, history, historyStack, ttMove, rootPly);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if constexpr (ROOT_NODE) {
@@ -771,11 +790,11 @@ private:
                 }
             }
 
-            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && fdepth >= SE_MIN_FDEPTH + tTablePV && tTableMove == move && tTableEntry.fdepth >= fdepth - SE_TABLE_FDEPTH_MARGIN && tTableEntry.bound != TTableEntry::Bound::UPPER && std::abs(tTableEntry.score) < Score::KNOWN_WIN;
+            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && fdepth >= SE_MIN_FDEPTH + ttPV && ttMove == move && ttEntry.fdepth >= fdepth - SE_TABLE_FDEPTH_MARGIN && ttEntry.bound != TTBound::UPPER && std::abs(ttEntry.score) < Score::KNOWN_WIN;
             Int32 fextension = 0;
 
             if (doSE) {
-                const Int32 seBeta = std::max(Score::MATED, tTableEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (tTablePV && !PV_NODE)) * fdepth / (64 * FDEPTH_SCALE));
+                const Int32 seBeta = std::max(Score::MATED, ttEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (ttPV && !PV_NODE)) * fdepth / (64 * FDEPTH_SCALE));
                 const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
 
                 stack.excludedMove = move;
@@ -786,14 +805,14 @@ private:
                     fextension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (SE_BASE_DOUBLE_FEXTENSTION + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN) * FDEPTH_SCALE) : SE_SINGLE_FEXTENSION;
                 } else if (seBeta >= beta) {
                     return seBeta;
-                } else if (tTableEntry.score >= beta) {
+                } else if (ttEntry.score >= beta) {
                     fextension = -SE_BASE_DOUBLE_NEG_FEXTENSION + PV_NODE * FDEPTH_SCALE;
-                } else if (tTableEntry.score <= alpha && cutNode) {
+                } else if (ttEntry.score <= alpha && cutNode) {
                     fextension = -SE_SINGLE_NEG_FEXTENSION;
                 }
             }
 
-            tTable_.prefetch(position.hashAfter(move));
+            tt_.prefetch(position.hashAfter(move));
 
             const UInt64 nodesBefore = thread.loadNodes();
 
@@ -814,12 +833,12 @@ private:
             Int32 newFdepth = fdepth - FDEPTH_SCALE + fextension;
             Int32 score = 0;
 
-            if (fdepth >= LMR_MIN_FDEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && !tTablePV) {
+            if (fdepth >= LMR_MIN_FDEPTH && movesTried >= (PV_NODE ? LMR_MIN_MOVES_PV : LMR_MIN_MOVES_NON_PV) && !ttPV) {
                 Int32 freduction = baseLMR;
                 freduction += LMR_NON_IMPROVING_SCALE * !improving;
-                freduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTableMove;
-                if (tTablePV) {
-                    freduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (tTableHit && tTableEntry.score > alpha);
+                freduction += LMR_NOISY_HASH_MOVE_SCALE * noisyTTMove;
+                if (ttPV) {
+                    freduction -= LMR_TABLE_PV_SCALE + LMR_TABLE_PV_NON_FAIL_LOW_SCALE * (ttHit && ttEntry.score > alpha);
                 }
                 freduction -= LMR_GIVES_CHECK_SCALE * givesCheck;
                 freduction -= LMR_IN_CHECK_SCALE * inCheck;
@@ -841,7 +860,7 @@ private:
                     score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, !cutNode);
 
                     if (quiet && (score <= alpha || score >= beta)) {
-                        Int32 bonus = (score >= beta) ? History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(fdepth) : -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(fdepth);
+                        Int32 bonus = (score >= beta) ? History::bonus(fdepth, HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX) : -History::bonus(fdepth, HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX);
                         history.updateContHist(position, historyStack, move, rootPly, bonus);
                     }
                 }
@@ -912,7 +931,7 @@ private:
                 bestScore = score;
 
                 if (bestScore > alpha) {
-                    bound = TTableEntry::Bound::EXACT;
+                    bound = TTBound::EXACT;
                     alpha = bestScore;
                     bestMove = move;
                     if constexpr (PV_NODE) {
@@ -925,12 +944,12 @@ private:
                 }
 
                 if (bestScore >= beta) {
-                    bound = TTableEntry::Bound::LOWER;
+                    bound = TTBound::LOWER;
                     stack.failHighCount++;
 
                     Int32 historyFdepth = fdepth + (bestScore > beta + HISTORY_BETA_MARGIN) * FDEPTH_SCALE;
-                    Int32 bonus = History::bonus<HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX>(historyFdepth);
-                    Int32 penalty = -History::bonus<HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX>(historyFdepth);
+                    Int32 bonus = History::bonus(historyFdepth, HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_OFFSET, HISTORY_BONUS_MAX);
+                    Int32 penalty = -History::bonus(historyFdepth, HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_OFFSET, HISTORY_PENALTY_MAX);
 
                     if (quiet) {
                         history.updateQuietHists(position, historyStack, move, rootPly, bonus);
@@ -963,29 +982,29 @@ private:
         }
 
         if (!excludedMove) {
-            if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTableEntry::Bound::LOWER && stack.staticEval >= bestScore) && !(bound == TTableEntry::Bound::UPPER && stack.staticEval <= bestScore)) {
+            if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTBound::LOWER && stack.staticEval >= bestScore) && !(bound == TTBound::UPPER && stack.staticEval <= bestScore)) {
                 sharedHistory->updateCorrHist(position, historyStack, rootPly, fdepth, bestScore, stack.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, fdepth, tTablePV, bound);
+                tt_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, fdepth, ttPV, bound);
             }
         }
 
         return bestScore;
     }
 
-    template<bool PV_NODE = false>
+    template<bool PV_NODE>
     Int32 qsearch(SearchThread &thread, Int32 alpha, Int32 beta) noexcept {
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
 
         USize &rootPly = thread.rootPly;
         Position &position = thread.position;
-        SearchStackEntry &stack = thread.stack[rootPly];
         std::span<const HistoryStackEntry> historyStack = thread.historyStack;
         History &history = thread.history;
         SharedHistory *sharedHistory = thread.sharedHistory;
+        SearchStackEntry &stack = thread.stack[rootPly];
 
         stack.pv.clear();
 
@@ -1021,13 +1040,15 @@ private:
             return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, historyStack, rootPly));
         }
 
-        auto [tTableEntry, tTableHit] = tTable_.probe(position.hash(), static_cast<Int32>(rootPly));
-        const bool tTablePV = PV_NODE || (tTableHit && tTableEntry.pv);
-        const Move tTableMove = tTableEntry.move;
+        SearchStackEntry &nextStack = thread.stack[rootPly + 1];
+
+        auto [ttEntry, ttHit] = tt_.probe(position.hash(), static_cast<Int32>(rootPly));
+        const bool ttPV = PV_NODE || (ttHit && ttEntry.pv);
+        const Move ttMove = ttEntry.move;
 
         if constexpr (!PV_NODE) {
-            if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= beta) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= alpha))) {
-                return tTableEntry.score;
+            if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= beta) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= alpha))) {
+                return ttEntry.score;
             }
         }
 
@@ -1037,37 +1058,36 @@ private:
             stack.staticEval = Score::NONE;
             stack.eval = Score::NONE;
         } else {
-            rawStaticEval = (tTableHit) ? tTableEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
+            rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
             stack.staticEval = Eval::adjust(rawStaticEval, position, sharedHistory->correction(position, historyStack, rootPly));
             stack.eval = stack.staticEval;
-            if (tTableHit && ((tTableEntry.bound == TTableEntry::Bound::EXACT) || (tTableEntry.bound == TTableEntry::Bound::LOWER && tTableEntry.score >= stack.eval) || (tTableEntry.bound == TTableEntry::Bound::UPPER && tTableEntry.score <= stack.eval))) {
-                stack.eval = tTableEntry.score;
+            if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= stack.staticEval) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= stack.staticEval))) {
+                stack.eval = ttEntry.score;
+            }
+
+            if (!ttHit) {
+                tt_.write(position.hash(), 0, Score::NONE, rawStaticEval, Move::NULL_MOVE, 0, ttPV, TTBound::NONE);
+            }
+
+            if (stack.eval >= beta) {
+                return (!Score::decisive(stack.eval) && !Score::decisive(beta)) ? Utils::linInterp<1024>(stack.eval, beta, QSEARCH_FAIL_FIRM_T) : stack.eval;
+            }
+
+            if (stack.eval > alpha) {
+                alpha = stack.eval;
             }
         }
-
-        if (stack.eval >= beta) {
-            if (!tTableHit) {
-                tTable_.write(position.hash(), static_cast<Int32>(rootPly), stack.eval, rawStaticEval, Move::NULL_MOVE, 0, tTablePV, TTableEntry::Bound::LOWER);
-            }
-            return stack.eval;
-        }
-
-        if (stack.eval > alpha) {
-            alpha = stack.eval;
-        }
-
-        SearchStackEntry &nextStack = thread.stack[rootPly + 1];
 
         const Int32 fpMargin = (inCheck) ? Score::MIN : stack.eval + QSEARCH_FP_MARGIN;
 
-        TTableEntry::Bound bound = TTableEntry::Bound::UPPER;
+        TTBound bound = TTBound::UPPER;
 
         Int32 movesTried = 0;
 
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : stack.eval;
 
-        MoveOrder moveOrder = MoveOrder::qsearch(position, history, historyStack, tTableMove, rootPly, inCheck);
+        MoveOrder moveOrder = MoveOrder::qsearch(position, history, historyStack, ttMove, rootPly, inCheck);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if (!inCheck && movesTried >= QSEARCH_MAX_MOVES) {
@@ -1083,7 +1103,7 @@ private:
                 continue;
             }
 
-            tTable_.prefetch(position.hashAfter(move));
+            tt_.prefetch(position.hashAfter(move));
 
             makeMove(thread, move, 0);
             movesTried++;
@@ -1111,7 +1131,7 @@ private:
                 }
 
                 if (bestScore >= beta) {
-                    bound = TTableEntry::Bound::LOWER;
+                    bound = TTBound::LOWER;
                     break;
                 }
             }
@@ -1125,7 +1145,7 @@ private:
             return Score::matedIn(static_cast<Int32>(rootPly));
         }
 
-        tTable_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, tTablePV, bound);
+        tt_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, ttPV, bound);
 
         return bestScore;
     }
@@ -1277,7 +1297,7 @@ private:
         for (auto &searchThread : threads_) {
             info.nodes += searchThread->loadNodes();
         }
-        info.hashfull = tTable_.hashfull();
+        info.hashfull = tt_.hashfull();
         info.score = thread.rootMoves[pvIndex].displayScore;
         info.lowerBound = thread.rootMoves[pvIndex].lowerBound;
         info.upperBound = thread.rootMoves[pvIndex].upperBound;
