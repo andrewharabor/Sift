@@ -663,14 +663,20 @@ private:
                     return (!Score::decisive(stack.eval) && !Score::decisive(beta)) ? Utils::linInterp<1024>(stack.eval, beta, RFP_FAIL_FIRM_T) : stack.eval;
                 }
 
-                // TODO: razoring
-                if (fdepth <= RAZORING_MAX_FDEPTH && stack.eval <= alpha - RAZORING_MARGIN * fdepth / FDEPTH_SCALE && alpha < RAZORING_MAX_ALPHA) {
-                    const Int32 score = qsearch<PV_NODE>(thread, alpha, beta);
+                const Int32 razoringMargin = [&] {
+                    Int32 margin = 0;
+                    margin += RAZORING_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                    return margin;
+                }();
+
+                if (fdepth <= RAZORING_MAX_FDEPTH && std::abs(alpha) < RAZORING_MAX_ABS_ALPHA && stack.eval + razoringMargin <= alpha) {
+                    const Int32 score = qsearch<false>(thread, alpha, beta);
                     if (score <= alpha) {
                         return score;
                     }
                 }
 
+                // TODO: nmp
                 if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && fdepth >= NMP_MIN_FDEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * fdepth / FDEPTH_SCALE && position.nonPawnMaterial(position.sideToMove())) {
                     const Int32 freduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * fdepth / FDEPTH_SCALE) + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION) * FDEPTH_SCALE;
 
