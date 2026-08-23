@@ -631,14 +631,8 @@ private:
                     tt_.write(position.hash(), 0, Score::NONE, rawStaticEval, Move::NULL_MOVE, 0, ttPV, TTBound::NONE);
                 }
             }
-
-            // FIXME: add eval policy main hist update
         }
 
-        // FIXME: remove winning threats
-        const bool winningThreats = bool(position.winningThreats());
-
-        // FIXME: improving
         bool improving = [&]() {
             if (inCheck) {
                 return false;
@@ -652,17 +646,24 @@ private:
             return true;
         }();
 
-        bool opponentWorsening = !inCheck && rootPly > 0 && (thread.stack[rootPly - 1].staticEval != Score::NONE) && (stack.staticEval > -thread.stack[rootPly - 1].staticEval + 1);
-
         if constexpr (!PV_NODE) {
             if (!inCheck && !excludedMove) {
-                const Int32 rfpMargin = ((improving) ? (RFP_IMPROVING_MARGIN + RFP_WINNING_THREATS * winningThreats) : RFP_NON_IMPROVING_MARGIN) * fdepth / FDEPTH_SCALE - (RFP_OPPONENT_WORSENING * opponentWorsening) + (historyStack[rootPly - 1].score / RFP_HISTORY_DIVISOR);
-                if (fdepth <= RFP_MAX_FDEPTH && std::abs(stack.eval) < Score::KNOWN_WIN && stack.eval >= std::max(rfpMargin, RFP_MIN_MARGIN) + beta) {
-                    return stack.eval;
+                // TODO: hindsight reduction
+
+                const Int32 rfpMargin = [&] {
+                    Int32 margin = 0;
+                    margin += RFP_LINEAR_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                    margin += RFP_QUADRATIC_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE);
+                    margin -= RFP_IMPROVING_SCALE * improving;
+                    margin += RFP_COMPLEXITY_SCALE * complexity / 1024;
+                    return margin;
+                }();
+
+                if (fdepth <= RFP_MAX_FDEPTH && stack.eval - rfpMargin >= beta) {
+                    return (!Score::decisive(stack.eval) && !Score::decisive(beta)) ? Utils::linInterp<1024>(stack.eval, beta, RFP_FAIL_FIRM_T) : stack.eval;
                 }
 
-
-
+                // TODO: razoring
                 if (fdepth <= RAZORING_MAX_FDEPTH && stack.eval <= alpha - RAZORING_MARGIN * fdepth / FDEPTH_SCALE && alpha < RAZORING_MAX_ALPHA) {
                     const Int32 score = qsearch<PV_NODE>(thread, alpha, beta);
                     if (score <= alpha) {
