@@ -144,7 +144,6 @@ struct SearchThread {
             historyStack[i].movedPiece = Piece::NONE;
             historyStack[i].contHistSubtable = nullptr;
             historyStack[i].contCorrHistSubtable = nullptr;
-            historyStack[i].score = 0;
         }
     }
 
@@ -435,13 +434,13 @@ private:
                 Int32 freduction = 0;
 
                 if (depth >= WINDOW_MIN_DEPTH) {
-                    alpha = std::max(rootMove.windowScore - delta, Score::MIN);
-                    beta = std::min(rootMove.windowScore + delta, Score::MAX);
+                    alpha = std::clamp(rootMove.windowScore - delta, Score::MIN, Score::MAX);
+                    beta = std::clamp(rootMove.windowScore + delta, Score::MIN, Score::MAX);
                     delta += static_cast<Int32>(static_cast<Int64>(std::abs(rootMove.averageSquaredScore)) * static_cast<Int64>(WINDOW_SQUARED_SCORE_SCALE) / 1048576);
                 }
 
                 while (true) {
-                    const Int32 fdepth = std::max(depth * FDEPTH_SCALE - freduction, WINDOW_MIN_FDEPTH);
+                    const Int32 fdepth = std::max(depth * FDEPTH_SCALE - freduction, FDEPTH_SCALE);
                     Int32 score = search<true, true>(thread, fdepth, alpha, beta, false);
                     thread.sortRemainingMoves();
 
@@ -455,10 +454,10 @@ private:
 
                     if (score <= alpha) {
                         beta = (alpha + beta) / 2;
-                        alpha = std::max(score - delta, Score::MIN);
+                        alpha = std::clamp(score - delta, Score::MIN, Score::MAX);
                         freduction = 0;
                     } else if (score >= beta) {
-                        beta = std::min(score + delta, Score::MAX);
+                        beta = std::clamp(score + delta, Score::MIN, Score::MAX);
                         freduction = std::min(freduction + WINDOW_FREDUCTION, WINDOW_MAX_FREDUCTION);
                     } else {
                         break;
@@ -696,7 +695,9 @@ private:
                     const Int32 reducedFdepth = fdepth - freduction;
 
                     makeNullMove(thread);
+
                     const Int32 score = -search<false, false>(thread, reducedFdepth, -beta, -beta + 1, !cutNode);
+
                     unmakeNullMove(thread);
 
                     if (timeUp()) {
@@ -722,11 +723,12 @@ private:
                     }
                 }
 
-                // TODO: probcut
-                Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
-                if (fdepth >= PROBCUT_MIN_FDEPTH && !Score::mate(beta) && (!ttHit || ttEntry.score >= probcutBeta || ttEntry.fdepth + PROBCUT_TT_FDEPTH_MARGIN < fdepth)) {
-                    Int32 seeMargin = probcutBeta - stack.staticEval;
-                    Int32 probcutFdepth = fdepth - PROBCUT_FREDUCTION;
+                const Int32 probcutBeta = beta + PROBCUT_BETA_OFFSET - improving * PROBCUT_BETA_IMPROVING_SCALE;
+                const Int32 probcutFdepth = std::max(fdepth - PROBCUT_FREDUCTION, FDEPTH_SCALE);
+
+                if (fdepth >= PROBCUT_MIN_FDEPTH && !ttPV && !Score::decisive(beta) && (ttMove == Move::NULL_MOVE || noisyTTMove) && !(ttHit && ttEntry.fdepth >= probcutFdepth && ttEntry.score < probcutBeta)) {
+                    const Int32 seeMargin = (probcutBeta - stack.staticEval) * PROBCUT_SEE_EVAL_SCALE / 128;
+
                     MoveOrder moveOrder = MoveOrder::probcut(position, history, historyStack, ttMove, rootPly);
                     Move move;
                     while ((move = moveOrder.next()) != Move::NULL_MOVE) {
@@ -736,11 +738,11 @@ private:
 
                         tt_.prefetch(position.hashAfter(move));
 
-                        makeMove(thread, move, history.noisyScore(position, move));
+                        makeMove(thread, move);
 
                         Int32 score = -qsearch<false>(thread, -probcutBeta, -probcutBeta + 1);
-                        if (score >= probcutBeta && probcutFdepth >= 0) {
-                            score = -search<false, false>(thread, probcutFdepth, -probcutBeta, -probcutBeta + 1, !cutNode);
+                        if (score >= probcutBeta) {
+                            score = -search<false, false>(thread, probcutFdepth - FDEPTH_SCALE, -probcutBeta, -probcutBeta + 1, !cutNode);
                         }
 
                         unmakeMove(thread);
@@ -750,7 +752,7 @@ private:
                         }
 
                         if (score >= probcutBeta) {
-                            tt_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth + FDEPTH_SCALE, ttPV, TTBound::LOWER);
+                            tt_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth, false, TTBound::LOWER);
                             return score;
                         }
                     }
@@ -758,6 +760,7 @@ private:
             }
         }
 
+        // TODO: ...
         nextStack.failHighCount = 0;
 
         TTBound bound = TTBound::UPPER;
@@ -846,7 +849,7 @@ private:
 
             const UInt64 nodesBefore = thread.loadNodes();
 
-            makeMove(thread, move, historyScore);
+            makeMove(thread, move);
             movesTried++;
 
             if (quiet) {
@@ -1135,7 +1138,7 @@ private:
 
             tt_.prefetch(position.hashAfter(move));
 
-            makeMove(thread, move, 0);
+            makeMove(thread, move);
             movesTried++;
 
             const Int32 score = -qsearch<PV_NODE>(thread, -beta, -alpha);
@@ -1190,7 +1193,7 @@ private:
         return thread.position.draw(thread.rootPly, noMoves);
     }
 
-    void makeMove(SearchThread &thread, Move move, Int32 historyScore) noexcept {
+    void makeMove(SearchThread &thread, Move move) noexcept {
         assert(move != Move::NULL_MOVE);
 
         HistoryStackEntry &historyStack = thread.historyStack[thread.rootPly];
@@ -1198,7 +1201,6 @@ private:
         historyStack.movedPiece = thread.position.moved(move);
         historyStack.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
         historyStack.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
-        historyStack.score = historyScore;
 
         thread.position.makeMove(move, thread.nnue.state());
         thread.incNodes();
@@ -1215,8 +1217,6 @@ private:
         historyStack.movedPiece = Piece::NONE;
         historyStack.contHistSubtable = nullptr;
         historyStack.contCorrHistSubtable = nullptr;
-        historyStack.score = 0;
-
     }
 
     void makeNullMove(SearchThread &thread) noexcept {

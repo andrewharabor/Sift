@@ -105,8 +105,6 @@ struct HistoryStackEntry {
 
     ContHistSubtable *contHistSubtable;
     ContCorrHistSubtable *contCorrHistSubtable;
-
-    Int32 score;
 };
 
 class History {
