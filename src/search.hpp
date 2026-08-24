@@ -534,11 +534,11 @@ private:
 
         if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), threads_.size())) {
             setTimeUp(true);
-            return alpha;
+            return 0;
         }
 
         if (timeUp()) {
-            return alpha;
+            return 0;
         }
 
         if (static_cast<Int32>(rootPly) + 1 > thread.selDepth) {
@@ -652,10 +652,10 @@ private:
 
                 const Int32 rfpMargin = [&] {
                     Int32 margin = 0;
-                    margin += RFP_LINEAR_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                    margin += RFP_QUADRATIC_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE);
-                    margin -= RFP_IMPROVING_SCALE * improving;
-                    margin += RFP_COMPLEXITY_SCALE * complexity / 1024;
+                    margin += RFP_MARGIN_LINEAR_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                    margin += RFP_MARGIN_QUADRATIC_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE);
+                    margin -= RFP_MARGIN_IMPROVING_SCALE * improving;
+                    margin += RFP_MARGIN_COMPLEXITY_SCALE * complexity / 1024;
                     return margin;
                 }();
 
@@ -665,7 +665,7 @@ private:
 
                 const Int32 razoringMargin = [&] {
                     Int32 margin = 0;
-                    margin += RAZORING_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                    margin += RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
                     return margin;
                 }();
 
@@ -676,30 +676,53 @@ private:
                     }
                 }
 
-                // TODO: nmp
-                if (position.nullPly() > 0 && rootPly >= thread.nmpMinPly && fdepth >= NMP_MIN_FDEPTH && stack.eval >= beta + NMP_EVAL_MARGIN && stack.staticEval >= beta + NMP_STATIC_EVAL_BASE_MARGIN - NMP_STATIC_EVAL_DEPTH_MARGIN * fdepth / FDEPTH_SCALE && position.nonPawnMaterial(position.sideToMove())) {
-                    const Int32 freduction = (NMP_BASE_REDUCTION + NMP_DEPTH_REDUCTION_SCALE * fdepth / FDEPTH_SCALE) + std::min((stack.eval - beta) / NMP_EVAL_REDUCTION_SCALE, NMP_MAX_EVAL_REDUCTION) * FDEPTH_SCALE;
+                const Int32 nmpBetaMargin = [&] {
+                    Int32 margin = NMP_MARGIN_BASE;
+                    margin -= NMP_MARGIN_DEPTH_SCALE * fdepth / (FDEPTH_SCALE * 128);
+                    margin -= NMP_MARGIN_IMPROVING_SCALE * improving;
+                    return std::max(margin, 0);
+                }();
+
+                if (fdepth >= NMP_MIN_FDEPTH && rootPly >= thread.nmpMinPly && stack.staticEval >= beta + nmpBetaMargin && position.nullPly() > 0 && !(ttEntry.bound == TTBound::UPPER && ttEntry.score < beta) && position.nonPawnMaterial(position.sideToMove())) {
+                    tt_.prefetch(position.hashAfter(Move::NULL_MOVE));
+
+                    const Int32 freduction = [&] {
+                        Int32 reduction = NMP_FREDUCTION_BASE;
+                        reduction += NMP_FREDUCTION_FDEPTH_SCALE * fdepth / 1024;
+                        reduction += std::min((stack.staticEval - beta) * NMP_FREDUCTION_EVAL_SCALE, NMP_FREDUCTION_EVAL_MAX);
+                        return reduction;
+                    }();
+
+                    const Int32 reducedFdepth = fdepth - freduction;
 
                     makeNullMove(thread);
-                    const Int32 nullMoveScore = -search<false, false>(thread, fdepth - freduction, -beta, -beta + 1, !cutNode);
+                    const Int32 score = -search<false, false>(thread, reducedFdepth, -beta, -beta + 1, !cutNode);
                     unmakeNullMove(thread);
 
-                    if (nullMoveScore >= beta) {
-                        if ((fdepth <= NMP_NO_VERIFICATION_MAX_FDEPTH && std::abs(beta) < Score::KNOWN_WIN) || thread.nmpMinPly > 0) {
-                            return Score::mate(nullMoveScore) ? beta : nullMoveScore;
+                    if (timeUp()) {
+                        return 0;
+                    }
+
+                    if (score >= beta) {
+                        if (fdepth <= NMP_NO_VERIF_MAX_DEPTH || thread.nmpMinPly > 0) {
+                            return (Score::win(score)) ? beta : score;
                         }
 
-                        thread.nmpMinPly = rootPly + static_cast<USize>((fdepth - freduction) * NMP_MIN_PLY_FDEPTH_SCALE / (1024 * FDEPTH_SCALE));
-                        const Int32 verificationScore = search<false, false>(thread, fdepth - freduction, beta - 1, beta, true);
+                        thread.nmpMinPly = rootPly + static_cast<USize>(NMP_MIN_PLY_FDEPTH_SCALE * reducedFdepth / (FDEPTH_SCALE * 128));
+                        const Int32 verifScore = search<false, false>(thread, reducedFdepth, beta - 1, beta, true);
                         thread.nmpMinPly = 0;
 
-                        if (verificationScore >= beta) {
-                            return verificationScore;
+                        if (timeUp()) {
+                            return 0;
+                        }
+
+                        if (verifScore >= beta) {
+                            return verifScore;
                         }
                     }
                 }
 
-
+                // TODO: probcut
                 Int32 probcutBeta = beta + PROBCUT_BETA_MARGIN;
                 if (fdepth >= PROBCUT_MIN_FDEPTH && !Score::mate(beta) && (!ttHit || ttEntry.score >= probcutBeta || ttEntry.fdepth + PROBCUT_TT_FDEPTH_MARGIN < fdepth)) {
                     Int32 seeMargin = probcutBeta - stack.staticEval;
@@ -723,7 +746,7 @@ private:
                         unmakeMove(thread);
 
                         if (timeUp()) {
-                            return alpha;
+                            return 0;
                         }
 
                         if (score >= probcutBeta) {
@@ -884,7 +907,7 @@ private:
             unmakeMove(thread);
 
             if (timeUp()) {
-                return alpha;
+                return 0;
             }
 
             if constexpr (ROOT_NODE) {
@@ -1017,11 +1040,11 @@ private:
 
         if (thread.main() && timeManager_.stopHard(thread.limits, thread.loadNodes(), threads_.size())) {
             setTimeUp(true);
-            return alpha;
+            return 0;
         }
 
         if (timeUp()) {
-            return alpha;
+            return 0;
         }
 
         if (static_cast<Int32>(rootPly) + 1 > thread.selDepth) {
@@ -1120,7 +1143,7 @@ private:
             unmakeMove(thread);
 
             if (timeUp()) {
-                return alpha;
+                return 0;
             }
 
             if (score > bestScore) {
