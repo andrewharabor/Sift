@@ -48,14 +48,14 @@ inline std::strong_ordering operator<=>(MoveOrderStage stage1, MoveOrderStage st
 
 class MoveOrder {
 public:
-    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TT, position, history, historyStack, ttMove, rootPly); }
+    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TT, position, history, histStack, ttMove, rootPly); }
 
-    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly, bool forceEvasions) {
+    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly, bool forceEvasions) {
         const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TT) : (MoveOrderStage::QSEARCH_TT);
-        return MoveOrder(stage, position, history, historyStack, ttMove, rootPly);
+        return MoveOrder(stage, position, history, histStack, ttMove, rootPly);
     }
 
-    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, position, history, historyStack, ttMove, rootPly); }
+    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, position, history, histStack, ttMove, rootPly); }
 
     Move next() noexcept {
         if (stage_ == MoveOrderStage::TT) {
@@ -234,7 +234,7 @@ private:
 
     const Position &position_;
     const History &history_;
-    std::span<const HistoryStackEntry> historyStack_;
+    std::span<const HistoryStackEntry> histStack_;
 
     Move ttMove_;
 
@@ -249,7 +249,7 @@ private:
 
     bool skipQuiets_;
 
-    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> historyStack, Move ttMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), historyStack_(historyStack), ttMove_(ttMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
+    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), histStack_(histStack), ttMove_(ttMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
 
     USize findNext() noexcept {
         const auto castUSize = [](Int32 value) -> USize {
@@ -291,7 +291,7 @@ private:
             Int32 &score = moveScores_[i];
 
             score += history_.noisyScore(position_, move) / MOVE_ORDER_NOISY_SCORE_DIVISOR;
-            score += SEE_PIECE_VALUES[static_cast<USize>(position_.captured(move).type())];
+            score += SEE_PIECE_VALUES[static_cast<USize>(position_.capturedPiece(move).type())];
             if (move.type() == MoveType::PROMOTION) {
                 score += SEE_PIECE_VALUES[static_cast<USize>(move.promotion())] - SEE_PIECE_VALUES[static_cast<USize>(PieceType::PAWN)];
             }
@@ -303,7 +303,7 @@ private:
             const Move move = moves_[i];
             Int32 &score = moveScores_[i];
 
-            score += history_.quietScore(position_, historyStack_, move, rootPly_);
+            score += history_.quietScore(position_, histStack_, move, rootPly_);
             score += MOVE_ORDER_DIRECT_CHECK_BONUS * (position_.directCheck(move) && position_.see(move, MOVE_ORDER_DIRECT_CHECK_SEE_MARGIN));
         }
     }

@@ -644,13 +644,13 @@ public:
         }
 
         const bool captureMove = (pieceAt(move.to()) != Piece::NONE) && (move.type() != MoveType::CASTLING);
-        const Piece captured = pieceAt(move.to());
+        const Piece capturedPiece = pieceAt(move.to());
         const PieceType pieceType = pieceAt(move.from()).type();
 
         if (captureMove) {
-            key ^= Zobrist::piece(captured, move.to());
+            key ^= Zobrist::piece(capturedPiece, move.to());
 
-            if (captured.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
+            if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                 const Square kingSq = kingSquare(~sideToMove_);
                 const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                 if (state().castlingRights.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
@@ -1082,11 +1082,9 @@ public:
         return false;
     }
 
-    constexpr Piece moved(Move move) const noexcept {
-        return pieceAt(move.from());
-    }
+    constexpr Piece movedPiece(Move move) const noexcept { return pieceAt(move.from()); }
 
-    constexpr Piece captured(Move move) const noexcept {
+    constexpr Piece capturedPiece(Move move) const noexcept {
         if (move.type() == MoveType::EN_PASSANT) {
             return Piece(PieceType::PAWN, ~sideToMove_);
         }
