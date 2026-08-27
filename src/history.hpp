@@ -209,7 +209,7 @@ public:
         return contCorrHistTable_[static_cast<USize>(movedPiece)][static_cast<USize>(move.to())];
     }
 
-    static constexpr Int32 bonus(Int32 fdepth, Int32 depthScale, Int32 offset, Int32 max) noexcept { return std::clamp(depthScale * fdepth / FDEPTH_SCALE - offset, 0, max); }
+    static constexpr Int32 bonus(Int32 fdepth, Int32 base, Int32 depthScale, Int32 max) noexcept { return std::clamp(base + depthScale * fdepth / FDEPTH_SCALE, 0, max); }
 
 private:
     MainHistTable mainHistTable_;
