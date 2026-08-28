@@ -46,10 +46,10 @@ public:
             const MS increment = limits.clock.increment[static_cast<USize>(color)];
 
             const Float64 baseTimeScale = static_cast<Float64>((limits.clock.movesToGo > 0) ? limits.clock.movesToGo : TIME_BASE_SCALE);
-            const auto baseTime = (time / baseTimeScale) + (increment * floatDiv100(TIME_INCREMENT_SCALE));
+            const auto baseTime = (time / baseTimeScale) + (increment * Utils::floatDiv100(TIME_INCREMENT_SCALE));
 
-            softBound_ = std::chrono::duration_cast<MS>(baseTime * floatDiv100(TIME_SOFT_SCALE));
-            hardBound_ = std::chrono::duration_cast<MS>(time * floatDiv100(TIME_HARD_SCALE));
+            softBound_ = std::chrono::duration_cast<MS>(baseTime * Utils::floatDiv100(TIME_SOFT_SCALE));
+            hardBound_ = std::chrono::duration_cast<MS>(time * Utils::floatDiv100(TIME_HARD_SCALE));
 
             if (moveCount == 1) {
                 softBound_ = std::min(softBound_, ONE_MOVE_BOUND);
@@ -113,37 +113,35 @@ private:
         }
 
         if (Score::mate(score)) {
-            return floatDiv100(TIME_MATE_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_MATE_SCORE_SCALE);
         }
 
         if (Score::win(score)) {
-            return floatDiv100(TIME_WIN_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_WIN_SCORE_SCALE);
         }
 
         if (Score::loss(score)) {
-            return floatDiv100(TIME_LOSS_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_LOSS_SCORE_SCALE);
         }
 
         Float64 scale = 1.0;
 
         const Float64 nodeFraction = static_cast<Float64>(bestMoveNodes) / static_cast<Float64>(nodes + 1);
-        scale *= std::max(floatDiv100(TIME_NODE_SCALE_MIN), floatDiv100(TIME_NODE_SCALE_BASE) - (nodeFraction * floatDiv100(TIME_NODE_SCALE_COEFF)));
+        scale *= std::max(Utils::floatDiv100(TIME_NODE_SCALE_MIN), Utils::floatDiv100(TIME_NODE_SCALE_BASE) - (nodeFraction * Utils::floatDiv100(TIME_NODE_SCALE_COEFF)));
 
         if (depth >= TIME_STABILITY_SCALE_MIN_DEPTH) {
-            scale *= std::min(floatDiv100(TIME_STABILITY_SCALE_MAX), floatDiv100(TIME_STABILITY_SCALE_MIN) + (floatDiv100(TIME_STABILITY_SCALE_COEFF) * std::pow(static_cast<Float64>(stability_) + floatDiv100(TIME_STABILITY_SCALE_OFFSET), floatDiv100(TIME_STABILITY_SCALE_POWER))));
+            scale *= std::min(Utils::floatDiv100(TIME_STABILITY_SCALE_MAX), Utils::floatDiv100(TIME_STABILITY_SCALE_MIN) + (Utils::floatDiv100(TIME_STABILITY_SCALE_COEFF) * std::pow(static_cast<Float64>(stability_) + Utils::floatDiv100(TIME_STABILITY_SCALE_OFFSET), Utils::floatDiv100(TIME_STABILITY_SCALE_POWER))));
         }
 
-        const Float64 scoreChange = static_cast<Float64>(score - averageScore_) / floatDiv100(TIME_SCORE_SCALE_CHANGE_COEFF);
-        const Float64 scoreScaleSignCoeff = (scoreChange > 0) ? floatDiv100(TIME_SCORE_SCALE_POS_SCALE) : floatDiv100(TIME_SCORE_SCALE_NEG_SCALE);
-        const Float64 invScale = (scoreChange * floatDiv100(TIME_SCORE_SCALE_COEFF)) / (std::abs(scoreChange) + floatDiv100(TIME_SCORE_SCALE_OFFSET)) * scoreScaleSignCoeff;
-        scale *= std::clamp(1.0 - invScale, floatDiv100(TIME_SCORE_SCALE_MIN), floatDiv100(TIME_SCORE_SCALE_MAX));
+        const Float64 scoreChange = static_cast<Float64>(score - averageScore_) / Utils::floatDiv100(TIME_SCORE_SCALE_CHANGE_COEFF);
+        const Float64 scoreScaleSignCoeff = (scoreChange > 0) ? Utils::floatDiv100(TIME_SCORE_SCALE_POS_SCALE) : Utils::floatDiv100(TIME_SCORE_SCALE_NEG_SCALE);
+        const Float64 invScale = (scoreChange * Utils::floatDiv100(TIME_SCORE_SCALE_COEFF)) / (std::abs(scoreChange) + Utils::floatDiv100(TIME_SCORE_SCALE_OFFSET)) * scoreScaleSignCoeff;
+        scale *= std::clamp(1.0 - invScale, Utils::floatDiv100(TIME_SCORE_SCALE_MIN), Utils::floatDiv100(TIME_SCORE_SCALE_MAX));
         averageScore_ = Utils::linInterp<8>(averageScore_, score, 1);
 
-        scale = std::max(scale, floatDiv100(TIME_SCALE_MIN));
+        scale = std::max(scale, Utils::floatDiv100(TIME_SCALE_MIN));
         return scale;
     }
-
-    static constexpr Float64 floatDiv100(Int32 value) noexcept { return static_cast<Float64>(value) / 100.0; }
 };
 
 }

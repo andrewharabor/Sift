@@ -40,7 +40,7 @@ struct SearchStackEntry {
     Int32 staticEval;
     Int32 eval;
 
-    Int32 failHighCount;
+    Int32 failHighCount; // FIXME
 };
 
 struct SearchInfo {
@@ -138,7 +138,7 @@ struct SearchThread {
             stack[i].excludedMove = Move::NULL_MOVE;
             stack[i].staticEval = Score::NONE;
             stack[i].eval = Score::NONE;
-            stack[i].failHighCount = 0;
+            stack[i].failHighCount = 0; // FIXME
 
             histStack[i].move = Move::NULL_MOVE;
             histStack[i].quietMove = false;
@@ -371,7 +371,7 @@ public:
     }
 
 private:
-    static constexpr MS CURR_MOVE_UPDATE_INTERVAL = MS(2500);
+    static constexpr MS CURR_MOVE_DELAY_INTERVAL = MS(2500);
 
     std::vector<std::unique_ptr<SearchThread>> threads_;
 
@@ -679,12 +679,7 @@ private:
                     return (!Score::decisive(curr.eval) && !Score::decisive(beta)) ? Utils::linInterp<1024>(curr.eval, beta, RFP_FAIL_FIRM_T) : curr.eval;
                 }
 
-                const Int32 razoringMargin = [&] {
-                    Int32 margin = 0;
-                    margin += RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                    return margin;
-                }();
-
+                const Int32 razoringMargin = RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
                 if (fdepth <= RAZORING_MAX_FDEPTH && std::abs(alpha) < RAZORING_MAX_ABS_ALPHA && curr.eval + razoringMargin <= alpha) {
                     const Int32 score = qsearch<false>(thread, alpha, beta);
                     if (score <= alpha) {
@@ -777,8 +772,7 @@ private:
             }
         }
 
-        // TODO: ...
-        next.failHighCount = 0;
+        next.failHighCount = 0; // FIXME
 
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::MIN;
@@ -798,7 +792,7 @@ private:
                     continue;
                 }
 
-                if (printInfo_ && thread.main() && timeManager_.elapsed() > CURR_MOVE_UPDATE_INTERVAL) {
+                if (printInfo_ && thread.main() && timeManager_.elapsed() > CURR_MOVE_DELAY_INTERVAL) {
                     uciCurrMove_(move, movesTried + 1, thread.rootDepth);
                 }
             }
@@ -808,35 +802,56 @@ private:
             }
 
             const bool quiet = position.quiet(move);
+            const bool quietOrLosing = moveOrder.stage() > MoveOrderStage::GOOD_NOISY;
+
             const Int32 historyScore = (quiet) ? history.quietScore(position, histStack, move, rootPly) : history.noisyScore(position, move);
-            const Int32 baseLMR = LMR_TABLE[std::min(static_cast<USize>(fdepth / FDEPTH_SCALE), LMR_TABLE_SIZE_DEPTH - 1)][std::min(static_cast<USize>(movesTried), LMR_TABLE_SIZE_MOVES - 1)] - (1024 * historyScore / (quiet ? LMR_QUIET_HISTORY_DIVISOR : LMR_NOISY_HISTORY_DIVISOR));
+
+            const Int32 baseLMR = LMR_TABLE[quiet][static_cast<USize>(fdepth / FDEPTH_SCALE)][static_cast<USize>(movesTried + 1)];
 
             if constexpr (!ROOT_NODE) {
-                if (bestScore > Score::LOSS) {
-                    const Int32 lmrFdepth = std::max(fdepth - baseLMR * FDEPTH_SCALE / 1024, 0);
-                    const Int32 fpMargin = std::max(FP_BASE_MARGIN + FP_DEPTH_SCALE * lmrFdepth / FDEPTH_SCALE + historyScore / FP_HISTORY_DIVISOR, FP_MARGIN_MIN);
-                    if (lmrFdepth <= FP_MAX_FDEPTH && quiet && !inCheck && alpha < Score::WIN && curr.staticEval + fpMargin <= alpha) {
+                if (!Score::loss(bestScore)) {
+                    const Int32 lmrFdepth = [&] {
+                        const Int32 freduction = (baseLMR + ttPV * LMR_FDEPTH_PV_SCALE) * FDEPTH_SCALE / 1024;
+                        return std::max(fdepth - freduction, 0);
+                    }();
+
+                    if (quiet) {
+                        const Int32 lmpMargin = LMP_TABLE[improving][static_cast<USize>(fdepth / FDEPTH_SCALE)] + historyScore * LMP_MARGIN_HISTORY_SCALE / 8388608;
+                        if (movesTried >= lmpMargin) {
+                            moveOrder.skipQuiets();
+                            continue;
+                        }
+
+                        const Int32 quietHistoryPruningMargin = QUIET_HISTORY_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + QUIET_HISTORY_PRUNING_MARGIN_OFFSET;
+                        if (lmrFdepth <= QUIET_HISTORY_PRUNING_MAX_FDEPTH && historyScore < quietHistoryPruningMargin) {
+                            moveOrder.skipQuiets();
+                            continue;
+                        }
+
+                        const Int32 quietFPMargin = QUIET_FP_MARGIN_BASE + QUIET_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / QUIET_FP_MARGIN_HISTORY_DIVISOR;
+                        if (!inCheck && lmrFdepth <= QUIET_FP_MAX_FDEPTH && std::abs(alpha) < QUIET_FP_MAX_ABS_ALPHA && !position.directCheck(move) && curr.staticEval + quietFPMargin <= alpha) {
+                            moveOrder.skipQuiets();
+                            continue;
+                        }
+                    } else {
+                        const Int32 noisyHistoryPruningMargin = NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE) + NOISY_HISTORY_PRUNING_MARGIN_OFFSET;
+                        if (lmrFdepth <= NOISY_HISTORY_PRUNING_MAX_FDEPTH && historyScore < noisyHistoryPruningMargin) {
+                            continue;
+                        }
+
+                        const Int32 noisyFPMargin = NOISY_FP_MARGIN_BASE + NOISY_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / NOISY_FP_MARGIN_HISTORY_DIVISOR;
+                        if (!inCheck && lmrFdepth <= NOISY_FP_MAX_FDEPTH && std::abs(alpha) < NOISY_FP_MAX_ABS_ALPHA && curr.staticEval + noisyFPMargin <= alpha) {
+                            if (quietOrLosing) {
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+
+                    const Int32 seePruningMargin = (quiet) ? (QUIET_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE)) : (std::min(NOISY_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE - historyScore / NOISY_SEE_PRUNING_MARGIN_HISTORY_DIVISOR, 0));
+                    if (quietOrLosing && !position.see(move, seePruningMargin)) {
                         continue;
-                    }
-
-                    const Int32 noisyFPMargin = std::max(NOISY_FP_BASE_MARGIN + NOISY_FP_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / NOISY_FP_HISTORY_DIVISOR, NOISY_FP_MARGIN_MIN);
-                    if (fdepth <= NOISY_FP_MAX_FDEPTH && !quiet && !inCheck && alpha < Score::WIN && curr.staticEval + noisyFPMargin <= alpha) {
-                        break;
-                    }
-
-                    const Int32 lmpMargin = ((improving || complexity > HIGH_COMPLEXITY_MARGIN) ? (LMP_MARGIN_IMPROVING_BASE + LMP_MARGIN_IMPROVING_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE) : (LMP_MARGIN_NON_IMPROVING_BASE + LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE)) / 256;
-                    if (!inCheck && movesTried >= lmpMargin) {
-                        break;
-                    }
-
-                    const Int32 seeCaptHistMax = SEE_CAPT_HIST_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                    const Int32 seeMargin = quiet ? (SEE_PRUNING_MARGIN_QUIET * fdepth / FDEPTH_SCALE) : (SEE_PRUNING_MARGIN_NOISY * fdepth / FDEPTH_SCALE - std::clamp(historyScore / SEE_CAPT_HIST_DIVISOR, -seeCaptHistMax, seeCaptHistMax));
-                    if (!position.see(move, seeMargin)) {
-                        continue;
-                    }
-
-                    if (quiet && fdepth <= HISTORY_PRUNING_MAX_FDEPTH && historyScore < HISTORY_PRUNING_MARGIN * fdepth / FDEPTH_SCALE) {
-                        break;
                     }
                 }
             }
@@ -895,7 +910,7 @@ private:
                 freduction -= LMR_IN_CHECK_SCALE * inCheck;
                 freduction -= LMR_HIGH_COMPLEXITY_SCALE * (complexity > HIGH_COMPLEXITY_MARGIN);
                 freduction += LMR_CUTNODE_SCALE * cutNode;
-                freduction += LMR_FAIL_HIGH_COUNT_SCALE * (next.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN);
+                freduction += LMR_FAIL_HIGH_COUNT_SCALE * (next.failHighCount >= LMR_FAIL_HIGH_COUNT_MARGIN); // FIXME
                 freduction *= FDEPTH_SCALE;
                 freduction /= 1024;
 
@@ -997,7 +1012,7 @@ private:
 
                 if (bestScore >= beta) {
                     bound = TTBound::LOWER;
-                    curr.failHighCount++;
+                    curr.failHighCount++; // FIXME
 
                     const Int32 historyFdepth = fdepth + (!inCheck && curr.staticEval <= alpha) * HISTORY_FDEPTH_EVAL_SCALE;
 

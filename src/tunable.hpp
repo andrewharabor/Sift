@@ -2,12 +2,14 @@
 
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "types.hpp"
+#include "utils.hpp"
 
 
 namespace Sift {
@@ -107,9 +109,7 @@ static constexpr Int32 FDEPTH_SCALE = 128;
 static constexpr Int32 MOVE_ORDER_GOOD_NOISY_SCORE_DIVISOR = 4;
 static constexpr Int32 MOVE_ORDER_NOISY_SCORE_DIVISOR = 8;
 
-using MVVTable = std::array<Int32, 7>;
-
-static inline MVVTable MVV_PIECE_VALUES;
+static inline std::array<Int32, 7> MVV_PIECE_VALUES;
 
 namespace MVV {
 
@@ -125,9 +125,7 @@ TUNABLE_CALLBACK(MVV_QUEEN_VALUE, 7181, 0, 0, 0, []() { MVV::init(); });
 
 static inline void MVV::init() { MVV_PIECE_VALUES = {MVV_PAWN_VALUE, MVV_KNIGHT_VALUE, MVV_BISHOP_VALUE, MVV_ROOK_VALUE, MVV_QUEEN_VALUE, 0, 0}; }
 
-using SEETable = std::array<Int32, 7>;
-
-static inline SEETable SEE_PIECE_VALUES;
+static inline std::array<Int32, 7> SEE_PIECE_VALUES;
 
 namespace SEE {
 
@@ -280,6 +278,10 @@ TUNABLE(WINDOW_FREDUCTION, 128, 0, 0, 0);
 TUNABLE(WINDOW_MAX_FREDUCTION, 384, 0, 0, 0);
 TUNABLE(WINDOW_WIDENING_SCALE, 136, 0, 0, 0);
 
+TUNABLE(IIR_MIN_FDEPTH, 384, 0, 0, 0);
+TUNABLE(IIR_TT_FDEPTH_MARGIN, 384, 0, 0, 0);
+TUNABLE(IIR_FREDUCTION, 128, 0, 0, 0);
+
 TUNABLE(RFP_MARGIN_LINEAR_DEPTH_SCALE, 36, 0, 0, 0);
 TUNABLE(RFP_MARGIN_QUADRATIC_DEPTH_SCALE, 7, 0, 0, 0);
 TUNABLE(RFP_MARGIN_IMPROVING_SCALE, 35, 0, 0, 0);
@@ -308,18 +310,7 @@ TUNABLE(PROBCUT_FREDUCTION, 384, 0, 0, 0);
 TUNABLE(PROBCUT_MIN_FDEPTH, 896, 0, 0, 0);
 TUNABLE(PROBCUT_SEE_EVAL_SCALE, 136, 0, 0, 0);
 
-TUNABLE(HIGH_COMPLEXITY_MARGIN, 87, 0, 0, 0);
-
-TUNABLE(IIR_MIN_FDEPTH, 384, 0, 0, 0);
-TUNABLE(IIR_TT_FDEPTH_MARGIN, 384, 0, 0, 0);
-TUNABLE(IIR_FREDUCTION, 128, 0, 0, 0);
-
-static constexpr USize LMR_TABLE_SIZE_DEPTH = 64;
-static constexpr USize LMR_TABLE_SIZE_MOVES = 64;
-
-using LMRTable = MultiArray<Int32, LMR_TABLE_SIZE_DEPTH, LMR_TABLE_SIZE_MOVES>;
-
-static inline LMRTable LMR_TABLE;
+static inline MultiArray<Int32, 2, 256, 256> LMR_TABLE;
 
 namespace LMR {
 
@@ -327,20 +318,79 @@ static void init();
 
 }
 
-TUNABLE_CALLBACK(LMR_BASE, 775, 0, 0, 0, []() { LMR::init(); })
-TUNABLE_CALLBACK(LMR_SCALE, 427, 0, 0, 0, []() { LMR::init(); })
+TUNABLE_CALLBACK(LMR_NOISY_BASE, -10, 0, 0, 0, []() { LMR::init(); })
+TUNABLE_CALLBACK(LMR_NOISY_DIVISOR, 249, 0, 0, 0, []() { LMR::init(); })
+TUNABLE_CALLBACK(LMR_QUIET_BASE, 78, 0, 0, 0, []() { LMR::init(); })
+TUNABLE_CALLBACK(LMR_QUIET_DIVISOR, 236, 0, 0, 0, []() { LMR::init(); })
 
 static inline void LMR::init() {
     LMR_TABLE.fill({});
-    const Float64 base = static_cast<Float64>(LMR_BASE);
-    const Float64 scale = static_cast<Float64>(LMR_SCALE);
-    for (USize depth = 1; depth < LMR_TABLE_SIZE_DEPTH; depth++) {
-        for (USize moves = 1; moves < LMR_TABLE_SIZE_MOVES; moves++) {
-            LMR_TABLE[depth][moves] = static_cast<Int32>(base + scale * std::log(static_cast<Float64>(depth)) * std::log(static_cast<Float64>(moves)));
+
+    constexpr Float64 NOISY_BASE = Utils::floatDiv100(LMR_NOISY_BASE);
+    constexpr Float64 NOISY_DIVISOR = Utils::floatDiv100(LMR_NOISY_DIVISOR);
+    constexpr Float64 QUIET_BASE = Utils::floatDiv100(LMR_QUIET_BASE);
+    constexpr Float64 QUIET_DIVISOR = Utils::floatDiv100(LMR_QUIET_DIVISOR);
+
+    for (Int32 depth = 1; depth < 256; depth++) {
+        for (Int32 moves = 1; moves < 256; moves++) {
+            const Float64 lnDepth = std::log(static_cast<Float64>(depth));
+            const Float64 lnMoves = std::log(static_cast<Float64>(moves));
+            LMR_TABLE[0][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (NOISY_BASE + lnDepth * lnMoves / NOISY_DIVISOR));
+            LMR_TABLE[1][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (QUIET_BASE + lnDepth * lnMoves / QUIET_DIVISOR));
         }
     }
 }
 
+TUNABLE(LMR_FDEPTH_PV_SCALE, 726, 0, 0, 0);
+
+static inline MultiArray<Int32, 2, 256> LMP_TABLE;
+
+namespace LMP {
+
+static void init();
+
+}
+
+TUNABLE_CALLBACK(LMP_TABLE_BASE, 3, 0, 0, 0, []() { LMP::init(); })
+
+static inline void LMP::init() {
+    LMP_TABLE.fill({});
+
+    for (Int32 improving = 0; improving < 2; improving++) {
+        for (Int32 depth = 0; depth < 256; depth++) {
+            LMP_TABLE[static_cast<USize>(improving)][static_cast<USize>(depth)] = (LMP_TABLE_BASE + depth * depth) / (2 - improving);
+        }
+    }
+}
+
+TUNABLE(LMP_MARGIN_HISTORY_SCALE, 527, 0, 0, 0);
+
+TUNABLE(QUIET_HISTORY_PRUNING_MAX_FDEPTH, 640, 0, 0, 0);
+TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -2242, 0, 0, 0);
+TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_OFFSET, -1315, 0, 0, 0);
+
+TUNABLE(QUIET_FP_MARGIN_BASE, 274, 0, 0, 0);
+TUNABLE(QUIET_FP_MARGIN_DEPTH_SCALE, 68, 0, 0, 0);
+TUNABLE(QUIET_FP_MARGIN_HISTORY_DIVISOR, 102, 0, 0, 0);
+TUNABLE(QUIET_FP_MAX_FDEPTH, 1024, 0, 0, 0);
+TUNABLE(QUIET_FP_MAX_ABS_ALPHA, 2000, 0, 0, 0);
+
+TUNABLE(NOISY_HISTORY_PRUNING_MAX_FDEPTH, 512, 0, 0, 0);
+TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -1006, 0, 0, 0);
+TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_OFFSET, -1121, 0, 0, 0);
+
+TUNABLE(NOISY_FP_MARGIN_BASE, 100, 0, 0, 0);
+TUNABLE(NOISY_FP_MARGIN_DEPTH_SCALE, 50, 0, 0, 0);
+TUNABLE(NOISY_FP_MARGIN_HISTORY_DIVISOR, 65, 0, 0, 0);
+TUNABLE(NOISY_FP_MAX_FDEPTH, 640, 0, 0, 0);
+TUNABLE(NOISY_FP_MAX_ABS_ALPHA, 2000, 0, 0, 0);
+
+TUNABLE(QUIET_SEE_PRUNING_MARGIN_DEPTH_SCALE, -20, 0, 0, 0);
+
+TUNABLE(NOISY_SEE_PRUNING_MARGIN_DEPTH_SCALE, -111, 0, 0, 0);
+TUNABLE(NOISY_SEE_PRUNING_MARGIN_HISTORY_DIVISOR, 65, 0, 0, 0);
+
+// FIXME
 static constexpr Int32 LMR_MIN_MOVES_PV = 4;
 static constexpr Int32 LMR_MIN_MOVES_NON_PV = 3;
 
@@ -357,31 +407,10 @@ TUNABLE(LMR_HIGH_COMPLEXITY_SCALE, 593, 0, 0, 0);
 TUNABLE(LMR_CUTNODE_SCALE, 1612, 0, 0, 0);
 TUNABLE(LMR_FAIL_HIGH_COUNT_SCALE, 1042, 0, 0, 0);
 TUNABLE(LMR_FAIL_HIGH_COUNT_MARGIN, 2, 0, 0, 0);
+// FIXME
 
-TUNABLE(FP_MAX_FDEPTH, 1024, 0, 0, 0);
-TUNABLE(FP_BASE_MARGIN, 146, 0, 0, 0);
-TUNABLE(FP_DEPTH_SCALE, 128, 0, 0, 0);
-TUNABLE(FP_HISTORY_DIVISOR, 393, 0, 0, 0);
-TUNABLE(FP_MARGIN_MIN, 20, 0, 0, 0);
 
-TUNABLE(NOISY_FP_MAX_FDEPTH, 640, 0, 0, 0);
-TUNABLE(NOISY_FP_BASE_MARGIN, 4, 0, 0, 0);
-TUNABLE(NOISY_FP_DEPTH_SCALE, 113, 0, 0, 0);
-TUNABLE(NOISY_FP_HISTORY_DIVISOR, 253, 0, 0, 0);
-TUNABLE(NOISY_FP_MARGIN_MIN, 20, 0, 0, 0);
-
-TUNABLE(LMP_MARGIN_IMPROVING_BASE, 553, 0, 0, 0);
-TUNABLE(LMP_MARGIN_IMPROVING_DEPTH_SCALE, 333, 0, 0, 0);
-TUNABLE(LMP_MARGIN_NON_IMPROVING_BASE, 566, 0, 0, 0);
-TUNABLE(LMP_MARGIN_NON_IMPROVING_DEPTH_SCALE, 103, 0, 0, 0);
-
-TUNABLE(SEE_PRUNING_MARGIN_NOISY, -96, 0, 0, 0);
-TUNABLE(SEE_PRUNING_MARGIN_QUIET, -67, 0, 0, 0);
-TUNABLE(SEE_CAPT_HIST_DEPTH_SCALE, 103, 0, 0, 0);
-TUNABLE(SEE_CAPT_HIST_DIVISOR, 30, 0, 0, 0);
-
-TUNABLE(HISTORY_PRUNING_MAX_FDEPTH, 896, 0, 0, 0);
-TUNABLE(HISTORY_PRUNING_MARGIN, -1743, 0, 0, 0);
+TUNABLE(HIGH_COMPLEXITY_MARGIN, 87, 0, 0, 0);
 
 static constexpr Int32 SE_ROOT_DEPTH_SCALE = 2;
 
@@ -416,6 +445,7 @@ inline void TunableList::init() noexcept {
     MVV::init();
     SEE::init();
     LMR::init();
+    LMP::init();
 }
 
 }

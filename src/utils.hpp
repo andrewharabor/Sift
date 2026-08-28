@@ -46,6 +46,8 @@ public:
         return value;
     };
 
+    static constexpr Float64 floatDiv100(Int32 value) noexcept { return static_cast<Float64>(value) / 100.0; }
+
     template<std::integral auto K>
     static constexpr auto linInterp(auto a, auto b, auto t) { return (a * (K - t) + b * t) / K; }
 
@@ -74,7 +76,7 @@ public:
         U64 c2 = aHi * bLo + c1;
         U64 c3 = aLo * bHi + (c2 & 0xFFFFFFFF);
         return aHi * bHi + (c2 >> 32) + (c3 >> 32);
-    }
+}
 
 #endif
 
@@ -87,7 +89,7 @@ public:
             return;
         }
         _aligned_free(ptr);
-    }
+}
 
 #else
 
