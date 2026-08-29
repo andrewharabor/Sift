@@ -48,14 +48,14 @@ inline std::strong_ordering operator<=>(MoveOrderStage stage1, MoveOrderStage st
 
 class MoveOrder {
 public:
-    static inline MoveOrder search(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::TT, position, history, histStack, ttMove, rootPly); }
+    static inline MoveOrder search(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::TT, moves, position, history, histStack, ttMove, ply); }
 
-    static inline MoveOrder qsearch(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly, bool forceEvasions) {
+    static inline MoveOrder qsearch(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply, bool forceEvasions) {
         const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TT) : (MoveOrderStage::QSEARCH_TT);
-        return MoveOrder(stage, position, history, histStack, ttMove, rootPly);
+        return MoveOrder(stage, moves, position, history, histStack, ttMove, ply);
     }
 
-    static inline MoveOrder probcut(const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, position, history, histStack, ttMove, rootPly); }
+    static inline MoveOrder probcut(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, moves, position, history, histStack, ttMove, ply); }
 
     Move next() noexcept {
         if (stage_ == MoveOrderStage::TT) {
@@ -232,16 +232,16 @@ public:
 private:
     MoveOrderStage stage_;
 
+    MoveList &moves_;
+    std::array<Int32, MoveList::MAX_MOVES> moveScores_;
+
     const Position &position_;
     const History &history_;
     std::span<const HistoryStackEntry> histStack_;
 
     Move ttMove_;
 
-    USize rootPly_;
-
-    MoveList moves_;
-    std::array<Int32, MoveList::MAX_MOVES> moveScores_;
+    USize ply_;
 
     USize idx_;
     USize end_;
@@ -249,7 +249,7 @@ private:
 
     bool skipQuiets_;
 
-    explicit MoveOrder(MoveOrderStage initialStage, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize rootPly) noexcept : stage_(initialStage), position_(position), history_(history), histStack_(histStack), ttMove_(ttMove), rootPly_(rootPly), moves_(), moveScores_(), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) {}
+    explicit MoveOrder(MoveOrderStage initialStage, MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept : stage_(initialStage), moves_(moves), moveScores_(), position_(position), history_(history), histStack_(histStack), ttMove_(ttMove), ply_(ply), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) { moves_.clear(); }
 
     USize findNext() noexcept {
         const auto castUSize = [](Int32 value) -> USize {
@@ -303,7 +303,7 @@ private:
             const Move move = moves_[i];
             Int32 &score = moveScores_[i];
 
-            score += history_.quietScore(position_, histStack_, move, rootPly_);
+            score += history_.quietScore(position_, histStack_, move, ply_);
             score += MOVE_ORDER_DIRECT_CHECK_BONUS * (position_.directCheck(move) && position_.see(move, MOVE_ORDER_DIRECT_CHECK_SEE_MARGIN));
         }
     }

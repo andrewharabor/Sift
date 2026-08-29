@@ -43,6 +43,13 @@ struct SearchStackEntry {
     Int32 failHighCount; // FIXME
 };
 
+struct MoveStackEntry {
+    MoveList list;
+
+    MoveList quietsTried;
+    MoveList noisiesTried;
+};
+
 struct SearchInfo {
     Int32 depth;
     Int32 selDepth;
@@ -101,17 +108,17 @@ struct SearchThread {
 
     SearchLimits limits;
 
-    USize rootPly;
     USize nmpMinPly;
-    Int32 rootDepth;
+    Int32 depth;
     Int32 selDepth;
 
     USize pvIndex;
 
     std::vector<RootMove> rootMoves;
 
-    std::array<SearchStackEntry, MAX_PLY + 1> stack;
-    std::array<HistoryStackEntry, MAX_PLY + 1> histStack;
+    std::array<SearchStackEntry, MAX_PLY + 5> stack;
+    std::array<HistoryStackEntry, MAX_PLY + 5> histStack;
+    std::array<MoveStackEntry, MAX_PLY + 5> moveStack;
 
     History history;
     SharedHistory *sharedHistory;
@@ -126,8 +133,7 @@ struct SearchThread {
     void reset() noexcept {
         nodes.store(0, std::memory_order_relaxed);
 
-        rootPly = 0;
-        rootDepth = 0;
+        depth = 0;
         selDepth = 0;
         nmpMinPly = 0;
 
@@ -148,6 +154,10 @@ struct SearchThread {
             histStack[i].pawnHash = 0;
             histStack[i].contHistSubtable = nullptr;
             histStack[i].contCorrHistSubtable = nullptr;
+
+            moveStack[i].list.clear();
+            moveStack[i].quietsTried.clear();
+            moveStack[i].noisiesTried.clear();
         }
     }
 
@@ -422,7 +432,7 @@ private:
     void searchRoot(SearchThread &thread) noexcept {
         const Int32 maxDepth = std::min(thread.limits.depth, static_cast<Int32>(MAX_PLY - 1));
         for (Int32 depth = 1; depth <= maxDepth; depth++) {
-            thread.rootDepth = depth;
+            thread.depth = depth;
             thread.selDepth = 0;
 
             for (RootMove &rootMove : thread.rootMoves) {
@@ -445,7 +455,7 @@ private:
 
                 while (true) {
                     const Int32 fdepth = std::max(depth * FDEPTH_SCALE - freduction, FDEPTH_SCALE);
-                    Int32 score = search<true, true>(thread, fdepth, alpha, beta, false);
+                    Int32 score = search<true, true>(thread, fdepth, alpha, beta, 0, 0, false);
                     thread.sortRemainingMoves();
 
                     if (timeUp()) {
@@ -511,7 +521,7 @@ private:
                 const SearchThread &bestThread = selectThread();
 
                 if (!bestThread.main()) {
-                    printSearchInfo(bestThread, 0, bestThread.rootDepth);
+                    printSearchInfo(bestThread, 0, bestThread.depth);
                 }
 
                 uciBestMove_(bestThread.bestMove().move);
@@ -520,18 +530,18 @@ private:
     }
 
     template<bool PV_NODE, bool ROOT_NODE>
-    Int32 search(SearchThread &thread, Int32 fdepth, Int32 alpha, Int32 beta, bool cutNode) noexcept {
+    Int32 search(SearchThread &thread, Int32 fdepth, Int32 alpha, Int32 beta, USize ply, USize moveStackIdx, bool cutNode) noexcept {
         static_assert(PV_NODE || !ROOT_NODE);
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
         assert(!(PV_NODE && cutNode));
 
-        USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         std::span<const HistoryStackEntry> histStack = thread.histStack;
         History &history = thread.history;
         SharedHistory *sharedHistory = thread.sharedHistory;
-        SearchStackEntry &curr = thread.stack[rootPly];
+        SearchStackEntry &curr = thread.stack[ply];
+        MoveStackEntry &moves = thread.moveStack[moveStackIdx];
 
         curr.pv.clear();
 
@@ -544,14 +554,14 @@ private:
             return 0;
         }
 
-        if (static_cast<Int32>(rootPly) + 1 > thread.selDepth) {
-            thread.selDepth = static_cast<Int32>(rootPly) + 1;
+        if (static_cast<Int32>(ply) + 1 > thread.selDepth) {
+            thread.selDepth = static_cast<Int32>(ply) + 1;
         }
 
         fdepth = std::min(fdepth, static_cast<Int32>(MAX_PLY - 1) * FDEPTH_SCALE);
 
-        alpha = std::max(alpha, Score::matedIn(static_cast<Int32>(rootPly)));
-        beta = std::min(beta, Score::mateIn(static_cast<Int32>(rootPly)));
+        alpha = std::max(alpha, Score::matedIn(static_cast<Int32>(ply)));
+        beta = std::min(beta, Score::mateIn(static_cast<Int32>(ply)));
         if (alpha >= beta) {
             return alpha;
         }
@@ -561,7 +571,7 @@ private:
         const Int32 drawScore = Score::drawScore(thread.loadNodes());
 
         if constexpr (!ROOT_NODE) {
-            if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
+            if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(ply)) {
                 alpha = drawScore;
                 if (alpha >= beta) {
                     return alpha;
@@ -569,24 +579,24 @@ private:
             }
         }
 
-        if (positionDraw(thread)) {
+        if (positionDraw(thread, ply)) {
             return drawScore;
         }
 
-        if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, rootPly));
+        if (ply >= MAX_PLY) {
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, ply));
         }
 
         if (fdepth <= 0) {
-            return qsearch<PV_NODE>(thread, alpha, beta);
+            return qsearch<PV_NODE>(thread, alpha, beta, ply, moveStackIdx);
         }
 
         SearchStackEntry empty = SearchStackEntry();
-        SearchStackEntry &prev = (!ROOT_NODE) ? thread.stack[rootPly - 1] : empty;
-        SearchStackEntry &next = thread.stack[rootPly + 1];
+        SearchStackEntry &prev = (!ROOT_NODE) ? thread.stack[ply - 1] : empty;
+        SearchStackEntry &next = thread.stack[ply + 1];
 
         HistoryStackEntry emptyHist = HistoryStackEntry();
-        HistoryStackEntry &prevHist = (!ROOT_NODE) ? thread.histStack[rootPly - 1] : emptyHist;
+        HistoryStackEntry &prevHist = (!ROOT_NODE) ? thread.histStack[ply - 1] : emptyHist;
 
         const bool excludedMove = curr.excludedMove != Move::NULL_MOVE;
 
@@ -594,13 +604,13 @@ private:
         bool ttHit = false;
 
         if (!excludedMove) {
-            std::tie(ttEntry, ttHit) = tt_.probe(position.hash(), static_cast<Int32>(rootPly));
+            std::tie(ttEntry, ttHit) = tt_.probe(position.hash(), static_cast<Int32>(ply));
 
             if constexpr (!PV_NODE) {
                 if (ttHit && ttEntry.fdepth >= fdepth && (ttEntry.score <= alpha || cutNode) && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= beta) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= alpha))) {
                     if (ttEntry.score >= beta && ttEntry.move != Move::NULL_MOVE && position.quiet(ttEntry.move) && position.legal(ttEntry.move)) {
                         const Int32 bonus = History::bonus(fdepth, TT_CUTOFF_BONUS_BASE, TT_CUTOFF_BONUS_DEPTH_SCALE, TT_CUTOFF_BONUS_MAX);
-                        history.updateQuietHists(position, histStack, ttEntry.move, rootPly, bonus);
+                        history.updateQuietHists(position, histStack, ttEntry.move, ply, bonus);
                     }
 
                     if (static_cast<Int32>(position.halfmoveClock()) < TT_CUTOFF_MAX_HALFMOVES) {
@@ -627,7 +637,7 @@ private:
                 curr.eval = Score::NONE;
             } else {
                 rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-                const Int32 correction = sharedHistory->correction(position, histStack, rootPly);
+                const Int32 correction = sharedHistory->correction(position, histStack, ply);
                 complexity = std::abs(correction);
                 curr.staticEval = Eval::adjust(rawStaticEval, position, correction);
                 curr.eval = curr.staticEval;
@@ -653,11 +663,11 @@ private:
             if (inCheck) {
                 return false;
             }
-            if (rootPly > 1 && thread.stack[rootPly - 2].staticEval != Score::NONE) {
-                return curr.staticEval > thread.stack[rootPly - 2].staticEval;
+            if (ply > 1 && thread.stack[ply - 2].staticEval != Score::NONE) {
+                return curr.staticEval > thread.stack[ply - 2].staticEval;
             }
-            if (rootPly > 3 && thread.stack[rootPly - 4].staticEval != Score::NONE) {
-                return curr.staticEval > thread.stack[rootPly - 4].staticEval;
+            if (ply > 3 && thread.stack[ply - 4].staticEval != Score::NONE) {
+                return curr.staticEval > thread.stack[ply - 4].staticEval;
             }
             return true;
         }();
@@ -681,7 +691,7 @@ private:
 
                 const Int32 razoringMargin = RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
                 if (fdepth <= RAZORING_MAX_FDEPTH && std::abs(alpha) < RAZORING_MAX_ABS_ALPHA && curr.eval + razoringMargin <= alpha) {
-                    const Int32 score = qsearch<false>(thread, alpha, beta);
+                    const Int32 score = qsearch<false>(thread, alpha, beta, ply, moveStackIdx);
                     if (score <= alpha) {
                         return score;
                     }
@@ -694,7 +704,7 @@ private:
                     return std::max(margin, 0);
                 }();
 
-                if (fdepth >= NMP_MIN_FDEPTH && rootPly >= thread.nmpMinPly && curr.staticEval >= beta + nmpBetaMargin && position.nullPly() > 0 && !(ttEntry.bound == TTBound::UPPER && ttEntry.score < beta) && position.nonPawnMaterial(position.sideToMove())) {
+                if (fdepth >= NMP_MIN_FDEPTH && ply >= thread.nmpMinPly && curr.staticEval >= beta + nmpBetaMargin && position.nullPly() > 0 && !(ttEntry.bound == TTBound::UPPER && ttEntry.score < beta) && position.nonPawnMaterial(position.sideToMove())) {
                     tt_.prefetch(position.hashAfter(Move::NULL_MOVE));
 
                     const Int32 freduction = [&] {
@@ -706,11 +716,11 @@ private:
 
                     const Int32 reducedFdepth = fdepth - freduction;
 
-                    makeNullMove(thread);
+                    makeNullMove(thread, ply);
 
-                    const Int32 score = -search<false, false>(thread, reducedFdepth, -beta, -beta + 1, !cutNode);
+                    const Int32 score = -search<false, false>(thread, reducedFdepth, -beta, -beta + 1, ply + 1, moveStackIdx, !cutNode);
 
-                    unmakeNullMove(thread);
+                    unmakeNullMove(thread, ply);
 
                     if (timeUp()) {
                         return 0;
@@ -721,8 +731,8 @@ private:
                             return (Score::win(score)) ? beta : score;
                         }
 
-                        thread.nmpMinPly = rootPly + static_cast<USize>(NMP_MIN_PLY_FDEPTH_SCALE * reducedFdepth / (FDEPTH_SCALE * 128));
-                        const Int32 verifScore = search<false, false>(thread, reducedFdepth, beta - 1, beta, true);
+                        thread.nmpMinPly = ply + static_cast<USize>(NMP_MIN_PLY_FDEPTH_SCALE * reducedFdepth / (FDEPTH_SCALE * 128));
+                        const Int32 verifScore = search<false, false>(thread, reducedFdepth, beta - 1, beta, ply, moveStackIdx + 1, true);
                         thread.nmpMinPly = 0;
 
                         if (timeUp()) {
@@ -741,7 +751,7 @@ private:
                 if (fdepth >= PROBCUT_MIN_FDEPTH && !ttPV && !Score::decisive(beta) && (ttMove == Move::NULL_MOVE || noisyTTMove) && !(ttHit && ttEntry.fdepth >= probcutFdepth && ttEntry.score < probcutBeta)) {
                     const Int32 seeMargin = (probcutBeta - curr.staticEval) * PROBCUT_SEE_EVAL_SCALE / 128;
 
-                    MoveOrder moveOrder = MoveOrder::probcut(position, history, histStack, ttMove, rootPly);
+                    MoveOrder moveOrder = MoveOrder::probcut(moves.list, position, history, histStack, ttMove, ply);
                     Move move;
                     while ((move = moveOrder.next()) != Move::NULL_MOVE) {
                         if (!position.see(move, seeMargin)) {
@@ -750,21 +760,21 @@ private:
 
                         tt_.prefetch(position.hashAfter(move));
 
-                        makeMove(thread, move);
+                        makeMove(thread, move, ply);
 
-                        Int32 score = -qsearch<false>(thread, -probcutBeta, -probcutBeta + 1);
+                        Int32 score = -qsearch<false>(thread, -probcutBeta, -probcutBeta + 1, ply + 1, moveStackIdx + 1);
                         if (score >= probcutBeta) {
-                            score = -search<false, false>(thread, probcutFdepth - FDEPTH_SCALE, -probcutBeta, -probcutBeta + 1, !cutNode);
+                            score = -search<false, false>(thread, probcutFdepth - FDEPTH_SCALE, -probcutBeta, -probcutBeta + 1, ply + 1, moveStackIdx + 1, !cutNode);
                         }
 
-                        unmakeMove(thread);
+                        unmakeMove(thread, ply);
 
                         if (timeUp()) {
                             return 0;
                         }
 
                         if (score >= probcutBeta) {
-                            tt_.write(position.hash(), static_cast<Int32>(rootPly), score, rawStaticEval, move, probcutFdepth, false, TTBound::LOWER);
+                            tt_.write(position.hash(), static_cast<Int32>(ply), score, rawStaticEval, move, probcutFdepth, false, TTBound::LOWER);
                             return score;
                         }
                     }
@@ -779,12 +789,12 @@ private:
 
         TTBound bound = TTBound::UPPER;
 
-        MoveList quietsTried;
-        MoveList noisiesTried;
+        moves.quietsTried.clear();
+        moves.noisiesTried.clear();
 
         Int32 movesTried = 0;
 
-        MoveOrder moveOrder = MoveOrder::search(position, history, histStack, ttMove, rootPly);
+        MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, ply);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if constexpr (ROOT_NODE) {
@@ -793,7 +803,7 @@ private:
                 }
 
                 if (printInfo_ && thread.main() && timeManager_.elapsed() > CURR_MOVE_DELAY_INTERVAL) {
-                    uciCurrMove_(move, movesTried + 1, thread.rootDepth);
+                    uciCurrMove_(move, movesTried + 1, thread.depth);
                 }
             }
 
@@ -804,7 +814,7 @@ private:
             const bool quiet = position.quiet(move);
             const bool quietOrLosing = moveOrder.stage() > MoveOrderStage::GOOD_NOISY;
 
-            const Int32 historyScore = (quiet) ? history.quietScore(position, histStack, move, rootPly) : history.noisyScore(position, move);
+            const Int32 historyScore = (quiet) ? history.quietScore(position, histStack, move, ply) : history.noisyScore(position, move);
 
             const Int32 baseLMR = LMR_TABLE[quiet][static_cast<USize>(fdepth / FDEPTH_SCALE)][static_cast<USize>(movesTried + 1)];
 
@@ -865,7 +875,7 @@ private:
                         const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
 
                         curr.excludedMove = move;
-                        const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, cutNode);
+                        const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, ply, moveStackIdx + 1, cutNode);
                         curr.excludedMove = Move::NULL_MOVE;
 
                         if (score < seBeta) {
@@ -904,13 +914,13 @@ private:
 
             const UInt64 nodesBefore = thread.loadNodes();
 
-            makeMove(thread, move);
+            makeMove(thread, move, ply);
             movesTried++;
 
             if (quiet) {
-                quietsTried.add(move);
+                moves.quietsTried.add(move);
             } else {
-                noisiesTried.add(move);
+                moves.noisiesTried.add(move);
             }
 
             const bool givesCheck = position.givesCheck();
@@ -934,7 +944,7 @@ private:
                 freduction /= 1024;
 
                 const Int32 reducedFdepth = std::min(std::max(newFdepth - freduction, FDEPTH_SCALE), newFdepth);
-                score = -search<false, false>(thread, reducedFdepth, -alpha - 1, -alpha, true);
+                score = -search<false, false>(thread, reducedFdepth, -alpha - 1, -alpha, ply + 1, moveStackIdx + 1, true);
                 if (score > alpha && reducedFdepth < newFdepth) {
                     if (score > bestScore + DEEPER_SEARCH_MARGIN_BASE + (DEEPER_SEARCH_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE) / 64) {
                         newFdepth += DEEPER_SEARCH_FEXTENSION;
@@ -942,24 +952,24 @@ private:
                     if (score < bestScore + SHALLOWER_SEARCH_MARGIN) {
                         newFdepth -= SHALLOWER_SEARCH_FREDUCTION;
                     }
-                    score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, !cutNode);
+                    score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, ply + 1, moveStackIdx + 1, !cutNode);
 
                     if (quiet && (score <= alpha || score >= beta)) {
                         Int32 bonus = (score >= beta) ? History::bonus(fdepth, HISTORY_BONUS_BASE, HISTORY_BONUS_DEPTH_SCALE, HISTORY_BONUS_MAX) : -History::bonus(fdepth, HISTORY_PENALTY_BASE, HISTORY_PENALTY_DEPTH_SCALE, HISTORY_PENALTY_MAX);
-                        history.updateContHist(position, histStack, move, rootPly, bonus);
+                        history.updateContHist(position, histStack, move, ply, bonus);
                     }
                 }
             } else if (!PV_NODE || movesTried > 1) {
-                score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, !cutNode);
+                score = -search<false, false>(thread, newFdepth, -alpha - 1, -alpha, ply + 1, moveStackIdx + 1, !cutNode);
             }
 
             if constexpr (PV_NODE) {
                 if (movesTried == 1 || score > alpha) {
-                    score = -search<true, false>(thread, newFdepth, -beta, -alpha, false);
+                    score = -search<true, false>(thread, newFdepth, -beta, -alpha, ply + 1, moveStackIdx + 1, false);
                 }
             }
 
-            unmakeMove(thread);
+            unmakeMove(thread, ply);
 
             if (timeUp()) {
                 return 0;
@@ -1037,17 +1047,17 @@ private:
 
                     if (quiet) {
                         const Int32 quietBonus = History::bonus(historyFdepth, QUIET_BONUS_BASE, QUIET_BONUS_DEPTH_SCALE, QUIET_BONUS_MAX);
-                        history.updateQuietHists(position, histStack, move, rootPly, quietBonus);
+                        history.updateQuietHists(position, histStack, move, ply, quietBonus);
 
                         const Int32 quietPenalty = -History::bonus(historyFdepth, QUIET_PENALTY_BASE, QUIET_PENALTY_DEPTH_SCALE, QUIET_PENALTY_MAX);
-                        for (const Move quietMove : quietsTried) {
+                        for (const Move quietMove : moves.quietsTried) {
                             if (quietMove != move) {
-                                history.updateQuietHists(position, histStack, quietMove, rootPly, quietPenalty);
+                                history.updateQuietHists(position, histStack, quietMove, ply, quietPenalty);
                             }
                         }
 
                         const Int32 noisyPenalty = -History::bonus(historyFdepth, QUIET_MOVE_NOISY_PENALTY_BASE, QUIET_MOVE_NOISY_PENALTY_DEPTH_SCALE, QUIET_MOVE_NOISY_PENALTY_MAX);
-                        for (const Move noisyMove : noisiesTried) {
+                        for (const Move noisyMove : moves.noisiesTried) {
                             if (noisyMove != move) {
                                 history.updateNoisyHists(position, noisyMove, noisyPenalty);
                             }
@@ -1057,7 +1067,7 @@ private:
                         history.updateNoisyHists(position, move, noisyBonus);
 
                         const Int32 noisyPenalty = -History::bonus(historyFdepth, NOISY_MOVE_NOISY_PENALTY_BASE, NOISY_MOVE_NOISY_PENALTY_DEPTH_SCALE, NOISY_MOVE_NOISY_PENALTY_MAX);
-                        for (const Move noisyMove : noisiesTried) {
+                        for (const Move noisyMove : moves.noisiesTried) {
                             if (noisyMove != move) {
                                 history.updateNoisyHists(position, noisyMove, noisyPenalty);
                             }
@@ -1074,7 +1084,7 @@ private:
                 return alpha;
             }
 
-            return (inCheck) ? Score::matedIn(static_cast<Int32>(rootPly)) : Score::STALEMATE;
+            return (inCheck) ? Score::matedIn(static_cast<Int32>(ply)) : Score::STALEMATE;
         }
 
         // TODO: pcm
@@ -1084,11 +1094,11 @@ private:
         if (!excludedMove) {
             // FIXME
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTBound::LOWER && curr.staticEval >= bestScore) && !(bound == TTBound::UPPER && curr.staticEval <= bestScore)) {
-                sharedHistory->updateCorrHist(position, histStack, rootPly, fdepth, bestScore, curr.staticEval);
+                sharedHistory->updateCorrHist(position, histStack, ply, fdepth, bestScore, curr.staticEval);
             }
 
             if (!ROOT_NODE || thread.pvIndex == 0) {
-                tt_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, fdepth, ttPV, bound);
+                tt_.write(position.hash(), static_cast<Int32>(ply), bestScore, rawStaticEval, bestMove, fdepth, ttPV, bound);
             }
         }
 
@@ -1096,16 +1106,16 @@ private:
     }
 
     template<bool PV_NODE>
-    Int32 qsearch(SearchThread &thread, Int32 alpha, Int32 beta) noexcept {
+    Int32 qsearch(SearchThread &thread, Int32 alpha, Int32 beta, USize ply, USize moveStackIdx) noexcept {
         assert(Score::MIN <= alpha && alpha <= Score::MAX);
         assert(Score::MIN <= beta && beta <= Score::MAX);
 
-        USize &rootPly = thread.rootPly;
         Position &position = thread.position;
         std::span<const HistoryStackEntry> histStack = thread.histStack;
         History &history = thread.history;
         SharedHistory *sharedHistory = thread.sharedHistory;
-        SearchStackEntry &curr = thread.stack[rootPly];
+        SearchStackEntry &curr = thread.stack[ply];
+        MoveStackEntry &moves = thread.moveStack[moveStackIdx];
 
         curr.pv.clear();
 
@@ -1118,32 +1128,32 @@ private:
             return 0;
         }
 
-        if (static_cast<Int32>(rootPly) + 1 > thread.selDepth) {
-            thread.selDepth = static_cast<Int32>(rootPly) + 1;
+        if (static_cast<Int32>(ply) + 1 > thread.selDepth) {
+            thread.selDepth = static_cast<Int32>(ply) + 1;
         }
 
         const bool inCheck = position.inCheck();
 
         const Int32 drawScore = Score::drawScore(thread.loadNodes());
 
-        if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(rootPly)) {
+        if (position.halfmoveClock() >= 3 && alpha < drawScore && position.upcomingRepetition(ply)) {
             alpha = drawScore;
             if (alpha >= beta) {
                 return alpha;
             }
         }
 
-        if (positionDraw(thread)) {
+        if (positionDraw(thread, ply)) {
             return drawScore;
         }
 
-        if (rootPly >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, rootPly));
+        if (ply >= MAX_PLY) {
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, ply));
         }
 
-        SearchStackEntry &next = thread.stack[rootPly + 1];
+        SearchStackEntry &next = thread.stack[ply + 1];
 
-        auto [ttEntry, ttHit] = tt_.probe(position.hash(), static_cast<Int32>(rootPly));
+        auto [ttEntry, ttHit] = tt_.probe(position.hash(), static_cast<Int32>(ply));
         const bool ttPV = PV_NODE || (ttHit && ttEntry.pv);
         const Move ttMove = ttEntry.move;
 
@@ -1160,7 +1170,7 @@ private:
             curr.eval = Score::NONE;
         } else {
             rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-            curr.staticEval = Eval::adjust(rawStaticEval, position, sharedHistory->correction(position, histStack, rootPly));
+            curr.staticEval = Eval::adjust(rawStaticEval, position, sharedHistory->correction(position, histStack, ply));
             curr.eval = curr.staticEval;
             if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= curr.staticEval) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= curr.staticEval))) {
                 curr.eval = ttEntry.score;
@@ -1188,7 +1198,7 @@ private:
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = (inCheck) ? Score::MIN : curr.eval;
 
-        MoveOrder moveOrder = MoveOrder::qsearch(position, history, histStack, ttMove, rootPly, inCheck);
+        MoveOrder moveOrder = MoveOrder::qsearch(moves.list, position, history, histStack, ttMove, ply, inCheck);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if (!inCheck && movesTried >= QSEARCH_MAX_MOVES) {
@@ -1206,12 +1216,12 @@ private:
 
             tt_.prefetch(position.hashAfter(move));
 
-            makeMove(thread, move);
+            makeMove(thread, move, ply);
             movesTried++;
 
-            const Int32 score = -qsearch<PV_NODE>(thread, -beta, -alpha);
+            const Int32 score = -qsearch<PV_NODE>(thread, -beta, -alpha, ply + 1, moveStackIdx + 1);
 
-            unmakeMove(thread);
+            unmakeMove(thread, ply);
 
             if (timeUp()) {
                 return 0;
@@ -1243,28 +1253,28 @@ private:
         }
 
         if (inCheck && movesTried == 0) {
-            return Score::matedIn(static_cast<Int32>(rootPly));
+            return Score::matedIn(static_cast<Int32>(ply));
         }
 
-        tt_.write(position.hash(), static_cast<Int32>(rootPly), bestScore, rawStaticEval, bestMove, 0, ttPV, bound);
+        tt_.write(position.hash(), static_cast<Int32>(ply), bestScore, rawStaticEval, bestMove, 0, ttPV, bound);
 
         return bestScore;
     }
 
-    bool positionDraw(SearchThread &thread) const noexcept {
+    bool positionDraw(SearchThread &thread, USize ply) const noexcept {
         bool noMoves = false;
         if (thread.position.halfmoveClock() >= 100) {
             MoveList moves;
             MoveGen::legal(thread.position, moves);
             noMoves = moves.empty();
         }
-        return thread.position.draw(thread.rootPly, noMoves);
+        return thread.position.draw(ply, noMoves);
     }
 
-    void makeMove(SearchThread &thread, Move move) noexcept {
+    void makeMove(SearchThread &thread, Move move, USize ply) noexcept {
         assert(move != Move::NULL_MOVE);
 
-        HistoryStackEntry &currHist = thread.histStack[thread.rootPly];
+        HistoryStackEntry &currHist = thread.histStack[ply];
         currHist.move = move;
         currHist.quietMove = thread.position.quiet(move);
         currHist.movedPiece = thread.position.movedPiece(move);
@@ -1276,15 +1286,13 @@ private:
 
         thread.position.makeMove(move, thread.nnue.state());
         thread.incNodes();
-        thread.rootPly++;
     }
 
-    void unmakeMove(SearchThread &thread) noexcept {
-        assert(thread.rootPly != 0);
-        thread.rootPly--;
+    void unmakeMove(SearchThread &thread, USize ply) noexcept {
+        assert(ply != 0);
         thread.position.unmakeMove(thread.nnue.state());
 
-        HistoryStackEntry &currHist = thread.histStack[thread.rootPly];
+        HistoryStackEntry &currHist = thread.histStack[ply];
         currHist.move = Move::NULL_MOVE;
         currHist.quietMove = false;
         currHist.movedPiece = Piece::NONE;
@@ -1295,8 +1303,8 @@ private:
         currHist.contCorrHistSubtable = nullptr;
     }
 
-    void makeNullMove(SearchThread &thread) noexcept {
-        HistoryStackEntry &currHist = thread.histStack[thread.rootPly];
+    void makeNullMove(SearchThread &thread, USize ply) noexcept {
+        HistoryStackEntry &currHist = thread.histStack[ply];
         currHist.move = Move::NULL_MOVE;
         currHist.quietMove = false;
         currHist.movedPiece = Piece::NONE;
@@ -1307,15 +1315,13 @@ private:
         currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, Move::NULL_MOVE);
 
         thread.position.makeNullMove();
-        thread.rootPly++;
     }
 
-    void unmakeNullMove(SearchThread &thread) noexcept {
-        assert(thread.rootPly != 0);
-        thread.rootPly--;
+    void unmakeNullMove(SearchThread &thread, USize ply) noexcept {
+        assert(ply != 0);
         thread.position.unmakeMove();
 
-        HistoryStackEntry &currHist = thread.histStack[thread.rootPly];
+        HistoryStackEntry &currHist = thread.histStack[ply];
         currHist.move = Move::NULL_MOVE;
         currHist.quietMove = false;
         currHist.movedPiece = Piece::NONE;
@@ -1339,7 +1345,7 @@ private:
             }
         }
 
-        const auto threadWeight = [&](const SearchThread &thread) { return (thread.bestMove().score - lowestRootScore + THREAD_WEIGHT_SCORE_OFFSET) * thread.rootDepth; };
+        const auto threadWeight = [&](const SearchThread &thread) { return (thread.bestMove().score - lowestRootScore + THREAD_WEIGHT_SCORE_OFFSET) * thread.depth; };
 
         std::unordered_map<UInt16, Int32> moveVotes = {};
 

@@ -1105,9 +1105,9 @@ public:
         return pieces(PieceType::PAWN).count() + (3 * pieces(PieceType::KNIGHT).count()) + (3 * pieces(PieceType::BISHOP).count()) + (5 * pieces(PieceType::ROOK).count()) + (9 * pieces(PieceType::QUEEN).count());
     }
 
-    bool repetition3Fold(USize searchPly) const noexcept { return state().repetitions > 1 || (state().repetitions == 1 && state().repetitionPly < searchPly); }
+    bool repetition3Fold(USize ply) const noexcept { return state().repetitions > 1 || (state().repetitions == 1 && state().repetitionPly < ply); }
 
-    bool upcomingRepetition(USize searchPly) const noexcept {
+    bool upcomingRepetition(USize ply) const noexcept {
         if (states_.size() <= 3) {
             return false;
         }
@@ -1130,7 +1130,7 @@ public:
             }
 
             if (!((Attacks::between(move.from(), move.to()) ^ Bitboard(move.to())) & occupied())) {
-                if (searchPly > i) {
+                if (ply > i) {
                     return true;
                 }
 
@@ -1180,8 +1180,8 @@ public:
         return false;
     }
 
-    constexpr bool draw(USize searchPly, bool noMoves) const noexcept {
-        return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(searchPly);
+    constexpr bool draw(USize ply, bool noMoves) const noexcept {
+        return halfMoveDraw(noMoves) || insufficientMaterial() || repetition3Fold(ply);
     }
 
     bool see(Move move, Int32 margin) const noexcept {
