@@ -872,7 +872,7 @@ private:
                     if (fdepth >= SE_MIN_FDEPTH_BASE + ttPV * SE_MIN_FDEPTH_PV_SCALE && ttEntry.fdepth + SE_TT_FDEPTH_MARGIN >= fdepth && ttEntry.bound != TTBound::UPPER && !Score::decisive(ttEntry.score)) {
                         const Int32 seBetaMargin = SE_BETA_MARGIN_BASE + SE_BETA_MARGIN_PREV_PV_SCALE * (ttPV && !PV_NODE);
                         const Int32 seBeta = std::max(ttEntry.score - fdepth * seBetaMargin / (FDEPTH_SCALE * 128), Score::MATED_IN_MAX);
-                        const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
+                        const Int32 seFdepth = fdepth / 2;
 
                         curr.excludedMove = move;
                         const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, ply, moveStackIdx + 1, cutNode);
