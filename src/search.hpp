@@ -669,7 +669,7 @@ private:
                 const Int32 rfpMargin = [&] {
                     Int32 margin = 0;
                     margin += RFP_MARGIN_LINEAR_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                    margin += RFP_MARGIN_QUADRATIC_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE);
+                    margin += RFP_MARGIN_QUADRATIC_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE;
                     margin -= RFP_MARGIN_IMPROVING_SCALE * improving;
                     margin += RFP_MARGIN_COMPLEXITY_SCALE * complexity / 1024;
                     return margin;
@@ -775,7 +775,7 @@ private:
         next.failHighCount = 0; // FIXME
 
         Move bestMove = Move::NULL_MOVE;
-        Int32 bestScore = Score::MIN;
+        Int32 bestScore = Score::NONE;
 
         TTBound bound = TTBound::UPPER;
 
@@ -834,7 +834,7 @@ private:
                             continue;
                         }
                     } else {
-                        const Int32 noisyHistoryPruningMargin = NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE) + NOISY_HISTORY_PRUNING_MARGIN_OFFSET;
+                        const Int32 noisyHistoryPruningMargin = NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE + NOISY_HISTORY_PRUNING_MARGIN_OFFSET;
                         if (lmrFdepth <= NOISY_HISTORY_PRUNING_MAX_FDEPTH && historyScore < noisyHistoryPruningMargin) {
                             continue;
                         }
@@ -849,32 +849,54 @@ private:
                         }
                     }
 
-                    const Int32 seePruningMargin = (quiet) ? (QUIET_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth * fdepth / (FDEPTH_SCALE * FDEPTH_SCALE)) : (std::min(NOISY_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE - historyScore / NOISY_SEE_PRUNING_MARGIN_HISTORY_DIVISOR, 0));
+                    const Int32 seePruningMargin = (quiet) ? (QUIET_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE) : (std::min(NOISY_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE - historyScore / NOISY_SEE_PRUNING_MARGIN_HISTORY_DIVISOR, 0));
                     if (quietOrLosing && !position.see(move, seePruningMargin)) {
                         continue;
                     }
                 }
             }
 
-            const bool doSE = !ROOT_NODE && rootPly < static_cast<USize>(SE_ROOT_DEPTH_SCALE * thread.rootDepth) && !excludedMove && fdepth >= SE_MIN_FDEPTH + ttPV && ttMove == move && ttEntry.fdepth >= fdepth - SE_TABLE_FDEPTH_MARGIN && ttEntry.bound != TTBound::UPPER && std::abs(ttEntry.score) < Score::KNOWN_WIN;
             Int32 fextension = 0;
+            if constexpr (!ROOT_NODE) {
+                if (move == ttMove && !excludedMove) {
+                    if (fdepth >= SE_MIN_FDEPTH_BASE + ttPV * SE_MIN_FDEPTH_PV_SCALE && ttEntry.fdepth + SE_TT_FDEPTH_MARGIN >= fdepth && ttEntry.bound != TTBound::UPPER && !Score::decisive(ttEntry.score)) {
+                        const Int32 seBetaMargin = SE_BETA_MARGIN_BASE + SE_BETA_MARGIN_PREV_PV_SCALE * (ttPV && !PV_NODE);
+                        const Int32 seBeta = std::max(ttEntry.score - fdepth * seBetaMargin / (FDEPTH_SCALE * 128), Score::MATED_IN_MAX);
+                        const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
 
-            if (doSE) {
-                const Int32 seBeta = std::max(Score::MATED, ttEntry.score - (SE_BETA_SCALE + SE_BETA_SCALE_PV * (ttPV && !PV_NODE)) * fdepth / (64 * FDEPTH_SCALE));
-                const Int32 seFdepth = (fdepth - FDEPTH_SCALE) / 2;
+                        curr.excludedMove = move;
+                        const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, cutNode);
+                        curr.excludedMove = Move::NULL_MOVE;
 
-                curr.excludedMove = move;
-                const Int32 score = search<false, false>(thread, seFdepth, seBeta - 1, seBeta, cutNode);
-                curr.excludedMove = Move::NULL_MOVE;
+                        if (score < seBeta) {
+                            const Int32 doubleFextMargin = [&] {
+                                Int32 margin = SE_DOUBLE_FEXT_MARGIN_BASE;
+                                margin += SE_DOUBLE_FEXT_MARGIN_PV_SCALE * PV_NODE;
+                                margin += SE_DOUBLE_FEXT_MARGIN_NEW_PV_SCALE * (PV_NODE && !(ttHit && ttEntry.pv));
+                                margin += SE_DOUBLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 16777216;
+                                return margin;
+                            }();
 
-                if (score < seBeta) {
-                    fextension = (!PV_NODE && score < seBeta - SE_DOUBLE_EXT_MARGIN) ? (SE_BASE_DOUBLE_FEXTENSTION + (quiet && score < seBeta - SE_TRIPLE_EXT_MARGIN) * FDEPTH_SCALE) : SE_SINGLE_FEXTENSION;
-                } else if (seBeta >= beta) {
-                    return seBeta;
-                } else if (ttEntry.score >= beta) {
-                    fextension = -SE_BASE_DOUBLE_NEG_FEXTENSION + PV_NODE * FDEPTH_SCALE;
-                } else if (ttEntry.score <= alpha && cutNode) {
-                    fextension = -SE_SINGLE_NEG_FEXTENSION;
+                            const Int32 tripleFextMargin = [&] {
+                                Int32 margin = SE_TRIPLE_FEXT_MARGIN_BASE;
+                                margin += SE_TRIPLE_FEXT_MARGIN_PV_SCALE * PV_NODE;
+                                margin += SE_TRIPLE_FEXT_MARGIN_NEW_PV_SCALE * (PV_NODE && !(ttHit && ttEntry.pv));
+                                margin += SE_TRIPLE_FEXT_MARGIN_NOISY_SCALE * noisyTTMove;
+                                margin += SE_TRIPLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 16777216;
+                                return margin;
+                            }();
+
+                            fextension = SE_SINGLE_FEXTENSION + (score < seBeta - doubleFextMargin) * SE_DOUBLE_FEXTENSION + (score < seBeta - tripleFextMargin) * SE_TRIPLE_FEXTENSION;
+                        } else if (!PV_NODE && score >= beta) {
+                            return (!Score::decisive(score)) ? Utils::linInterp<1024>(score, beta, MULTICUT_FAIL_FIRM_T) : score;
+                        } else if (ttEntry.score >= beta) {
+                            fextension = -SE_NEG_FEXTENSION;
+                        } else if (cutNode) {
+                            fextension = -SE_CUTNODE_NEG_FEXTENSION;
+                        }
+                    } else if (fdepth <= LDSE_MAX_FDEPTH && !inCheck && ttEntry.bound == TTBound::LOWER) {
+                        fextension = (curr.staticEval <= alpha - LDSE_SINGLE_FEXT_MARGIN) * LDSE_SINGLE_FEXTENSION + (!PV_NODE && !noisyTTMove && ttEntry.fdepth + LDSE_DOUBLE_FEXT_TT_FDEPTH_MARGIN >= fdepth && curr.staticEval <= alpha - LDSE_DOUBLE_FEXT_MARGIN) * LDSE_DOUBLE_FEXTENSION;
+                    }
                 }
             }
 
@@ -892,9 +914,6 @@ private:
             }
 
             const bool givesCheck = position.givesCheck();
-            if (!doSE && givesCheck) {
-                fextension = CHECK_FEXTENSION;
-            }
 
             Int32 newFdepth = fdepth - FDEPTH_SCALE + fextension;
             Int32 score = 0;
