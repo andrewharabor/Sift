@@ -673,7 +673,13 @@ private:
 
         if constexpr (!PV_NODE) {
             if (!inCheck && !excludedMove) {
-                // TODO: hindsight reduction
+                if (prev.freduction >= HINDSIGHT_FEXT_MIN_FREDUCTION && prev.staticEval != Score::NONE && curr.staticEval + prev.staticEval <= 0) {
+                    fdepth += HINDSIGHT_FEXTENSION;
+                }
+
+                if (fdepth >= HINDSIGHT_FRED_MIN_FDEPTH && prev.freduction >= HINDSIGHT_FRED_MIN_FREDUCTION && prev.staticEval != Score::NONE && curr.staticEval + prev.staticEval >= HINDSIGHT_FRED_MARGIN) {
+                    fdepth -= HINDSIGHT_FREDUCTION;
+                }
 
                 const Int32 rfpMargin = [&] {
                     Int32 margin = 0;
