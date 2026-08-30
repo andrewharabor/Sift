@@ -1092,11 +1092,12 @@ private:
 
         // TODO: pcm
 
-        // TODO: fail firm stuff
+        if (bestScore >= beta && !Score::decisive(bestScore) && !Score::decisive(beta)) {
+            bestScore = (bestScore * fdepth + beta * FDEPTH_SCALE) / (fdepth + FDEPTH_SCALE);
+        }
 
         if (!excludedMove) {
-            // FIXME
-            if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && !(bound == TTBound::LOWER && curr.staticEval >= bestScore) && !(bound == TTBound::UPPER && curr.staticEval <= bestScore)) {
+            if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && (bound == TTBound::EXACT || (bound == TTBound::LOWER && bestScore > curr.staticEval) || (bound == TTBound::UPPER && bestScore < curr.staticEval))) {
                 sharedHistory->updateCorrHist(position, histStack, ply, fdepth, bestScore, curr.staticEval);
             }
 
