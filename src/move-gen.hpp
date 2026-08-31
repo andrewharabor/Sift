@@ -14,24 +14,6 @@
 
 namespace Sift {
 
-enum class PieceFlag : UInt8 {
-    PAWN = 1 << 0,
-    KNIGHT = 1 << 1,
-    BISHOP = 1 << 2,
-    ROOK = 1 << 3,
-    QUEEN = 1 << 4,
-    KING = 1 << 5,
-    ALL = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5)
-};
-
-constexpr bool operator&(PieceFlag left, PieceFlag right) noexcept {
-    return (static_cast<UInt8>(left) & static_cast<UInt8>(right)) != 0;
-}
-
-constexpr PieceFlag operator|(PieceFlag left, PieceFlag right) noexcept {
-    return static_cast<PieceFlag>(static_cast<UInt8>(left) | static_cast<UInt8>(right));
-}
-
 enum class MoveGenType : UInt8 {
     ALL,
     NOISY,
@@ -41,11 +23,11 @@ enum class MoveGenType : UInt8 {
 class MoveGen {
 public:
     template<MoveGenType MOVE_GEN_TYPE = MoveGenType::ALL>
-    static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
+    static void legal(const Position &position, MoveList &moveList) {
         if (position.sideToMove() == Color::WHITE) {
-            legal<Color::WHITE, MOVE_GEN_TYPE>(position, moveList, pieces);
+            legal<Color::WHITE, MOVE_GEN_TYPE>(position, moveList);
         } else {
-            legal<Color::BLACK, MOVE_GEN_TYPE>(position, moveList, pieces);
+            legal<Color::BLACK, MOVE_GEN_TYPE>(position, moveList);
         }
     }
 
@@ -272,7 +254,7 @@ private:
     }
 
     template<Color::ColorEnum COLOR_ENUM, MoveGenType MOVE_GEN_TYPE>
-    static void legal(const Position &position, MoveList &moveList, PieceFlag pieces = PieceFlag::ALL) {
+    static void legal(const Position &position, MoveList &moveList) {
         static_assert(COLOR_ENUM != Color::NONE);
         constexpr Color COLOR = Color(COLOR_ENUM);
 
@@ -300,17 +282,15 @@ private:
             static_assert(false);
         }
 
-        if (pieces & PieceFlag::KING) {
-            auto genKing = [&](Square square) { return king(square, threats) & movable; };
-            whileBitboardAddMoves(moveList, Bitboard(kingSquare), genKing);
+        auto genKing = [&](Square square) { return king(square, threats) & movable; };
+        whileBitboardAddMoves(moveList, Bitboard(kingSquare), genKing);
 
-            if constexpr (MOVE_GEN_TYPE != MoveGenType::NOISY) {
-                if (checks == 0) {
-                    Bitboard castlingMoves = castling<COLOR_ENUM>(position, kingSquare, occupied, threats);
-                    while (castlingMoves) {
-                        const Square to = Square(castlingMoves.pop());
-                        moveList.add(Move(kingSquare, to, MoveType::CASTLING));
-                    }
+        if constexpr (MOVE_GEN_TYPE != MoveGenType::NOISY) {
+            if (checks == 0) {
+                Bitboard castlingMoves = castling<COLOR_ENUM>(position, kingSquare, occupied, threats);
+                while (castlingMoves) {
+                    const Square to = Square(castlingMoves.pop());
+                    moveList.add(Move(kingSquare, to, MoveType::CASTLING));
                 }
             }
         }
@@ -321,33 +301,23 @@ private:
 
         movable &= checkMask;
 
-        if (pieces & PieceFlag::PAWN) {
-            pawn<COLOR_ENUM, MOVE_GEN_TYPE>(position, moveList, kingSquare, occupied, enemyOccupied, diagonalPins, orthogonalPins, checkMask);
-        }
+        pawn<COLOR_ENUM, MOVE_GEN_TYPE>(position, moveList, kingSquare, occupied, enemyOccupied, diagonalPins, orthogonalPins, checkMask);
 
-        if (pieces & PieceFlag::KNIGHT) {
-            Bitboard knights = position.pieces(PieceType::KNIGHT, COLOR) & ~(diagonalPins | orthogonalPins);
-            auto genKnight = [&](Square square) { return knight(square) & movable; };
-            whileBitboardAddMoves(moveList, knights, genKnight);
-        }
+        Bitboard knights = position.pieces(PieceType::KNIGHT, COLOR) & ~(diagonalPins | orthogonalPins);
+        auto genKnight = [&](Square square) { return knight(square) & movable; };
+        whileBitboardAddMoves(moveList, knights, genKnight);
 
-        if (pieces & PieceFlag::BISHOP) {
-            Bitboard bishops = position.pieces(PieceType::BISHOP, COLOR) & ~orthogonalPins;
-            auto genBishop = [&](Square square) { return bishop(square, occupied, diagonalPins) & movable; };
-            whileBitboardAddMoves(moveList, bishops, genBishop);
-        }
+        Bitboard bishops = position.pieces(PieceType::BISHOP, COLOR) & ~orthogonalPins;
+        auto genBishop = [&](Square square) { return bishop(square, occupied, diagonalPins) & movable; };
+        whileBitboardAddMoves(moveList, bishops, genBishop);
 
-        if (pieces & PieceFlag::ROOK) {
-            Bitboard rooks = position.pieces(PieceType::ROOK, COLOR) & ~diagonalPins;
-            auto genRook = [&](Square square) { return rook(square, occupied, orthogonalPins) & movable; };
-            whileBitboardAddMoves(moveList, rooks, genRook);
-        }
+        Bitboard rooks = position.pieces(PieceType::ROOK, COLOR) & ~diagonalPins;
+        auto genRook = [&](Square square) { return rook(square, occupied, orthogonalPins) & movable; };
+        whileBitboardAddMoves(moveList, rooks, genRook);
 
-        if (pieces & PieceFlag::QUEEN) {
-            Bitboard queens = position.pieces(PieceType::QUEEN, COLOR) & ~(diagonalPins & orthogonalPins);
-            auto genQueen = [&](Square square) { return queen(square, occupied, diagonalPins, orthogonalPins) & movable; };
-            whileBitboardAddMoves(moveList, queens, genQueen);
-        }
+        Bitboard queens = position.pieces(PieceType::QUEEN, COLOR) & ~(diagonalPins & orthogonalPins);
+        auto genQueen = [&](Square square) { return queen(square, occupied, diagonalPins, orthogonalPins) & movable; };
+        whileBitboardAddMoves(moveList, queens, genQueen);
     }
 
     template<typename Function>
