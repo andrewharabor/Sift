@@ -84,7 +84,7 @@ public:
                     continue;
                 }
 
-                const Int32 margin = -score / MOVE_ORDER_GOOD_NOISY_SCORE_DIVISOR + MOVE_ORDER_GOOD_NOISY_SEE_OFFSET;
+                const Int32 margin = -score / MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_DIVISOR + MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET;
                 if (!position_.see(move, margin)) {
                     moves_[badNoisyEnd_] = moves_[i];
                     moveScores_[badNoisyEnd_] = moveScores_[i];
@@ -304,7 +304,7 @@ private:
             Int32 &score = moveScores_[i];
 
             score += history_.quietScore(position_, histStack_, move, ply_);
-            score += MOVE_ORDER_DIRECT_CHECK_BONUS * (position_.directCheck(move) && position_.see(move, MOVE_ORDER_DIRECT_CHECK_SEE_MARGIN));
+            score += MOVE_ORDER_DIRECT_CHECK_BONUS * (position_.directCheck(move) && position_.see(move, MOVE_ORDER_DIRECT_CHECK_MARGIN));
         }
     }
 

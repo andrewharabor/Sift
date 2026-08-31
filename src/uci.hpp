@@ -332,7 +332,7 @@ private:
 
         std::cout << "info depth " << info.depth;
         std::cout << " seldepth " << info.selDepth;
-        std::cout << " multipv " << (info.pvIndex + 1);
+        std::cout << " multipv " << (info.pvIdx + 1);
 
         std::cout << " score ";
         if (Score::mate(info.score)) {

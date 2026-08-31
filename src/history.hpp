@@ -101,7 +101,6 @@ using MajorPieceCorrHistTable = SharedCorrHistTable;
 
 struct HistoryStackEntry {
     Move move;
-    bool quietMove;
     Piece movedPiece;
     Piece capturedPiece;
     Bitboard threats;

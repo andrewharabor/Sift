@@ -18,7 +18,7 @@ struct PerftTest {
 
 class Perft {
 public:
-    static constexpr USize TEST_COUNT = 128;
+    static constexpr USize TEST_COUNT = 127;
 
     static constexpr std::array<PerftTest, TEST_COUNT> TEST_CASES = {
         PerftTest("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, 119060324),
@@ -83,7 +83,6 @@ public:
         PerftTest("6KQ/8/8/8/8/8/8/7k b - - 0 1", 6, 391507),
         PerftTest("K7/8/8/3Q4/4q3/8/8/7k w - - 0 1", 6, 3370175),
         PerftTest("6qk/8/8/8/8/8/8/7K b - - 0 1", 6, 419369),
-        PerftTest("6KQ/8/8/8/8/8/8/7k b - - 0 1", 6, 391507),
         PerftTest("K7/8/8/3Q4/4q3/8/8/7k b - - 0 1", 6, 3370175),
         PerftTest("8/8/8/8/8/K7/P7/k7 w - - 0 1", 6, 6249),
         PerftTest("8/8/8/8/8/7K/7P/7k w - - 0 1", 6, 6249),

@@ -45,11 +45,11 @@ public:
             const MS time = std::max(MS(1), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
             const MS increment = limits.clock.increment[static_cast<USize>(color)];
 
-            const Float64 baseTimeScale = static_cast<Float64>((limits.clock.movesToGo > 0) ? limits.clock.movesToGo : TIME_BASE_SCALE);
-            const auto baseTime = (time / baseTimeScale) + (increment * Utils::floatDiv100(TIME_INCREMENT_SCALE));
+            const Float64 baseTimeScale = static_cast<Float64>((limits.clock.movesToGo > 0) ? limits.clock.movesToGo : TIME_BASE_TIME_SCALE);
+            const auto baseTime = (time / baseTimeScale) + (increment * Utils::floatDiv100(TIME_BASE_TIME_INCREMENT_SCALE));
 
-            softBound_ = std::chrono::duration_cast<MS>(baseTime * Utils::floatDiv100(TIME_SOFT_SCALE));
-            hardBound_ = std::chrono::duration_cast<MS>(time * Utils::floatDiv100(TIME_HARD_SCALE));
+            softBound_ = std::chrono::duration_cast<MS>(baseTime * Utils::floatDiv100(TIME_SOFT_BOUND_SCALE));
+            hardBound_ = std::chrono::duration_cast<MS>(time * Utils::floatDiv100(TIME_HARD_BOUND_SCALE));
 
             if (moveCount == 1) {
                 softBound_ = std::min(softBound_, ONE_MOVE_BOUND);
@@ -113,30 +113,30 @@ private:
         }
 
         if (Score::mate(score)) {
-            return Utils::floatDiv100(TIME_MATE_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_SCALE_MATE_SCORE);
         }
 
         if (Score::win(score)) {
-            return Utils::floatDiv100(TIME_WIN_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_SCALE_WIN_SCORE);
         }
 
         if (Score::loss(score)) {
-            return Utils::floatDiv100(TIME_LOSS_SCORE_SCALE);
+            return Utils::floatDiv100(TIME_SCALE_LOSS_SCORE);
         }
 
         Float64 scale = 1.0;
 
         const Float64 nodeFraction = static_cast<Float64>(bestMoveNodes) / static_cast<Float64>(nodes + 1);
-        scale *= std::max(Utils::floatDiv100(TIME_NODE_SCALE_MIN), Utils::floatDiv100(TIME_NODE_SCALE_BASE) - (nodeFraction * Utils::floatDiv100(TIME_NODE_SCALE_COEFF)));
+        scale *= std::max(Utils::floatDiv100(TIME_SCALE_NODE_MIN), Utils::floatDiv100(TIME_SCALE_NODE_BASE) - (nodeFraction * Utils::floatDiv100(TIME_SCALE_NODE_SCALE)));
 
-        if (depth >= TIME_STABILITY_SCALE_MIN_DEPTH) {
-            scale *= std::min(Utils::floatDiv100(TIME_STABILITY_SCALE_MAX), Utils::floatDiv100(TIME_STABILITY_SCALE_MIN) + (Utils::floatDiv100(TIME_STABILITY_SCALE_COEFF) * std::pow(static_cast<Float64>(stability_) + Utils::floatDiv100(TIME_STABILITY_SCALE_OFFSET), Utils::floatDiv100(TIME_STABILITY_SCALE_POWER))));
+        if (depth >= TIME_SCALE_STABILITY_MIN_DEPTH) {
+            scale *= std::min(Utils::floatDiv100(TIME_SCALE_STABILITY_MAX), Utils::floatDiv100(TIME_SCALE_STABILITY_BASE) + (Utils::floatDiv100(TIME_SCALE_STABILITY_SCALE) * std::pow(static_cast<Float64>(stability_) + Utils::floatDiv100(TIME_SCALE_STABILITY_OFFSET), Utils::floatDiv100(TIME_SCALE_STABILITY_POWER))));
         }
 
-        const Float64 scoreChange = static_cast<Float64>(score - averageScore_) / Utils::floatDiv100(TIME_SCORE_SCALE_CHANGE_COEFF);
-        const Float64 scoreScaleSignCoeff = (scoreChange > 0) ? Utils::floatDiv100(TIME_SCORE_SCALE_POS_SCALE) : Utils::floatDiv100(TIME_SCORE_SCALE_NEG_SCALE);
-        const Float64 invScale = (scoreChange * Utils::floatDiv100(TIME_SCORE_SCALE_COEFF)) / (std::abs(scoreChange) + Utils::floatDiv100(TIME_SCORE_SCALE_OFFSET)) * scoreScaleSignCoeff;
-        scale *= std::clamp(1.0 - invScale, Utils::floatDiv100(TIME_SCORE_SCALE_MIN), Utils::floatDiv100(TIME_SCORE_SCALE_MAX));
+        const Float64 scoreChange = static_cast<Float64>(score - averageScore_) / Utils::floatDiv100(TIME_SCALE_SCORE_CHANGE_DIVISOR);
+        const Float64 scoreScaleSignCoeff = (scoreChange > 0) ? Utils::floatDiv100(TIME_SCALE_POS_SCORE_SCALE) : Utils::floatDiv100(TIME_SCALE_NEG_SCORE_SCALE);
+        const Float64 invScale = (scoreChange * Utils::floatDiv100(TIME_SCALE_SCORE_SCALE)) / (std::abs(scoreChange) + Utils::floatDiv100(TIME_SCALE_SCORE_OFFSET)) * scoreScaleSignCoeff;
+        scale *= std::clamp(1.0 - invScale, Utils::floatDiv100(TIME_SCALE_SCORE_MIN), Utils::floatDiv100(TIME_SCALE_SCORE_MAX));
         averageScore_ = Utils::linInterp<8>(averageScore_, score, 1);
 
         scale = std::max(scale, Utils::floatDiv100(TIME_SCALE_MIN));
