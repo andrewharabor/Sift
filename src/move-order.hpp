@@ -84,7 +84,7 @@ public:
                     continue;
                 }
 
-                const Int32 margin = -score / MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_DIVISOR + MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET;
+                const Int32 margin = -score * MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_SCALE / 1024 + MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET;
                 if (!position_.see(move, margin)) {
                     moves_[badNoisyEnd_] = moves_[i];
                     moveScores_[badNoisyEnd_] = moveScores_[i];
@@ -290,7 +290,7 @@ private:
             const Move move = moves_[i];
             Int32 &score = moveScores_[i];
 
-            score += history_.noisyScore(position_, move) / MOVE_ORDER_NOISY_SCORE_DIVISOR;
+            score += history_.noisyScore(position_, move) * MOVE_ORDER_NOISY_SCORE_SCALE / 1024;
             score += SEE_PIECE_VALUES[static_cast<USize>(position_.capturedPiece(move).type())];
             if (move.type() == MoveType::PROMOTION) {
                 score += SEE_PIECE_VALUES[static_cast<USize>(move.promotion())] - SEE_PIECE_VALUES[static_cast<USize>(PieceType::PAWN)];

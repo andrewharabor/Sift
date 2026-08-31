@@ -561,8 +561,8 @@ private:
             return 0;
         }
 
-        if (static_cast<Int32>(ply) + 1 > thread.selDepth) {
-            thread.selDepth = static_cast<Int32>(ply) + 1;
+        if constexpr (PV_NODE) {
+            thread.selDepth = std::max(thread.selDepth, static_cast<Int32>(ply + 1));
         }
 
         fdepth = std::min(fdepth, static_cast<Int32>(MAX_PLY - 1) * FDEPTH_SCALE);
@@ -803,12 +803,11 @@ private:
 
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::NONE;
-
         TTBound bound = TTBound::UPPER;
 
-        Int32 movesTried = 0;
-
         Int32 alphaRaises = 0;
+
+        Int32 movesTried = 0;
 
         MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, ply);
         Move move;
@@ -1049,7 +1048,6 @@ private:
                 alpha = score;
                 bestMove = move;
                 bound = TTBound::EXACT;
-
                 alphaRaises++;
 
                 if constexpr (PV_NODE) {
@@ -1063,7 +1061,6 @@ private:
 
             if (score >= beta) {
                 bound = TTBound::LOWER;
-
                 break;
             }
 
@@ -1081,7 +1078,7 @@ private:
                 return alpha;
             }
 
-            return (inCheck) ? Score::matedIn(static_cast<Int32>(ply)) : Score::STALEMATE;
+            return (inCheck) ? Score::matedIn(static_cast<Int32>(ply)) : 0;
         }
 
         if (bestMove != Move::NULL_MOVE) {
@@ -1167,8 +1164,8 @@ private:
             return 0;
         }
 
-        if (static_cast<Int32>(ply) + 1 > thread.selDepth) {
-            thread.selDepth = static_cast<Int32>(ply) + 1;
+        if constexpr (PV_NODE) {
+            thread.selDepth = std::max(thread.selDepth, static_cast<Int32>(ply + 1));
         }
 
         const bool inCheck = position.inCheck();
@@ -1228,29 +1225,31 @@ private:
             }
         }
 
-        const Int32 fpMargin = (inCheck) ? Score::MIN : curr.eval + QSEARCH_FP_MARGIN;
+        const Int32 futility = (inCheck) ? Score::MIN : curr.eval + QSEARCH_FP_MARGIN;
 
+        Move bestMove = Move::NULL_MOVE;
+        Int32 bestScore = (inCheck) ? Score::MIN : curr.eval;
         TTBound bound = TTBound::UPPER;
 
         Int32 movesTried = 0;
 
-        Move bestMove = Move::NULL_MOVE;
-        Int32 bestScore = (inCheck) ? Score::MIN : curr.eval;
-
-        MoveOrder moveOrder = MoveOrder::qsearch(moves.list, position, history, histStack, ttMove, ply, inCheck);
+        const bool forceEvasions = !PV_NODE && ttMove != Move::NULL_MOVE && ttEntry.bound != TTBound::UPPER && position.quiet(ttMove);
+        MoveOrder moveOrder = MoveOrder::qsearch(moves.list, position, history, histStack, ttMove, ply, forceEvasions);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
-            if (!inCheck && movesTried >= QSEARCH_MAX_MOVES) {
-                break;
-            }
+            if (!Score::loss(bestScore)) {
+                if (movesTried >= QSEARCH_MAX_MOVES) {
+                    break;
+                }
 
-            if (bestScore > Score::LOSS && !position.see(move, 0)) {
-                continue;
-            }
+                if (!inCheck && futility <= alpha && !position.see(move, 1)) {
+                    bestScore = std::max(bestScore, futility);
+                    continue;
+                }
 
-            if (!inCheck && fpMargin <= alpha && !position.see(move, 1)) {
-                bestScore = std::max(bestScore, fpMargin);
-                continue;
+                if (!position.see(move, QSEARCH_SEE_PRUNING_MARGIN)) {
+                    continue;
+                }
             }
 
             tt_.prefetch(position.hashAfter(move));
@@ -1266,27 +1265,28 @@ private:
                 return 0;
             }
 
+            if (!Score::loss(score)) {
+                moveOrder.skipQuiets();
+            }
+
             if (score > bestScore) {
                 bestScore = score;
+            }
 
-                if (bestScore > alpha) {
-                    alpha = bestScore;
-                    bestMove = move;
+            if (score > alpha) {
+                alpha = score;
+                bestMove = move;
+                bound = TTBound::EXACT;
 
-                    curr.pv.clear();
-                    curr.pv.add(move);
-                    for (Move pvMove : next.pv) {
-                        curr.pv.add(pvMove);
-                    }
-                }
-
-                if (bestScore >= beta) {
-                    bound = TTBound::LOWER;
-                    break;
+                curr.pv.clear();
+                curr.pv.add(move);
+                for (Move pvMove : next.pv) {
+                    curr.pv.add(pvMove);
                 }
             }
 
-            if (position.quiet(move) && inCheck && bestScore > Score::LOSS) {
+            if (score >= beta) {
+                bound = TTBound::LOWER;
                 break;
             }
         }

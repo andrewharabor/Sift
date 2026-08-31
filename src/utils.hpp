@@ -37,15 +37,6 @@ public:
 
     static void stringToLower(std::string &string) { std::transform(string.begin(), string.end(), string.begin(), [](unsigned char c) { return std::tolower(c); }); }
 
-    static constexpr UInt64 murmurHash3(UInt64 value) noexcept {
-        value ^= value >> 33;
-        value *= 0xFF51AFD7ED558CCD;
-        value ^= value >> 33;
-        value *= 0xC4CEB9FE1A85EC53;
-        value ^= value >> 33;
-        return value;
-    };
-
     static constexpr Float64 floatDiv100(Int32 value) noexcept { return static_cast<Float64>(value) / 100.0; }
 
     template<std::integral auto K>
@@ -76,7 +67,7 @@ public:
         U64 c2 = aHi * bLo + c1;
         U64 c3 = aLo * bHi + (c2 & 0xFFFFFFFF);
         return aHi * bHi + (c2 >> 32) + (c3 >> 32);
-}
+    }
 
 #endif
 
@@ -87,7 +78,7 @@ public:
     static void alignedFree(void *ptr) {
         if (ptr == nullptr) {
             return;
-        }
+}
         _aligned_free(ptr);
 }
 

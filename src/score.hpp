@@ -8,22 +8,18 @@ namespace Sift {
 namespace Score {
 static constexpr Int32 MAX_PLY = 251;
 
-static constexpr Int32 ZERO = 0;
-static constexpr Int32 MAX = 32767;
+static constexpr Int32 MAX = 32700;
 static constexpr Int32 MIN = -MAX;
-static constexpr Int32 NONE = -33000;
+static constexpr Int32 NONE = -32767;
 
-static constexpr Int32 MATE = 32700;
+static constexpr Int32 MATE = 32000;
 static constexpr Int32 MATED = -MATE;
 static constexpr Int32 MATE_IN_MAX = MATE - MAX_PLY;
 static constexpr Int32 MATED_IN_MAX = -MATE_IN_MAX;
 
 static constexpr Int32 WIN = 25000;
 static constexpr Int32 LOSS = -WIN;
-static constexpr Int32 KNOWN_WIN = 10000;
-static constexpr Int32 KNOWN_LOSS = -KNOWN_WIN;
 
-static constexpr Int32 STALEMATE = 0;
 static constexpr Int32 DRAW_MAX = 2;
 static constexpr Int32 DRAW_MIN = -DRAW_MAX;
 
