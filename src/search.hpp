@@ -46,8 +46,8 @@ struct SearchStackEntry {
 struct MoveStackEntry {
     MoveList list;
 
-    MoveList quietsTried;
-    MoveList noisiesTried;
+    MoveList failLowQuiets;
+    MoveList failLowNoisies;
 };
 
 struct SearchInfo {
@@ -156,8 +156,8 @@ struct SearchThread {
             histStack[i].contCorrHistSubtable = nullptr;
 
             moveStack[i].list.clear();
-            moveStack[i].quietsTried.clear();
-            moveStack[i].noisiesTried.clear();
+            moveStack[i].failLowQuiets.clear();
+            moveStack[i].failLowNoisies.clear();
         }
     }
 
@@ -608,7 +608,7 @@ private:
             if constexpr (!PV_NODE) {
                 if (ttHit && ttEntry.fdepth >= fdepth && (ttEntry.score <= alpha || cutNode) && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= beta) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= alpha))) {
                     if (ttEntry.score >= beta && ttEntry.move != Move::NULL_MOVE && position.quiet(ttEntry.move) && position.legal(ttEntry.move)) {
-                        const Int32 bonus = History::bonus(fdepth, TT_CUTOFF_BONUS_BASE, TT_CUTOFF_BONUS_DEPTH_SCALE, TT_CUTOFF_BONUS_MAX);
+                        const Int32 bonus = History::bonus(fdepth, TT_CUTOFF_BONUS_DEPTH_SCALE, TT_CUTOFF_BONUS_OFFSET, TT_CUTOFF_BONUS_MAX);
                         history.updateQuietHists(position, histStack, ttEntry.move, ply, bonus);
                     }
 
@@ -652,7 +652,7 @@ private:
             if constexpr (!ROOT_NODE) {
                 if (!inCheck && prevHist.move != Move::NULL_MOVE && prevHist.quietMove && prev.staticEval != Score::NONE) {
                     const Int32 gain = -prev.staticEval - curr.staticEval;
-                    const Int32 bonus = std::clamp(gain * EVAL_POLICY_BONUS_GAIN_SCALE + EVAL_POLICY_BONUS_BASE, EVAL_POLICY_BONUS_MIN, EVAL_POLICY_BONUS_MAX);
+                    const Int32 bonus = std::clamp(EVAL_POLICY_BONUS_BASE + gain * EVAL_POLICY_BONUS_GAIN_SCALE, EVAL_POLICY_BONUS_MIN, EVAL_POLICY_BONUS_MAX);
                     history.updateMainPawnHists(prevHist, bonus);
                 }
             }
@@ -787,13 +787,13 @@ private:
             }
         }
 
+        moves.failLowQuiets.clear();
+        moves.failLowNoisies.clear();
+
         Move bestMove = Move::NULL_MOVE;
         Int32 bestScore = Score::NONE;
 
         TTBound bound = TTBound::UPPER;
-
-        moves.quietsTried.clear();
-        moves.noisiesTried.clear();
 
         Int32 movesTried = 0;
 
@@ -920,12 +920,6 @@ private:
             makeMove(thread, move, ply);
             movesTried++;
 
-            if (quiet) {
-                moves.quietsTried.add(move);
-            } else {
-                moves.noisiesTried.add(move);
-            }
-
             const bool givesCheck = position.givesCheck();
 
             Int32 newFdepth = fdepth + fextension - FDEPTH_SCALE;
@@ -967,7 +961,7 @@ private:
                     }
 
                     if (quiet && (score <= alpha || score >= beta) && !timeUp()) {
-                        Int32 bonus = (score <= alpha) ? -History::bonus(newFdepth, POST_LMR_PENALTY_BASE, POST_LMR_PENALTY_DEPTH_SCALE, POST_LMR_PENALTY_MAX) : History::bonus(newFdepth, POST_LMR_BONUS_BASE, POST_LMR_BONUS_DEPTH_SCALE, POST_LMR_BONUS_MAX);
+                        Int32 bonus = (score >= beta) ? History::bonus(newFdepth, POST_LMR_BONUS_DEPTH_SCALE, POST_LMR_BONUS_OFFSET, POST_LMR_BONUS_MAX) : -History::bonus(newFdepth, POST_LMR_PENALTY_DEPTH_SCALE, POST_LMR_PENALTY_OFFSET, POST_LMR_PENALTY_MAX);
                         history.updateContHist(position, histStack, move, ply, bonus);
                     }
                 }
@@ -1034,56 +1028,33 @@ private:
 
             if (score > bestScore) {
                 bestScore = score;
+            }
 
-                if (bestScore > alpha) {
-                    alpha = bestScore;
-                    bestMove = move;
-                    bound = TTBound::EXACT;
+            if (score > alpha) {
+                alpha = score;
+                bestMove = move;
+                bound = TTBound::EXACT;
 
-                    if constexpr (PV_NODE) {
-                        curr.pv.clear();
-                        curr.pv.add(move);
-                        for (Move pvMove : next.pv) {
-                            curr.pv.add(pvMove);
-                        }
+                if constexpr (PV_NODE) {
+                    curr.pv.clear();
+                    curr.pv.add(move);
+                    for (Move pvMove : next.pv) {
+                        curr.pv.add(pvMove);
                     }
                 }
+            }
 
-                if (bestScore >= beta) {
-                    bound = TTBound::LOWER;
+            if (score >= beta) {
+                bound = TTBound::LOWER;
 
-                    const Int32 historyFdepth = fdepth + (!inCheck && curr.staticEval <= alpha) * HISTORY_FDEPTH_EVAL_SCALE;
+                break;
+            }
 
-                    if (quiet) {
-                        const Int32 quietBonus = History::bonus(historyFdepth, QUIET_BONUS_BASE, QUIET_BONUS_DEPTH_SCALE, QUIET_BONUS_MAX);
-                        history.updateQuietHists(position, histStack, move, ply, quietBonus);
-
-                        const Int32 quietPenalty = -History::bonus(historyFdepth, QUIET_PENALTY_BASE, QUIET_PENALTY_DEPTH_SCALE, QUIET_PENALTY_MAX);
-                        for (const Move quietMove : moves.quietsTried) {
-                            if (quietMove != move) {
-                                history.updateQuietHists(position, histStack, quietMove, ply, quietPenalty);
-                            }
-                        }
-
-                        const Int32 noisyPenalty = -History::bonus(historyFdepth, QUIET_MOVE_NOISY_PENALTY_BASE, QUIET_MOVE_NOISY_PENALTY_DEPTH_SCALE, QUIET_MOVE_NOISY_PENALTY_MAX);
-                        for (const Move noisyMove : moves.noisiesTried) {
-                            if (noisyMove != move) {
-                                history.updateNoisyHists(position, noisyMove, noisyPenalty);
-                            }
-                        }
-                    } else {
-                        const Int32 noisyBonus = History::bonus(historyFdepth, NOISY_BONUS_BASE, NOISY_BONUS_DEPTH_SCALE, NOISY_BONUS_MAX);
-                        history.updateNoisyHists(position, move, noisyBonus);
-
-                        const Int32 noisyPenalty = -History::bonus(historyFdepth, NOISY_MOVE_NOISY_PENALTY_BASE, NOISY_MOVE_NOISY_PENALTY_DEPTH_SCALE, NOISY_MOVE_NOISY_PENALTY_MAX);
-                        for (const Move noisyMove : moves.noisiesTried) {
-                            if (noisyMove != move) {
-                                history.updateNoisyHists(position, noisyMove, noisyPenalty);
-                            }
-                        }
-                    }
-
-                    break;
+            if (move != bestMove) {
+                if (quiet) {
+                    moves.failLowQuiets.add(move);
+                } else {
+                    moves.failLowNoisies.add(move);
                 }
             }
         }
@@ -1096,7 +1067,32 @@ private:
             return (inCheck) ? Score::matedIn(static_cast<Int32>(ply)) : Score::STALEMATE;
         }
 
-        // TODO: pcm
+        if (bestMove != Move::NULL_MOVE) {
+            const Int32 historyFdepth = fdepth + (!inCheck && curr.staticEval <= bestScore) * HISTORY_FDEPTH_EVAL_SCALE;
+
+            if (position.quiet(bestMove)) {
+                const Int32 quietBonus = History::bonus(historyFdepth, QUIET_BONUS_DEPTH_SCALE, QUIET_BONUS_OFFSET, QUIET_BONUS_MAX);
+                history.updateQuietHists(position, histStack, bestMove, ply, quietBonus);
+
+                const Int32 quietPenalty = -History::bonus(historyFdepth, QUIET_PENALTY_DEPTH_SCALE, QUIET_PENALTY_OFFSET, QUIET_PENALTY_MAX);
+                for (const Move quietMove : moves.failLowQuiets) {
+                    history.updateQuietHists(position, histStack, quietMove, ply, quietPenalty);
+                }
+
+                const Int32 noisyPenalty = -History::bonus(historyFdepth, QUIET_MOVE_NOISY_PENALTY_DEPTH_SCALE, QUIET_MOVE_NOISY_PENALTY_OFFSET, QUIET_MOVE_NOISY_PENALTY_MAX);
+                for (const Move noisyMove : moves.failLowNoisies) {
+                    history.updateNoisyHists(position, noisyMove, noisyPenalty);
+                }
+            } else {
+                const Int32 noisyBonus = History::bonus(historyFdepth, NOISY_BONUS_DEPTH_SCALE, NOISY_BONUS_OFFSET, NOISY_BONUS_MAX);
+                history.updateNoisyHists(position, bestMove, noisyBonus);
+
+                const Int32 noisyPenalty = -History::bonus(historyFdepth, NOISY_MOVE_NOISY_PENALTY_DEPTH_SCALE, NOISY_MOVE_NOISY_PENALTY_OFFSET, NOISY_MOVE_NOISY_PENALTY_MAX);
+                for (const Move noisyMove : moves.failLowNoisies) {
+                    history.updateNoisyHists(position, noisyMove, noisyPenalty);
+                }
+            }
+        } // TODO: pcm
 
         if (bestScore >= beta && !Score::decisive(bestScore) && !Score::decisive(beta)) {
             bestScore = (bestScore * fdepth + beta * FDEPTH_SCALE) / (fdepth + FDEPTH_SCALE);
