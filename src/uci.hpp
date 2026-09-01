@@ -568,7 +568,7 @@ private:
         } else {
             NNUE nnue = NNUE();
             nnue.state().set(position_);
-            const Int32 normedScore = WDL::normalize(Eval::adjusted(position_, nnue, {0, 0}), position_.materialScore());
+            const Int32 normedScore = WDL::normalize(Eval::adjusted(position_, nnue, {0, 0}, {0, 0}), position_.materialScore());
             std::cout << normedScore << " cp";
         }
         std::cout << std::endl;

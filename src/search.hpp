@@ -119,6 +119,8 @@ struct SearchThread {
     Int32 depth;
     Int32 selDepth;
 
+    std::array<Int32, 2> optimism;
+
     USize pvIdx;
 
     std::vector<RootMove> rootMoves;
@@ -143,6 +145,8 @@ struct SearchThread {
         depth = 0;
         selDepth = 0;
         nmpMinPly = 0;
+
+        optimism = {0, 0};
 
         pvIdx = 0;
 
@@ -461,6 +465,12 @@ private:
                     delta += static_cast<Int32>(static_cast<Int64>(std::abs(rootMove.averageSquaredScore)) * static_cast<Int64>(WINDOW_SQUARED_SCORE_SCALE) / 1048576);
                 }
 
+                if (depth >= OPTIMISM_MIN_DEPTH) {
+                    const Int32 optimism = OPTIMISM_SCORE_SCALE * rootMove.averageScore / (std::abs(rootMove.averageScore) + OPTIMISM_DIVISOR_OFFSET);
+                    thread.optimism[static_cast<USize>(thread.position.sideToMove())] = optimism;
+                    thread.optimism[static_cast<USize>(~thread.position.sideToMove())] = -optimism;
+                }
+
                 while (true) {
                     const Int32 fdepth = std::max(depth * FDEPTH_SCALE - freduction, FDEPTH_SCALE);
                     const Int32 score = search<true, true>(thread, fdepth, alpha, beta, 0, 0, false);
@@ -591,7 +601,7 @@ private:
         }
 
         if (ply >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, ply));
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, thread.optimism, contempt_, sharedHistory->correction(position, histStack, ply));
         }
 
         if (fdepth <= 0) {
@@ -649,7 +659,7 @@ private:
                 rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
                 const Int32 correction = sharedHistory->correction(position, histStack, ply);
                 complexity = std::abs(correction);
-                curr.staticEval = Eval::adjust(rawStaticEval, position, correction);
+                curr.staticEval = Eval::adjust(rawStaticEval, position, thread.optimism, correction);
                 curr.eval = curr.staticEval;
                 if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= curr.staticEval) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= curr.staticEval))) {
                     curr.eval = ttEntry.score;
@@ -1184,7 +1194,7 @@ private:
         }
 
         if (ply >= MAX_PLY) {
-            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, contempt_, sharedHistory->correction(position, histStack, ply));
+            return (inCheck) ? 0 : Eval::adjusted(position, thread.nnue, thread.optimism, contempt_, sharedHistory->correction(position, histStack, ply));
         }
 
         SearchStackEntry &next = thread.stack[ply + 1];
@@ -1206,7 +1216,7 @@ private:
             curr.eval = Score::NONE;
         } else {
             rawStaticEval = (ttHit && ttEntry.staticEval != Score::NONE) ? ttEntry.staticEval : Eval::raw(position, thread.nnue, contempt_);
-            curr.staticEval = Eval::adjust(rawStaticEval, position, sharedHistory->correction(position, histStack, ply));
+            curr.staticEval = Eval::adjust(rawStaticEval, position, thread.optimism, sharedHistory->correction(position, histStack, ply));
             curr.eval = curr.staticEval;
             if (ttHit && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= curr.staticEval) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= curr.staticEval))) {
                 curr.eval = ttEntry.score;
