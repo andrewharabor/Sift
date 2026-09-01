@@ -49,7 +49,7 @@ public:
     void resize(USize sizeMB, USize numThreads) noexcept {
         assert(sizeMB > 0);
 
-        const USize newSize = (sizeMB * 1024 * 1024) / sizeof(Bucket);
+        const USize newSize = (sizeMB * 1024 * 1024) / sizeof(Cluster);
 
         if (newSize > capacity_ || newSize <= capacity_ / 2) {
             deallocate();
@@ -66,17 +66,17 @@ public:
             threads.emplace_back([this, i, numThreads] {
                 USize start = (size_ * i) / numThreads;
                 USize end = (size_ * (i + 1)) / numThreads;
-                std::fill(table_ + start, table_ + end, Bucket());
+                std::fill(table_ + start, table_ + end, Cluster());
             });
         }
     }
 
     bool probe(TTEntry &entry, UInt64 hash, Int32 ply) const noexcept {
-        const Bucket &bucket = table_[index(hash)];
+        const Cluster &cluster = table_[index(hash)];
         const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
-        for (USize i = 0; i < ENTRIES; i++) {
-            if (bucket.entries[i].hash16 == hash16) {
-                const RawEntry &raw = bucket.entries[i];
+        for (USize i = 0; i < CLUSTER_SIZE; i++) {
+            if (cluster.entries[i].hash16 == hash16) {
+                const RawEntry &raw = cluster.entries[i];
                 entry.score = retrieve(raw.score, ply);
                 entry.staticEval = static_cast<Int32>(raw.staticEval);
                 entry.move = raw.move;
@@ -93,23 +93,23 @@ public:
     void write(UInt64 hash, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
         const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
         const Int32 depth = fdepth / FDEPTH_SCALE;
-        Bucket &bucket = table_[index(hash)];
+        Cluster &cluster = table_[index(hash)];
         Int32 bestQuality = std::numeric_limits<Int32>::max();
         USize replaceIndex = 0;
-        for (USize i = 0; i < ENTRIES; i++) {
-            if (bucket.entries[i].hash16 == hash16) {
+        for (USize i = 0; i < CLUSTER_SIZE; i++) {
+            if (cluster.entries[i].hash16 == hash16) {
                 replaceIndex = i;
                 break;
             }
 
-            const Int32 entryQuality = quality(bucket.entries[i].gen(), bucket.entries[i].depth);
+            const Int32 entryQuality = quality(cluster.entries[i].gen(), cluster.entries[i].depth);
             if (entryQuality < bestQuality) {
                 bestQuality = entryQuality;
                 replaceIndex = i;
             }
         }
 
-        RawEntry &replace = bucket.entries[replaceIndex];
+        RawEntry &replace = cluster.entries[replaceIndex];
         if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.gen() != age_ || depth + TT_REPLACE_DEPTH_SCALE + (TT_REPLACE_PV_SCALE * pv) > replace.depth) {
             if (move != Move::NULL_MOVE || replace.hash16 != hash16) {
                 replace.move = move;
@@ -128,20 +128,20 @@ public:
         USize count = 0;
         USize sampleSize = std::min(size_, static_cast<USize>(1000));
         for (USize i = 0; i < sampleSize; i++) {
-            for (USize j = 0; j < ENTRIES; j++) {
+            for (USize j = 0; j < CLUSTER_SIZE; j++) {
                 const RawEntry &entry = table_[i].entries[j];
                 if (entry.bound() != TTBound::NONE && entry.gen() == age_) {
                     count++;
                 }
             }
         }
-        return (count * 1000) / (sampleSize * ENTRIES);
+        return (count * 1000) / (sampleSize * CLUSTER_SIZE);
     }
 
     void incrementAge() noexcept { age_ = (age_ + 1) % GENERATIONS; }
 
 private:
-    static constexpr USize ENTRIES = 3;
+    static constexpr USize CLUSTER_SIZE = 3;
     static constexpr Int32 GENERATIONS = 8;
 
     struct RawEntry {
@@ -161,12 +161,12 @@ private:
         }
     };
 
-    struct alignas(64) Bucket {
-        RawEntry entries[ENTRIES];
+    struct alignas(64) Cluster {
+        RawEntry entries[CLUSTER_SIZE];
         UInt8 padding[2];
     };
 
-    Bucket *table_;
+    Cluster *table_;
     USize size_;
     USize capacity_;
     Int32 age_;
@@ -206,16 +206,16 @@ private:
         static constexpr USize PAGE_SIZE = 4096;
 #endif
 
-        const USize trueNewSize = ((newSize * sizeof(Bucket) + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
+        const USize trueNewSize = ((newSize * sizeof(Cluster) + PAGE_SIZE - 1) / PAGE_SIZE) * PAGE_SIZE;
 
-        table_ = static_cast<Bucket *>(Utils::alignedAlloc(trueNewSize, PAGE_SIZE));
+        table_ = static_cast<Cluster *>(Utils::alignedAlloc(trueNewSize, PAGE_SIZE));
 
 #if defined(__linux__)
         madvise(table_, trueNewSize, MADV_HUGEPAGE);
 #endif
 
         size_ = newSize;
-        capacity_ = trueNewSize / sizeof(Bucket);
+        capacity_ = trueNewSize / sizeof(Cluster);
     }
 
     void deallocate() noexcept {
