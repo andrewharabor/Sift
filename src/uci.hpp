@@ -552,7 +552,6 @@ private:
         std::unique_lock<std::mutex> lock = lockStdout();
 
         genLegalMoves();
-        std::cout << "moves ";
         for (const Move move : legalMoves_) {
             std::cout << std::string(move) << " ";
         }
@@ -562,7 +561,6 @@ private:
     void eval() const {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        std::cout << "static eval ";
         if (position_.inCheck()) {
             std::cout << "(none)";
         } else {
@@ -576,12 +574,12 @@ private:
 
     void fen() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "fen " << position_.fen() << std::endl;
+        std::cout << position_.fen() << std::endl;
     }
 
     void hash() const {
         std::unique_lock<std::mutex> lock = lockStdout();
-        std::cout << "zobrist hash " << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase << std::endl;
+        std::cout << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase << std::endl;
     }
 
     void help() const {
