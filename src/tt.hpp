@@ -75,12 +75,12 @@ public:
         const Cluster &cluster = table_[index(hash)];
         const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
         for (USize i = 0; i < CLUSTER_SIZE; i++) {
-            if (cluster.entries[i].hash16 == hash16) {
+            if (cluster.entries[i].filled && cluster.entries[i].hash16 == hash16) {
                 const RawEntry &raw = cluster.entries[i];
                 entry.score = retrieve(raw.score, ply);
                 entry.staticEval = static_cast<Int32>(raw.staticEval);
                 entry.move = raw.move;
-                entry.fdepth = static_cast<Int32>(raw.depth) * FDEPTH_SCALE;
+                entry.fdepth = static_cast<Int32>(raw.fdepth);
                 entry.pv = raw.pv();
                 entry.bound = raw.bound();
                 return true;
@@ -92,33 +92,33 @@ public:
 
     void write(UInt64 hash, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
         const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
-        const Int32 depth = fdepth / FDEPTH_SCALE;
         Cluster &cluster = table_[index(hash)];
-        Int32 bestQuality = std::numeric_limits<Int32>::max();
-        USize replaceIndex = 0;
+        Int32 replaceQuality = std::numeric_limits<Int32>::max();
+        USize replaceIdx = 0;
         for (USize i = 0; i < CLUSTER_SIZE; i++) {
-            if (cluster.entries[i].hash16 == hash16) {
-                replaceIndex = i;
+            if (!cluster.entries[i].filled || cluster.entries[i].hash16 == hash16) {
+                replaceIdx = i;
                 break;
             }
 
-            const Int32 entryQuality = quality(cluster.entries[i].gen(), cluster.entries[i].depth);
-            if (entryQuality < bestQuality) {
-                bestQuality = entryQuality;
-                replaceIndex = i;
+            const Int32 entryQuality = quality(static_cast<Int32>(cluster.entries[i].age()), static_cast<Int32>(cluster.entries[i].fdepth));
+            if (entryQuality < replaceQuality) {
+                replaceQuality = entryQuality;
+                replaceIdx = i;
             }
         }
 
-        RawEntry &replace = cluster.entries[replaceIndex];
-        if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.gen() != age_ || depth + TT_REPLACE_DEPTH_SCALE + (TT_REPLACE_PV_SCALE * pv) > replace.depth) {
+        RawEntry &replace = cluster.entries[replaceIdx];
+        if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.age() != age_ || fdepth + TT_REPLACE_DEPTH_MARGIN + (TT_REPLACE_PV_SCALE * pv) > static_cast<Int32>(replace.fdepth)) {
             if (move != Move::NULL_MOVE || replace.hash16 != hash16) {
                 replace.move = move;
             }
             replace.hash16 = hash16;
             replace.score = store(score, ply);
             replace.staticEval = static_cast<Int16>(staticEval);
-            replace.depth = static_cast<UInt8>(depth);
-            replace.setBoundPVGen(bound, pv, static_cast<UInt8>(age_));
+            replace.fdepth = static_cast<UInt16>(fdepth);
+            replace.setBoundPVAge(bound, pv, static_cast<UInt8>(age_));
+            replace.filled = 1;
         }
     }
 
@@ -130,7 +130,7 @@ public:
         for (USize i = 0; i < sampleSize; i++) {
             for (USize j = 0; j < CLUSTER_SIZE; j++) {
                 const RawEntry &entry = table_[i].entries[j];
-                if (entry.bound() != TTBound::NONE && entry.gen() == age_) {
+                if (entry.filled && entry.age() == age_) {
                     count++;
                 }
             }
@@ -138,45 +138,43 @@ public:
         return (count * 1000) / (sampleSize * CLUSTER_SIZE);
     }
 
-    void incrementAge() noexcept { age_ = (age_ + 1) % GENERATIONS; }
+    void age() noexcept { age_ = (age_ + 1) & MAX_AGE; }
 
 private:
-    static constexpr USize CLUSTER_SIZE = 3;
-    static constexpr Int32 GENERATIONS = 8;
+    static constexpr USize CLUSTER_SIZE = 5;
+    static constexpr Int32 MAX_AGE = 31;
 
     struct RawEntry {
         UInt16 hash16;
         Int16 score;
         Int16 staticEval;
         Move move;
-        UInt8 depth;
-        UInt8 boundPVGen;
+        UInt16 fdepth;
+        UInt8 boundPVAge;
+        UInt8 filled;
 
-        TTBound bound() const { return static_cast<TTBound>(boundPVGen & 3); }
-        bool pv() const { return boundPVGen & 4; }
-        UInt8 gen() const { return boundPVGen >> 3; }
+        TTBound bound() const { return static_cast<TTBound>(boundPVAge & 3); }
+        bool pv() const { return boundPVAge & 4; }
+        UInt8 age() const { return boundPVAge >> 3; }
 
-        void setBoundPVGen(TTBound bound, bool pv, UInt8 gen) {
-            boundPVGen = static_cast<UInt8>(bound) | (static_cast<UInt8>(pv << 2) | static_cast<UInt8>(gen << 3));
-        }
+        void setBoundPVAge(TTBound bound, bool pv, UInt8 age) { boundPVAge = static_cast<UInt8>(bound) | (static_cast<UInt8>(pv << 2) | static_cast<UInt8>(age << 3)); }
     };
 
     struct alignas(64) Cluster {
         RawEntry entries[CLUSTER_SIZE];
-        UInt8 padding[2];
+        UInt8 padding[4];
     };
+
+    static_assert(sizeof(Cluster) == 64);
 
     Cluster *table_;
     USize size_;
     USize capacity_;
     Int32 age_;
 
-    Int32 quality(Int32 age, Int32 depth) const noexcept {
-        Int32 ageDiff = (age_ - age) % GENERATIONS;
-        if (ageDiff < 0) {
-            ageDiff += GENERATIONS;
-        }
-        return depth - (TT_QUALITY_AGE_DIFF_SCALE * ageDiff);
+    Int32 quality(Int32 age, Int32 fdepth) const noexcept {
+        Int32 ageDiff = (MAX_AGE + 1 + age_ - age) & MAX_AGE;
+        return TT_QUALITY_FDEPTH_SCALE * fdepth / FDEPTH_SCALE - (TT_QUALITY_AGE_DIFF_SCALE * ageDiff);
     }
 
     Int32 retrieve(Int16 score, Int32 ply) const noexcept {

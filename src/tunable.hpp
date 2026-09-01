@@ -102,9 +102,10 @@ inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 m
 
 static constexpr Int32 FDEPTH_SCALE = 128;
 
-static constexpr UInt8 TT_REPLACE_DEPTH_SCALE = 4;
-static constexpr UInt8 TT_REPLACE_PV_SCALE = 2;
-static constexpr Int32 TT_QUALITY_AGE_DIFF_SCALE = 2;
+TUNABLE(TT_REPLACE_DEPTH_MARGIN, 512, 0, 0, 0);
+TUNABLE(TT_REPLACE_PV_SCALE, 256, 0, 0, 0);
+TUNABLE(TT_QUALITY_FDEPTH_SCALE, 128, 0, 0, 0);
+TUNABLE(TT_QUALITY_AGE_DIFF_SCALE, 256, 0, 0, 0);
 
 static inline std::array<Int32, 7> MVV_PIECE_VALUES;
 

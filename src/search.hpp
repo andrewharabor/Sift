@@ -308,7 +308,7 @@ public:
             return;
         }
 
-        tt_.incrementAge();
+        tt_.age();
 
         multiPV_ = static_cast<USize>(OPTIONS["MultiPV"].spinValue());
 
@@ -342,7 +342,7 @@ public:
         MoveList legalMoves;
         MoveGen::legal(position, legalMoves);
 
-        tt_.incrementAge();
+        tt_.age();
 
         multiPV_ = static_cast<USize>(OptionList::DEFAULT_MULTI_PV);
 
