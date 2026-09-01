@@ -621,7 +621,7 @@ private:
         bool ttHit = false;
 
         if (!excludedMove) {
-            std::tie(ttEntry, ttHit) = tt_.probe(position.hash(), static_cast<Int32>(ply));
+            ttHit = tt_.probe(ttEntry, position.hash(), static_cast<Int32>(ply));
 
             if constexpr (!PV_NODE) {
                 if (ttHit && ttEntry.fdepth >= fdepth && (ttEntry.score <= alpha || cutNode) && ((ttEntry.bound == TTBound::EXACT) || (ttEntry.bound == TTBound::LOWER && ttEntry.score >= beta) || (ttEntry.bound == TTBound::UPPER && ttEntry.score <= alpha))) {
@@ -1199,7 +1199,8 @@ private:
 
         SearchStackEntry &next = thread.stack[ply + 1];
 
-        auto [ttEntry, ttHit] = tt_.probe(position.hash(), static_cast<Int32>(ply));
+        TTEntry ttEntry = TTEntry();
+        const bool ttHit = tt_.probe(ttEntry, position.hash(), static_cast<Int32>(ply));
         const bool ttPV = PV_NODE || (ttHit && ttEntry.pv);
         const Move ttMove = ttEntry.move;
 

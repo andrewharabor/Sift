@@ -71,32 +71,23 @@ public:
         }
     }
 
-    std::pair<TTEntry, bool> probe(UInt64 key, Int32 ply) const noexcept {
+    bool probe(TTEntry &entry, UInt64 key, Int32 ply) const noexcept {
         const Bucket &bucket = table_[index(key)];
-        USize entryIndex = 0;
-        bool found = false;
         const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
         for (USize i = 0; i < ENTRIES; i++) {
             if (bucket.entries[i].key16 == key16) {
-                entryIndex = i;
-                found = true;
-                break;
+                const RawEntry &raw = bucket.entries[i];
+                entry.score = retrieve(raw.score, ply);
+                entry.staticEval = static_cast<Int32>(raw.staticEval);
+                entry.move = raw.move;
+                entry.fdepth = static_cast<Int32>(raw.depth) * FDEPTH_SCALE;
+                entry.pv = raw.pv();
+                entry.bound = raw.bound();
+                return true;
             }
         }
 
-        if (!found) {
-            return {TTEntry(), false};
-        }
-
-        const RawEntry &entry = bucket.entries[entryIndex];
-        TTEntry result = TTEntry();
-        result.score = retrieve(entry.score, ply);
-        result.staticEval = static_cast<Int32>(entry.staticEval);
-        result.move = entry.move;
-        result.fdepth = static_cast<Int32>(entry.depth) * FDEPTH_SCALE;
-        result.pv = entry.pv();
-        result.bound = entry.bound();
-        return {result, true};
+        return false;
     }
 
     void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
