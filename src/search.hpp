@@ -808,6 +808,10 @@ private:
             }
         }
 
+        if (fdepth >= IIR2_MIN_FDEPTH && !excludedMove && cutNode && !ttHit) {
+            fdepth -= IIR2_FREDUCTION;
+        }
+
         moves.failLowQuiets.clear();
         moves.failLowNoisies.clear();
 
