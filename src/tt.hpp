@@ -71,11 +71,11 @@ public:
         }
     }
 
-    bool probe(TTEntry &entry, UInt64 key, Int32 ply) const noexcept {
-        const Bucket &bucket = table_[index(key)];
-        const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
+    bool probe(TTEntry &entry, UInt64 hash, Int32 ply) const noexcept {
+        const Bucket &bucket = table_[index(hash)];
+        const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
         for (USize i = 0; i < ENTRIES; i++) {
-            if (bucket.entries[i].key16 == key16) {
+            if (bucket.entries[i].hash16 == hash16) {
                 const RawEntry &raw = bucket.entries[i];
                 entry.score = retrieve(raw.score, ply);
                 entry.staticEval = static_cast<Int32>(raw.staticEval);
@@ -90,14 +90,14 @@ public:
         return false;
     }
 
-    void write(UInt64 key, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
-        const UInt16 key16 = static_cast<UInt16>(key & 0xFFFF);
+    void write(UInt64 hash, Int32 ply, Int32 score, Int32 staticEval, Move move, Int32 fdepth, bool pv, TTBound bound) noexcept {
+        const UInt16 hash16 = static_cast<UInt16>(hash & 0xFFFF);
         const Int32 depth = fdepth / FDEPTH_SCALE;
-        Bucket &bucket = table_[index(key)];
+        Bucket &bucket = table_[index(hash)];
         Int32 bestQuality = std::numeric_limits<Int32>::max();
         USize replaceIndex = 0;
         for (USize i = 0; i < ENTRIES; i++) {
-            if (bucket.entries[i].key16 == key16) {
+            if (bucket.entries[i].hash16 == hash16) {
                 replaceIndex = i;
                 break;
             }
@@ -110,11 +110,11 @@ public:
         }
 
         RawEntry &replace = bucket.entries[replaceIndex];
-        if (bound == TTBound::EXACT || replace.key16 != key16 || replace.gen() != age_ || depth + TT_REPLACE_DEPTH_SCALE + (TT_REPLACE_PV_SCALE * pv) > replace.depth) {
-            if (move != Move::NULL_MOVE || replace.key16 != key16) {
+        if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.gen() != age_ || depth + TT_REPLACE_DEPTH_SCALE + (TT_REPLACE_PV_SCALE * pv) > replace.depth) {
+            if (move != Move::NULL_MOVE || replace.hash16 != hash16) {
                 replace.move = move;
             }
-            replace.key16 = key16;
+            replace.hash16 = hash16;
             replace.score = store(score, ply);
             replace.staticEval = static_cast<Int16>(staticEval);
             replace.depth = static_cast<UInt8>(depth);
@@ -122,7 +122,7 @@ public:
         }
     }
 
-    void prefetch(UInt64 key) const noexcept { Utils::prefetchPtr(static_cast<const void *>(&table_[index(key)])); }
+    void prefetch(UInt64 hash) const noexcept { Utils::prefetchPtr(static_cast<const void *>(&table_[index(hash)])); }
 
     USize hashfull() const noexcept {
         USize count = 0;
@@ -145,7 +145,7 @@ private:
     static constexpr Int32 GENERATIONS = 8;
 
     struct RawEntry {
-        UInt16 key16;
+        UInt16 hash16;
         Int16 score;
         Int16 staticEval;
         Move move;
@@ -193,7 +193,7 @@ private:
         return static_cast<Int16>(score);
     }
 
-    USize index(UInt64 key) const noexcept { return Utils::mulHi64(key, size_); }
+    USize index(UInt64 hash) const noexcept { return Utils::mulHi64(hash, size_); }
 
     void allocate(USize newSize) noexcept {
         assert(table_ == nullptr);
