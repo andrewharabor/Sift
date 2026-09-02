@@ -716,7 +716,7 @@ private:
                 }
 
                 const Int32 razoringMargin = RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                if (fdepth <= RAZORING_MAX_FDEPTH && std::abs(alpha) < RAZORING_MAX_ABS_ALPHA && curr.eval + razoringMargin <= alpha) {
+                if (fdepth <= RAZORING_MAX_FDEPTH && curr.eval + razoringMargin <= alpha) {
                     const Int32 score = qsearch<false>(thread, alpha, beta, ply, moveStackIdx);
                     if (score <= alpha) {
                         return score;
@@ -867,7 +867,7 @@ private:
                         }
 
                         const Int32 quietFPMargin = QUIET_FP_MARGIN_BASE + QUIET_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / QUIET_FP_MARGIN_HISTORY_DIVISOR;
-                        if (lmrFdepth <= QUIET_FP_MAX_FDEPTH && !inCheck && std::abs(alpha) < QUIET_FP_MAX_ABS_ALPHA && !position.directCheck(move) && curr.staticEval + quietFPMargin <= alpha) {
+                        if (lmrFdepth <= QUIET_FP_MAX_FDEPTH && !inCheck && !position.directCheck(move) && curr.staticEval + quietFPMargin <= alpha) {
                             moveOrder.skipQuiets();
                             continue;
                         }
@@ -878,12 +878,12 @@ private:
                         }
 
                         const Int32 bnfpMargin = BNFP_MARGIN_BASE + BNFP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / BNFP_MARGIN_HISTORY_DIVISOR;
-                        if (moveOrder.stage() >= MoveOrderStage::BAD_NOISY && lmrFdepth <= BNFP_MAX_FDEPTH && !inCheck && std::abs(alpha) < BNFP_MAX_ABS_ALPHA && curr.staticEval + bnfpMargin <= alpha) {
+                        if (moveOrder.stage() >= MoveOrderStage::BAD_NOISY && lmrFdepth <= BNFP_MAX_FDEPTH && !inCheck && curr.staticEval + bnfpMargin <= alpha) {
                             break;
                         }
 
                         const Int32 captureFPMargin = CAPTURE_FP_MARGIN_BASE + CAPTURE_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
-                        if (position.capture(move) && lmrFdepth <= CAPTURE_FP_MAX_FDEPTH && !inCheck && std::abs(alpha) < CAPTURE_FP_MAX_ABS_ALPHA && curr.staticEval + captureFPMargin <= alpha) {
+                        if (position.capture(move) && lmrFdepth <= CAPTURE_FP_MAX_FDEPTH && !inCheck && curr.staticEval + captureFPMargin <= alpha) {
                             continue;
                         }
                     }
