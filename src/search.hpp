@@ -841,7 +841,6 @@ private:
             }
 
             const bool quiet = position.quiet(move);
-            const bool quietOrBadNoisy = moveOrder.stage() > MoveOrderStage::GOOD_NOISY;
 
             const Int32 historyScore = (quiet) ? history.quietScore(position, histStack, move, ply) : history.noisyScore(position, move);
 
@@ -868,7 +867,7 @@ private:
                         }
 
                         const Int32 quietFPMargin = QUIET_FP_MARGIN_BASE + QUIET_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / QUIET_FP_MARGIN_HISTORY_DIVISOR;
-                        if (!inCheck && lmrFdepth <= QUIET_FP_MAX_FDEPTH && std::abs(alpha) < QUIET_FP_MAX_ABS_ALPHA && !position.directCheck(move) && curr.staticEval + quietFPMargin <= alpha) {
+                        if (lmrFdepth <= QUIET_FP_MAX_FDEPTH && !inCheck && std::abs(alpha) < QUIET_FP_MAX_ABS_ALPHA && !position.directCheck(move) && curr.staticEval + quietFPMargin <= alpha) {
                             moveOrder.skipQuiets();
                             continue;
                         }
@@ -878,18 +877,19 @@ private:
                             continue;
                         }
 
-                        const Int32 noisyFPMargin = NOISY_FP_MARGIN_BASE + NOISY_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / NOISY_FP_MARGIN_HISTORY_DIVISOR;
-                        if (!inCheck && lmrFdepth <= NOISY_FP_MAX_FDEPTH && std::abs(alpha) < NOISY_FP_MAX_ABS_ALPHA && curr.staticEval + noisyFPMargin <= alpha) {
-                            if (quietOrBadNoisy) {
-                                break;
-                            } else {
-                                continue;
-                            }
+                        const Int32 bnfpMargin = BNFP_MARGIN_BASE + BNFP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE + historyScore / BNFP_MARGIN_HISTORY_DIVISOR;
+                        if (moveOrder.stage() >= MoveOrderStage::BAD_NOISY && lmrFdepth <= BNFP_MAX_FDEPTH && !inCheck && std::abs(alpha) < BNFP_MAX_ABS_ALPHA && curr.staticEval + bnfpMargin <= alpha) {
+                            break;
+                        }
+
+                        const Int32 captureFPMargin = CAPTURE_FP_MARGIN_BASE + CAPTURE_FP_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
+                        if (position.capture(move) && lmrFdepth <= CAPTURE_FP_MAX_FDEPTH && !inCheck && std::abs(alpha) < CAPTURE_FP_MAX_ABS_ALPHA && curr.staticEval + captureFPMargin <= alpha) {
+                            continue;
                         }
                     }
 
-                    const Int32 seePruningMargin = (quiet) ? (QUIET_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE) : (std::min(NOISY_SEE_PRUNING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE - historyScore / NOISY_SEE_PRUNING_MARGIN_HISTORY_DIVISOR, 0));
-                    if (quietOrBadNoisy && !position.see(move, seePruningMargin)) {
+                    const Int32 seePruningMargin = (quiet) ? (SEE_PRUNING_MARGIN_QUIET_DEPTH_SCALE * fdepth / FDEPTH_SCALE * fdepth / FDEPTH_SCALE) : (std::min(SEE_PRUNING_MARGIN_NOISY_DEPTH_SCALE * fdepth / FDEPTH_SCALE - historyScore / SEE_PRUNING_MARGIN_NOISY_HISTORY_DIVISOR, 0));
+                    if (moveOrder.stage() >= MoveOrderStage::QUIET && !position.see(move, seePruningMargin)) {
                         continue;
                     }
                 }
