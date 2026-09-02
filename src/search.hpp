@@ -37,6 +37,8 @@ struct SearchStackEntry {
 
     Move excludedMove;
 
+    Move killerMove;
+
     Int32 staticEval;
     Int32 eval;
 
@@ -153,6 +155,7 @@ struct SearchThread {
         for (USize i = 0; i <= MAX_PLY; i++) {
             stack[i].pv.clear();
             stack[i].excludedMove = Move::NULL_MOVE;
+            stack[i].killerMove = Move::NULL_MOVE;
             stack[i].staticEval = Score::NONE;
             stack[i].eval = Score::NONE;
             stack[i].freduction = 0;
@@ -615,12 +618,12 @@ private:
         HistoryStackEntry emptyHist = HistoryStackEntry();
         HistoryStackEntry &prevHist = (!ROOT_NODE) ? thread.histStack[ply - 1] : emptyHist;
 
-        const bool excludedMove = curr.excludedMove != Move::NULL_MOVE;
+        const bool excluded = curr.excludedMove != Move::NULL_MOVE;
 
         TTEntry ttEntry = TTEntry();
         bool ttHit = false;
 
-        if (!excludedMove) {
+        if (!excluded) {
             ttHit = tt_.probe(ttEntry, position.hash(), static_cast<Int32>(ply));
 
             if constexpr (!PV_NODE) {
@@ -644,14 +647,14 @@ private:
         curr.ttMove = ttMove;
         curr.movesTried = 0;
 
-        if (fdepth >= IIR_MIN_FDEPTH && !excludedMove && (PV_NODE || cutNode) && (!ttHit || (ttEntry.move != Move::NULL_MOVE && ttEntry.fdepth + IIR_TT_FDEPTH_MARGIN < fdepth))) {
+        if (fdepth >= IIR_MIN_FDEPTH && !excluded && (PV_NODE || cutNode) && (!ttHit || (ttEntry.move != Move::NULL_MOVE && ttEntry.fdepth + IIR_TT_FDEPTH_MARGIN < fdepth))) {
             fdepth -= IIR_FREDUCTION;
         }
 
         Int32 rawStaticEval = Score::NONE;
         Int32 complexity = 0;
 
-        if (!excludedMove) {
+        if (!excluded) {
             if (inCheck) {
                 curr.staticEval = Score::NONE;
                 curr.eval = Score::NONE;
@@ -679,6 +682,8 @@ private:
             }
         }
 
+        next.killerMove = Move::NULL_MOVE;
+
         bool improving = [&]() {
             if (inCheck) {
                 return false;
@@ -693,7 +698,7 @@ private:
         }();
 
         if constexpr (!PV_NODE) {
-            if (!inCheck && !excludedMove) {
+            if (!inCheck && !excluded) {
                 if (prev.freduction >= HINDSIGHT_FEXT_MIN_FREDUCTION && prev.staticEval != Score::NONE && curr.staticEval + prev.staticEval <= 0) {
                     fdepth += HINDSIGHT_FEXTENSION;
                 }
@@ -808,7 +813,7 @@ private:
             }
         }
 
-        if (fdepth >= IIR2_MIN_FDEPTH && !excludedMove && cutNode && !ttHit) {
+        if (fdepth >= IIR2_MIN_FDEPTH && !excluded && cutNode && !ttHit) {
             fdepth -= IIR2_FREDUCTION;
         }
 
@@ -823,7 +828,7 @@ private:
 
         Int32 movesTried = 0;
 
-        MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, ply);
+        MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, curr.killerMove, ply);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if constexpr (ROOT_NODE) {
@@ -897,7 +902,7 @@ private:
 
             Int32 fextension = 0;
             if constexpr (!ROOT_NODE) {
-                if (move == ttMove && !excludedMove) {
+                if (move == ttMove && !excluded) {
                     if (fdepth >= SE_MIN_FDEPTH_BASE + ttPV * SE_MIN_FDEPTH_TT_PV_SCALE && ttEntry.fdepth + SE_TT_FDEPTH_MARGIN >= fdepth && ttEntry.bound != TTBound::UPPER && !Score::decisive(ttEntry.score)) {
                         const Int32 seBetaMargin = SE_BETA_MARGIN_BASE + SE_BETA_MARGIN_PREV_PV_SCALE * (ttPV && !PV_NODE);
                         const Int32 seBeta = std::max(ttEntry.score - fdepth * seBetaMargin / (FDEPTH_SCALE * 128), Score::MATED_IN_MAX);
@@ -1079,6 +1084,11 @@ private:
 
             if (score >= beta) {
                 bound = TTBound::LOWER;
+
+                if (quiet) {
+                    curr.killerMove = move;
+                }
+
                 break;
             }
 
@@ -1092,7 +1102,7 @@ private:
         }
 
         if (movesTried == 0) {
-            if (excludedMove) {
+            if (excluded) {
                 return alpha;
             }
 
@@ -1149,7 +1159,7 @@ private:
             bestScore = (bestScore * fdepth + beta * FDEPTH_SCALE) / (fdepth + FDEPTH_SCALE);
         }
 
-        if (!excludedMove) {
+        if (!excluded) {
             if (!inCheck && (bestMove == Move::NULL_MOVE || position.quiet(bestMove)) && (bound == TTBound::EXACT || (bound == TTBound::LOWER && bestScore > curr.staticEval) || (bound == TTBound::UPPER && bestScore < curr.staticEval))) {
                 sharedHistory->updateCorrHist(position, histStack, ply, fdepth, bestScore, curr.staticEval);
             }
