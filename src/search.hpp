@@ -647,7 +647,7 @@ private:
         curr.ttMove = ttMove;
         curr.movesTried = 0;
 
-        if (fdepth >= IIR_MIN_FDEPTH && !excluded && (PV_NODE || cutNode) && (!ttHit || (ttEntry.move != Move::NULL_MOVE && ttEntry.fdepth + IIR_TT_FDEPTH_MARGIN < fdepth))) {
+        if (fdepth >= IIR_MIN_FDEPTH && !excluded && (PV_NODE || cutNode) && (!ttHit || (ttEntry.move != Move::NULL_MOVE && ttEntry.fdepth + IIR_TT_FDEPTH_OFFSET < fdepth))) {
             fdepth -= IIR_FREDUCTION;
         }
 
@@ -779,7 +779,7 @@ private:
                 const Int32 probcutBeta = beta + PROBCUT_BETA_OFFSET - improving * PROBCUT_BETA_IMPROVING_SCALE;
                 const Int32 probcutFdepth = std::max(fdepth - PROBCUT_FREDUCTION, FDEPTH_SCALE);
 
-                if (fdepth >= PROBCUT_MIN_FDEPTH && !ttPV && !Score::decisive(beta) && (ttMove == Move::NULL_MOVE || noisyTTMove) && !(ttHit && ttEntry.fdepth >= probcutFdepth && ttEntry.score < probcutBeta)) {
+                if (fdepth >= PROBCUT_MIN_FDEPTH && !ttPV && !Score::decisive(beta) && (ttMove == Move::NULL_MOVE || noisyTTMove) && (!ttHit || ttEntry.fdepth < probcutFdepth || ttEntry.score >= probcutBeta)) {
                     const Int32 seeMargin = (probcutBeta - curr.staticEval) * PROBCUT_SEE_STATIC_EVAL_DIFF_SCALE / 128;
 
                     MoveOrder moveOrder = MoveOrder::probcut(moves.list, position, history, histStack, ttMove, ply);
@@ -811,6 +811,11 @@ private:
                     }
                 }
             }
+        }
+
+        const Int32 miniProbcutBeta = beta + MINI_PROBCUT_BETA_OFFSET;
+        if (!ttPV && ttEntry.bound == TTBound::LOWER && ttEntry.fdepth + MINI_PROBCUT_TT_FDEPTH_OFFSET >= fdepth && ttEntry.score >= miniProbcutBeta && !Score::decisive(ttEntry.score) && !Score::decisive(beta)) {
+            return miniProbcutBeta;
         }
 
         if (fdepth >= IIR2_MIN_FDEPTH && !excluded && cutNode && !ttHit) {
@@ -903,7 +908,7 @@ private:
             Int32 fextension = 0;
             if constexpr (!ROOT_NODE) {
                 if (move == ttMove && !excluded) {
-                    if (fdepth >= SE_MIN_FDEPTH_BASE + ttPV * SE_MIN_FDEPTH_TT_PV_SCALE && ttEntry.fdepth + SE_TT_FDEPTH_MARGIN >= fdepth && ttEntry.bound != TTBound::UPPER && !Score::decisive(ttEntry.score)) {
+                    if (fdepth >= SE_MIN_FDEPTH_BASE + ttPV * SE_MIN_FDEPTH_TT_PV_SCALE && ttEntry.fdepth + SE_TT_FDEPTH_OFFSET >= fdepth && ttEntry.bound != TTBound::UPPER && !Score::decisive(ttEntry.score)) {
                         const Int32 seBetaMargin = SE_BETA_MARGIN_BASE + SE_BETA_MARGIN_PREV_PV_SCALE * (ttPV && !PV_NODE);
                         const Int32 seBeta = std::max(ttEntry.score - fdepth * seBetaMargin / (FDEPTH_SCALE * 128), Score::MATED_IN_MAX);
                         const Int32 seFdepth = fdepth / 2;
@@ -939,7 +944,7 @@ private:
                             fextension = -SE_CUTNODE_NEG_FEXTENSION;
                         }
                     } else if (fdepth <= LDSE_MAX_FDEPTH && !inCheck && ttEntry.bound == TTBound::LOWER) {
-                        fextension = (curr.staticEval <= alpha - LDSE_SINGLE_FEXT_MARGIN) * LDSE_SINGLE_FEXTENSION + (!PV_NODE && !noisyTTMove && ttEntry.fdepth + LDSE_DOUBLE_FEXT_TT_FDEPTH_MARGIN >= fdepth && curr.staticEval <= alpha - LDSE_DOUBLE_FEXT_MARGIN) * LDSE_DOUBLE_FEXTENSION;
+                        fextension = (curr.staticEval <= alpha - LDSE_SINGLE_FEXT_MARGIN) * LDSE_SINGLE_FEXTENSION + (!PV_NODE && !noisyTTMove && ttEntry.fdepth + LDSE_DOUBLE_FEXT_TT_FDEPTH_OFFSET >= fdepth && curr.staticEval <= alpha - LDSE_DOUBLE_FEXT_MARGIN) * LDSE_DOUBLE_FEXTENSION;
                     }
                 }
             }

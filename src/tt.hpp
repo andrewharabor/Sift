@@ -109,7 +109,7 @@ public:
         }
 
         RawEntry &replace = cluster.entries[replaceIdx];
-        if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.age() != age_ || fdepth + TT_REPLACE_DEPTH_MARGIN + (TT_REPLACE_PV_SCALE * pv) > static_cast<Int32>(replace.fdepth)) {
+        if (bound == TTBound::EXACT || replace.hash16 != hash16 || replace.age() != age_ || fdepth + TT_REPLACE_DEPTH_OFFSET + (TT_REPLACE_PV_SCALE * pv) > static_cast<Int32>(replace.fdepth)) {
             if (move != Move::NULL_MOVE || replace.hash16 != hash16) {
                 replace.move = move;
             }
