@@ -977,6 +977,9 @@ private:
                     freduction -= LMR_FREDUCTION_COMPLEXITY_SCALE * complexity / 262144;
                     freduction *= FDEPTH_SCALE;
                     freduction /= 1024;
+                    if (threads_.size() > 1) {
+                        freduction += ((thread.loadNodes() + thread.id * 23) % 13) - 6;
+                    }
                     return freduction;
                 }();
 
