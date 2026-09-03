@@ -734,17 +734,17 @@ private:
                     tt_.prefetch(position.hashAfter(Move::NULL_MOVE));
 
                     const Int32 freduction = [&] {
-                        Int32 reduction = NMP_FREDUCTION_BASE;
-                        reduction += NMP_FREDUCTION_FDEPTH_SCALE * fdepth / 1024;
-                        reduction += std::min((curr.staticEval - beta) * NMP_FREDUCTION_STATIC_EVAL_DIFF_SCALE, NMP_FREDUCTION_STATIC_EVAL_DIFF_MAX);
-                        return reduction;
+                        Int32 freduction = NMP_FREDUCTION_BASE;
+                        freduction += NMP_FREDUCTION_FDEPTH_SCALE * fdepth / 1024;
+                        freduction += std::min((curr.staticEval - beta) * NMP_FREDUCTION_STATIC_EVAL_DIFF_SCALE, NMP_FREDUCTION_STATIC_EVAL_DIFF_MAX);
+                        return freduction;
                     }();
 
-                    const Int32 reducedFdepth = fdepth - freduction;
+                    const Int32 nmpFdepth = fdepth - freduction;
 
                     makeNullMove(thread, ply);
 
-                    const Int32 score = -search<false, false>(thread, reducedFdepth, -beta, -beta + 1, ply + 1, moveStackIdx, !cutNode);
+                    const Int32 score = -search<false, false>(thread, nmpFdepth, -beta, -beta + 1, ply + 1, moveStackIdx, !cutNode);
 
                     unmakeNullMove(thread, ply);
 
@@ -757,8 +757,8 @@ private:
                             return (Score::win(score)) ? beta : score;
                         }
 
-                        thread.nmpMinPly = ply + static_cast<USize>(NMP_MIN_PLY_FDEPTH_SCALE * reducedFdepth / (FDEPTH_SCALE * 128));
-                        const Int32 verifScore = search<false, false>(thread, reducedFdepth, beta - 1, beta, ply, moveStackIdx + 1, true);
+                        thread.nmpMinPly = ply + static_cast<USize>(NMP_MIN_PLY_FDEPTH_SCALE * nmpFdepth / (FDEPTH_SCALE * 128));
+                        const Int32 verifScore = search<false, false>(thread, nmpFdepth, beta - 1, beta, ply, moveStackIdx + 1, true);
                         thread.nmpMinPly = 0;
 
                         if (timeUp()) {
@@ -773,7 +773,6 @@ private:
 
                 const Int32 probcutBeta = beta + PROBCUT_BETA_OFFSET - improving * PROBCUT_BETA_IMPROVING_SCALE;
                 const Int32 probcutFdepth = std::max(fdepth - PROBCUT_FREDUCTION, FDEPTH_SCALE);
-
                 if (fdepth >= PROBCUT_MIN_FDEPTH && !ttPV && !Score::decisive(beta) && (ttMove == Move::NULL_MOVE || noisyTTMove) && (!ttHit || ttEntry.fdepth < probcutFdepth || ttEntry.score >= probcutBeta)) {
                     const Int32 seeMargin = (probcutBeta - curr.staticEval) * PROBCUT_SEE_STATIC_EVAL_DIFF_SCALE / 128;
 
