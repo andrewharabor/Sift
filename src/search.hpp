@@ -753,7 +753,7 @@ private:
                     }
 
                     if (score >= beta) {
-                        if (fdepth <= NMP_NO_VERIF_MAX_DEPTH || thread.nmpMinPly > 0) {
+                        if (fdepth <= NMP_NO_VERIF_MAX_DEPTH || thread.nmpMinPly > 0 || score >= beta + NMP_NO_VERIF_MARGIN) {
                             return (Score::win(score)) ? beta : score;
                         }
 
