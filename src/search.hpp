@@ -37,8 +37,6 @@ struct SearchStackEntry {
 
     Move excludedMove;
 
-    Move killerMove;
-
     Int32 staticEval;
     Int32 eval;
 
@@ -155,7 +153,6 @@ struct SearchThread {
         for (USize i = 0; i <= MAX_PLY; i++) {
             stack[i].pv.clear();
             stack[i].excludedMove = Move::NULL_MOVE;
-            stack[i].killerMove = Move::NULL_MOVE;
             stack[i].staticEval = Score::NONE;
             stack[i].eval = Score::NONE;
             stack[i].freduction = 0;
@@ -682,8 +679,6 @@ private:
             }
         }
 
-        next.killerMove = Move::NULL_MOVE;
-
         bool improving = [&]() {
             if (inCheck) {
                 return false;
@@ -833,7 +828,7 @@ private:
 
         Int32 movesTried = 0;
 
-        MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, curr.killerMove, ply);
+        MoveOrder moveOrder = MoveOrder::search(moves.list, position, history, histStack, ttMove, ply);
         Move move;
         while ((move = moveOrder.next()) != Move::NULL_MOVE) {
             if constexpr (ROOT_NODE) {
@@ -1089,11 +1084,6 @@ private:
 
             if (score >= beta) {
                 bound = TTBound::LOWER;
-
-                if (quiet) {
-                    curr.killerMove = move;
-                }
-
                 break;
             }
 

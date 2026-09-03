@@ -21,7 +21,6 @@ enum class MoveOrderStage : UInt8 {
     TT,
     GEN_NOISY,
     GOOD_NOISY,
-    KILLER,
     GEN_QUIET,
     QUIET,
     BAD_NOISY,
@@ -49,14 +48,14 @@ inline std::strong_ordering operator<=>(MoveOrderStage stage1, MoveOrderStage st
 
 class MoveOrder {
 public:
-    static inline MoveOrder search(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, Move killerMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::TT, moves, position, history, histStack, ttMove, killerMove, ply); }
+    static inline MoveOrder search(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::TT, moves, position, history, histStack, ttMove, ply); }
 
     static inline MoveOrder qsearch(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply, bool forceEvasions) {
         const MoveOrderStage stage = (forceEvasions || position.inCheck()) ? (MoveOrderStage::QSEARCH_EVASIONS_TT) : (MoveOrderStage::QSEARCH_TT);
-        return MoveOrder(stage, moves, position, history, histStack, ttMove, Move::NULL_MOVE, ply);
+        return MoveOrder(stage, moves, position, history, histStack, ttMove, ply);
     }
 
-    static inline MoveOrder probcut(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, moves, position, history, histStack, ttMove, Move::NULL_MOVE, ply); }
+    static inline MoveOrder probcut(MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept { return MoveOrder(MoveOrderStage::PROBCUT_TT, moves, position, history, histStack, ttMove, ply); }
 
     Move next() noexcept {
         if (stage_ == MoveOrderStage::TT) {
@@ -95,14 +94,6 @@ public:
             }
 
             ++stage_;
-        }
-
-        if (stage_ == MoveOrderStage::KILLER) {
-            ++stage_;
-
-            if (killerMove_ != Move::NULL_MOVE && killerMove_ != ttMove_ && position_.legal(killerMove_)) {
-                return killerMove_;
-            }
         }
 
         if (stage_ == MoveOrderStage::GEN_QUIET) {
@@ -248,7 +239,6 @@ private:
     std::span<const HistoryStackEntry> histStack_;
 
     Move ttMove_;
-    Move killerMove_;
 
     USize ply_;
 
@@ -258,7 +248,7 @@ private:
 
     bool skipQuiets_;
 
-    explicit MoveOrder(MoveOrderStage initialStage, MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, Move killerMove, USize ply) noexcept : stage_(initialStage), moves_(moves), moveScores_(), position_(position), history_(history), histStack_(histStack), ttMove_(ttMove), killerMove_(killerMove), ply_(ply), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) { moves_.clear(); }
+    explicit MoveOrder(MoveOrderStage initialStage, MoveList &moves, const Position &position, const History &history, std::span<const HistoryStackEntry> histStack, Move ttMove, USize ply) noexcept : stage_(initialStage), moves_(moves), moveScores_(), position_(position), history_(history), histStack_(histStack), ttMove_(ttMove), ply_(ply), idx_(0), end_(0), badNoisyEnd_(0), skipQuiets_(false) { moves_.clear(); }
 
     USize findNext() noexcept {
         const auto castUSize = [](Int32 value) -> USize {
@@ -287,7 +277,7 @@ private:
         while (idx_ < end_) {
             const USize i = (SORT) ? findNext() : idx_++;
             const Move move = moves_[i];
-            if (move != ttMove_ && move != killerMove_) {
+            if (move != ttMove_) {
                 return move;
             }
         }
