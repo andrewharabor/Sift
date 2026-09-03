@@ -808,13 +808,15 @@ private:
             }
         }
 
-        const Int32 miniProbcutBeta = beta + MINI_PROBCUT_BETA_OFFSET;
-        if (!ttPV && ttEntry.bound == TTBound::LOWER && ttEntry.fdepth + MINI_PROBCUT_TT_FDEPTH_OFFSET >= fdepth && ttEntry.score >= miniProbcutBeta && !Score::decisive(ttEntry.score) && !Score::decisive(beta)) {
-            return miniProbcutBeta;
-        }
+        if (!excluded) {
+            const Int32 miniProbcutBeta = beta + MINI_PROBCUT_BETA_OFFSET;
+            if (!ttPV && ttEntry.bound == TTBound::LOWER && ttEntry.fdepth + MINI_PROBCUT_TT_FDEPTH_OFFSET >= fdepth && ttEntry.score >= miniProbcutBeta && !Score::decisive(ttEntry.score) && !Score::decisive(beta)) {
+                return miniProbcutBeta;
+            }
 
-        if (fdepth >= IIR2_MIN_FDEPTH && !excluded && cutNode && !ttHit) {
-            fdepth -= IIR2_FREDUCTION;
+            if (fdepth >= IIR2_MIN_FDEPTH && cutNode && !ttHit) {
+                fdepth -= IIR2_FREDUCTION;
+            }
         }
 
         moves.failLowQuiets.clear();
