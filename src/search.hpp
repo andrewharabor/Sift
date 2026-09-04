@@ -1336,87 +1336,6 @@ private:
         return bestScore;
     }
 
-    bool positionDraw(SearchThread &thread, USize ply) const noexcept {
-        bool noMoves = false;
-        if (thread.position.halfmoveClock() >= 100) {
-            MoveList moves;
-            MoveGen::legal(thread.position, moves);
-            noMoves = moves.empty();
-        }
-        return thread.position.draw(ply, noMoves);
-    }
-
-    void makeMove(SearchThread &thread, Move move, USize ply) noexcept {
-        assert(move != Move::NULL_MOVE);
-
-        SearchStackEntry &curr = thread.stack[ply];
-        curr.move = move;
-        curr.quiet = thread.position.quiet(move);
-
-        HistoryStackEntry &currHist = thread.histStack[ply];
-        currHist.move = move;
-        currHist.movedPiece = thread.position.movedPiece(move);
-        currHist.capturedPiece = thread.position.capturedPiece(move);
-        currHist.threats = thread.position.threats();
-        currHist.pawnHash = thread.position.pawnHash();
-        currHist.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
-        currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
-
-        thread.position.makeMove(move, thread.nnue.state());
-        thread.incNodes();
-    }
-
-    void unmakeMove(SearchThread &thread, USize ply) noexcept {
-        thread.position.unmakeMove(thread.nnue.state());
-
-        SearchStackEntry &curr = thread.stack[ply];
-        curr.move = Move::NULL_MOVE;
-        curr.quiet = false;
-
-        HistoryStackEntry &currHist = thread.histStack[ply];
-        currHist.move = Move::NULL_MOVE;
-        currHist.movedPiece = Piece::NONE;
-        currHist.capturedPiece = Piece::NONE;
-        currHist.threats = Bitboard();
-        currHist.pawnHash = 0;
-        currHist.contHistSubtable = nullptr;
-        currHist.contCorrHistSubtable = nullptr;
-    }
-
-    void makeNullMove(SearchThread &thread, USize ply) noexcept {
-        SearchStackEntry &curr = thread.stack[ply];
-        curr.move = Move::NULL_MOVE;
-        curr.quiet = false;
-
-        HistoryStackEntry &currHist = thread.histStack[ply];
-        currHist.move = Move::NULL_MOVE;
-        currHist.movedPiece = Piece::NONE;
-        currHist.capturedPiece = Piece::NONE;
-        currHist.threats = thread.position.threats();
-        currHist.pawnHash = thread.position.pawnHash();
-        currHist.contHistSubtable = nullptr;
-        currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, Move::NULL_MOVE);
-
-        thread.position.makeNullMove();
-    }
-
-    void unmakeNullMove(SearchThread &thread, USize ply) noexcept {
-        thread.position.unmakeMove();
-
-        SearchStackEntry &curr = thread.stack[ply];
-        curr.move = Move::NULL_MOVE;
-        curr.quiet = false;
-
-        HistoryStackEntry &currHist = thread.histStack[ply];
-        currHist.move = Move::NULL_MOVE;
-        currHist.movedPiece = Piece::NONE;
-        currHist.capturedPiece = Piece::NONE;
-        currHist.threats = Bitboard();
-        currHist.pawnHash = 0;
-        currHist.contHistSubtable = nullptr;
-        currHist.contCorrHistSubtable = nullptr;
-    }
-
     const SearchThread &selectThread() const noexcept {
         if (threads_.size() == 1) {
             return *threads_[0];
@@ -1497,6 +1416,87 @@ private:
         }
 
         return *bestThread;
+    }
+
+    bool positionDraw(SearchThread &thread, USize ply) const noexcept {
+        bool noMoves = false;
+        if (thread.position.halfmoveClock() >= 100) {
+            MoveList moves;
+            MoveGen::legal(thread.position, moves);
+            noMoves = moves.empty();
+        }
+        return thread.position.draw(ply, noMoves);
+    }
+
+    void makeMove(SearchThread &thread, Move move, USize ply) noexcept {
+        assert(move != Move::NULL_MOVE);
+
+        SearchStackEntry &curr = thread.stack[ply];
+        curr.move = move;
+        curr.quiet = thread.position.quiet(move);
+
+        HistoryStackEntry &currHist = thread.histStack[ply];
+        currHist.move = move;
+        currHist.movedPiece = thread.position.movedPiece(move);
+        currHist.capturedPiece = thread.position.capturedPiece(move);
+        currHist.threats = thread.position.threats();
+        currHist.pawnHash = thread.position.pawnHash();
+        currHist.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
+        currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
+
+        thread.position.makeMove(move, thread.nnue.state());
+        thread.incNodes();
+    }
+
+    void unmakeMove(SearchThread &thread, USize ply) noexcept {
+        thread.position.unmakeMove(thread.nnue.state());
+
+        SearchStackEntry &curr = thread.stack[ply];
+        curr.move = Move::NULL_MOVE;
+        curr.quiet = false;
+
+        HistoryStackEntry &currHist = thread.histStack[ply];
+        currHist.move = Move::NULL_MOVE;
+        currHist.movedPiece = Piece::NONE;
+        currHist.capturedPiece = Piece::NONE;
+        currHist.threats = Bitboard();
+        currHist.pawnHash = 0;
+        currHist.contHistSubtable = nullptr;
+        currHist.contCorrHistSubtable = nullptr;
+    }
+
+    void makeNullMove(SearchThread &thread, USize ply) noexcept {
+        SearchStackEntry &curr = thread.stack[ply];
+        curr.move = Move::NULL_MOVE;
+        curr.quiet = false;
+
+        HistoryStackEntry &currHist = thread.histStack[ply];
+        currHist.move = Move::NULL_MOVE;
+        currHist.movedPiece = Piece::NONE;
+        currHist.capturedPiece = Piece::NONE;
+        currHist.threats = thread.position.threats();
+        currHist.pawnHash = thread.position.pawnHash();
+        currHist.contHistSubtable = nullptr;
+        currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, Move::NULL_MOVE);
+
+        thread.position.makeNullMove();
+    }
+
+    void unmakeNullMove(SearchThread &thread, USize ply) noexcept {
+        thread.position.unmakeMove();
+
+        SearchStackEntry &curr = thread.stack[ply];
+        curr.move = Move::NULL_MOVE;
+        curr.quiet = false;
+
+        HistoryStackEntry &currHist = thread.histStack[ply];
+        currHist.move = Move::NULL_MOVE;
+        currHist.movedPiece = Piece::NONE;
+        currHist.capturedPiece = Piece::NONE;
+        currHist.threats = Bitboard();
+        currHist.pawnHash = 0;
+        currHist.contHistSubtable = nullptr;
+        currHist.contCorrHistSubtable = nullptr;
     }
 
     void printSearchInfo(const SearchThread &thread, USize pvIdx, Int32 depth) const noexcept {
