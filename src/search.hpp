@@ -717,9 +717,20 @@ private:
 
                 const Int32 razoringMargin = RAZORING_MARGIN_DEPTH_SCALE * fdepth / FDEPTH_SCALE;
                 if (fdepth <= RAZORING_MAX_FDEPTH && curr.eval + razoringMargin <= alpha) {
-                    const Int32 score = qsearch<false>(thread, alpha, beta, ply, moveStackIdx);
-                    if (score <= alpha) {
+                    if (fdepth <= RAZORING_FULL_ALWAYS_MAX_FDEPTH || (fdepth <= RAZORING_FULL_MAX_FDEPTH && curr.eval + razoringMargin + RAZORING_FULL_MARGIN <= alpha)) {
+                        return qsearch<false>(thread, alpha, beta, ply, moveStackIdx);
+                    }
+
+                    const Int32 razoringAlpha = std::max(alpha - razoringMargin, Score::MIN);
+
+                    const Int32 score = qsearch<false>(thread, razoringAlpha, razoringAlpha + 1, ply, moveStackIdx);
+
+                    if (score <= razoringAlpha) {
                         return score;
+                    }
+
+                    if (score > razoringAlpha && fdepth <= RAZORING_FRED_MAX_FDEPTH) {
+                        fdepth = std::max(fdepth - RAZORING_FREDUCTION, FDEPTH_SCALE);
                     }
                 }
 
@@ -734,9 +745,9 @@ private:
                     tt_.prefetch(position.hashAfter(Move::NULL_MOVE));
 
                     const Int32 freduction = [&] {
-                        Int32 freduction = NMP_FREDUCTION_BASE;
-                        freduction += NMP_FREDUCTION_FDEPTH_SCALE * fdepth / 1024;
-                        freduction += std::min((curr.staticEval - beta) * NMP_FREDUCTION_STATIC_EVAL_DIFF_SCALE, NMP_FREDUCTION_STATIC_EVAL_DIFF_MAX);
+                        Int32 freduction = NMP_FRED_BASE;
+                        freduction += NMP_FRED_FDEPTH_SCALE * fdepth / 1024;
+                        freduction += std::min((curr.staticEval - beta) * NMP_FRED_STATIC_EVAL_DIFF_SCALE, NMP_FRED_STATIC_EVAL_DIFF_MAX);
                         return freduction;
                     }();
 
@@ -964,18 +975,18 @@ private:
 
             if (fdepth >= LMR_MIN_FDEPTH && movesTried >= LMR_MIN_MOVES + ROOT_NODE) {
                 Int32 lmrFreduction = [&] {
-                    Int32 freduction = baseLMR + LMR_FREDUCTION_OFFSET;
-                    freduction -= ((quiet) ? LMR_FREDUCTION_QUIET_HISTORY_SCALE : LMR_FREDUCTION_NOISY_HISTORY_SCALE) * historyScore / 4096;
-                    freduction += LMR_FREDUCTION_NON_PV_SCALE * !PV_NODE;
-                    freduction -= LMR_FREDUCTION_TT_PV_SCALE * ttPV;
-                    freduction -= LMR_FREDUCTION_IMPROVING_SCALE * improving;
-                    freduction -= LMR_FREDUCTION_GIVES_CHECK_SCALE * givesCheck;
-                    freduction += LMR_FREDUCTION_CUT_NODE_SCALE * cutNode;
-                    freduction += LMR_FREDUCTION_TT_PV_FAIL_LOW_SCALE * (ttPV && ttHit && ttEntry.score <= alpha);
-                    freduction += LMR_FREDUCTION_ALPHA_RAISES_SCALE * alphaRaises;
-                    freduction += LMR_FREDUCTION_NOISY_TT_MOVE_SCALE * noisyTTMove;
-                    freduction -= LMR_FREDUCTION_MOVES_TRIED_SCALE * movesTried;
-                    freduction -= LMR_FREDUCTION_COMPLEXITY_SCALE * complexity / 262144;
+                    Int32 freduction = baseLMR + LMR_FRED_OFFSET;
+                    freduction -= ((quiet) ? LMR_FRED_QUIET_HISTORY_SCALE : LMR_FRED_NOISY_HISTORY_SCALE) * historyScore / 4096;
+                    freduction += LMR_FRED_NON_PV_SCALE * !PV_NODE;
+                    freduction -= LMR_FRED_TT_PV_SCALE * ttPV;
+                    freduction -= LMR_FRED_IMPROVING_SCALE * improving;
+                    freduction -= LMR_FRED_GIVES_CHECK_SCALE * givesCheck;
+                    freduction += LMR_FRED_CUT_NODE_SCALE * cutNode;
+                    freduction += LMR_FRED_TT_PV_FAIL_LOW_SCALE * (ttPV && ttHit && ttEntry.score <= alpha);
+                    freduction += LMR_FRED_ALPHA_RAISES_SCALE * alphaRaises;
+                    freduction += LMR_FRED_NOISY_TT_MOVE_SCALE * noisyTTMove;
+                    freduction -= LMR_FRED_MOVES_TRIED_SCALE * movesTried;
+                    freduction -= LMR_FRED_COMPLEXITY_SCALE * complexity / 262144;
                     freduction *= FDEPTH_SCALE;
                     freduction /= 1024;
                     return freduction;
