@@ -1000,7 +1000,7 @@ private:
 
                     if (quiet && (score <= alpha || score >= beta) && !timeUp()) {
                         Int32 bonus = (score >= beta) ? History::bonus(newFdepth, POST_LMR_BONUS_DEPTH_SCALE, POST_LMR_BONUS_OFFSET, POST_LMR_BONUS_MAX) : -History::bonus(newFdepth, POST_LMR_PENALTY_DEPTH_SCALE, POST_LMR_PENALTY_OFFSET, POST_LMR_PENALTY_MAX);
-                        history.updateContHist(position, histStack, move, ply, bonus);
+                        history.updateQuietHists(position, histStack, move, ply, bonus);
                     }
                 }
             } else if (!PV_NODE || movesTried > 1) {
