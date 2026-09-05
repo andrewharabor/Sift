@@ -946,13 +946,13 @@ private:
                         } else if (!PV_NODE && score >= beta) {
                             return (!Score::decisive(score)) ? Utils::linInterp<1024>(score, beta, MULTICUT_FAIL_FIRM_T) : score;
                         } else if (ttEntry.score >= beta) {
-                            fextension -= SE_BETA_NEG_FEXTENSION;
+                            fextension -= SE_FAIL_HIGH_NEG_FEXTENSION;
                         } else if (cutNode) {
                             fextension -= SE_CUT_NODE_NEG_FEXTENSION;
                         } else if (ttEntry.score <= score) {
                             fextension -= SE_SCORE_NEG_FEXTENSION;
                         } else if (ttEntry.score <= alpha) {
-                            fextension -= SE_ALPHA_NEG_FEXTENSION;
+                            fextension -= SE_FAIL_LOW_NEG_FEXTENSION;
                         }
 
                         if constexpr (!PV_NODE) {
