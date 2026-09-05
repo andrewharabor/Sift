@@ -942,16 +942,22 @@ private:
                                 return margin;
                             }();
 
-                            fextension = SE_SINGLE_FEXTENSION + (score < seBeta - doubleFextMargin) * SE_DOUBLE_FEXTENSION + (score < seBeta - tripleFextMargin) * SE_TRIPLE_FEXTENSION;
+                            fextension += SE_SINGLE_FEXTENSION + (score < seBeta - doubleFextMargin) * SE_DOUBLE_FEXTENSION + (score < seBeta - tripleFextMargin) * SE_TRIPLE_FEXTENSION;
                         } else if (!PV_NODE && score >= beta) {
                             return (!Score::decisive(score)) ? Utils::linInterp<1024>(score, beta, MULTICUT_FAIL_FIRM_T) : score;
                         } else if (ttEntry.score >= beta) {
-                            fextension = -SE_NEG_FEXTENSION;
+                            fextension -= SE_NEG_FEXTENSION;
                         } else if (cutNode) {
-                            fextension = -SE_CUTNODE_NEG_FEXTENSION;
+                            fextension -= SE_CUTNODE_NEG_FEXTENSION;
+                        }
+
+                        if constexpr (!PV_NODE) {
+                            if (fdepth <= MLDE_MAX_FDEPTH && score < seBeta + MLDE_MARGIN) {
+                                fextension += MLDE_FEXTENSION;
+                            }
                         }
                     } else if (fdepth <= LDSE_MAX_FDEPTH && !inCheck && ttEntry.bound == TTBound::LOWER) {
-                        fextension = (curr.staticEval <= alpha - LDSE_SINGLE_FEXT_MARGIN) * LDSE_SINGLE_FEXTENSION + (!PV_NODE && !noisyTTMove && ttEntry.fdepth + LDSE_DOUBLE_FEXT_TT_FDEPTH_OFFSET >= fdepth && curr.staticEval <= alpha - LDSE_DOUBLE_FEXT_MARGIN) * LDSE_DOUBLE_FEXTENSION;
+                        fextension += (curr.staticEval <= alpha - LDSE_SINGLE_FEXT_MARGIN) * LDSE_SINGLE_FEXTENSION + (!PV_NODE && !noisyTTMove && ttEntry.fdepth + LDSE_DOUBLE_FEXT_TT_FDEPTH_OFFSET >= fdepth && curr.staticEval <= alpha - LDSE_DOUBLE_FEXT_MARGIN) * LDSE_DOUBLE_FEXTENSION;
                     }
                 }
             }
