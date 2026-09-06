@@ -942,7 +942,10 @@ private:
                                 return margin;
                             }();
 
-                            fextension += SE_SINGLE_FEXTENSION + (score < seBeta - doubleFextMargin) * SE_DOUBLE_FEXTENSION + (score < seBeta - tripleFextMargin) * SE_TRIPLE_FEXTENSION;
+
+                            fextension += SE_SINGLE_FEXTENSION;
+                            fextension += SE_DOUBLE_FEXTENSION * (score < seBeta - doubleFextMargin);
+                            fextension += SE_TRIPLE_FEXTENSION * (score < seBeta - tripleFextMargin);
                         } else if (!PV_NODE && score >= beta) {
                             return (!Score::decisive(score)) ? Utils::linInterp<1024>(score, beta, MULTICUT_FAIL_FIRM_T) : score;
                         } else if (ttEntry.score >= beta) {
