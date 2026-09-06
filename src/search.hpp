@@ -929,7 +929,7 @@ private:
                                 Int32 margin = SE_DOUBLE_FEXT_MARGIN_BASE;
                                 margin += SE_DOUBLE_FEXT_MARGIN_PV_SCALE * PV_NODE;
                                 margin += SE_DOUBLE_FEXT_MARGIN_NEW_PV_SCALE * (PV_NODE && !(ttHit && ttEntry.pv));
-                                margin += SE_DOUBLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 16777216;
+                                margin += SE_DOUBLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 8192;
                                 return margin;
                             }();
 
@@ -938,14 +938,23 @@ private:
                                 margin += SE_TRIPLE_FEXT_MARGIN_PV_SCALE * PV_NODE;
                                 margin += SE_TRIPLE_FEXT_MARGIN_NEW_PV_SCALE * (PV_NODE && !(ttHit && ttEntry.pv));
                                 margin += SE_TRIPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE * noisyTTMove;
-                                margin += SE_TRIPLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 16777216;
+                                margin += SE_TRIPLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 8192;
                                 return margin;
                             }();
 
+                            // const Int32 quadrupleFextMargin = [&] {
+                            //     Int32 margin = SE_QUADRUPLE_FEXT_MARGIN_BASE;
+                            //     margin += SE_QUADRUPLE_FEXT_MARGIN_PV_SCALE * PV_NODE;
+                            //     margin += SE_QUADRUPLE_FEXT_MARGIN_NEW_PV_SCALE * (PV_NODE && !(ttHit && ttEntry.pv));
+                            //     margin += SE_QUADRUPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE * noisyTTMove;
+                            //     margin += SE_QUADRUPLE_FEXT_MARGIN_COMPLEXITY_SCALE * complexity / 8192;
+                            //     return margin;
+                            // }();
 
                             fextension += SE_SINGLE_FEXTENSION;
                             fextension += SE_DOUBLE_FEXTENSION * (score < seBeta - doubleFextMargin);
                             fextension += SE_TRIPLE_FEXTENSION * (score < seBeta - tripleFextMargin);
+                            // fextension += SE_QUADRUPLE_FEXTENSION * (score < seBeta - quadrupleFextMargin);
                         } else if (!PV_NODE && score >= beta) {
                             return (!Score::decisive(score)) ? Utils::linInterp<1024>(score, beta, MULTICUT_FAIL_FIRM_T) : score;
                         } else if (ttEntry.score >= beta) {
@@ -999,7 +1008,7 @@ private:
                     freduction += LMR_FRED_ALPHA_RAISES_SCALE * alphaRaises;
                     freduction += LMR_FRED_NOISY_TT_MOVE_SCALE * noisyTTMove;
                     freduction -= LMR_FRED_MOVES_TRIED_SCALE * movesTried;
-                    freduction -= LMR_FRED_COMPLEXITY_SCALE * complexity / 262144;
+                    freduction -= LMR_FRED_COMPLEXITY_SCALE * complexity / 128;
                     freduction *= FDEPTH_SCALE;
                     freduction /= 1024;
                     return freduction;
