@@ -978,6 +978,10 @@ private:
                 }
             }
 
+            if (fdepth >= CUT_NODE_FRED_MIN_FDEPTH && cutNode && move != ttMove) {
+                fdepth -= CUT_NODE_FREDUCTION;
+            }
+
             const UInt64 nodesBefore = thread.loadNodes();
 
             tt_.prefetch(position.hashAfter(move));
@@ -990,10 +994,6 @@ private:
 
             Int32 newFdepth = fdepth + fextension - FDEPTH_SCALE;
             Int32 score = 0;
-
-            if (fdepth >= CUT_NODE_FRED_MIN_FDEPTH && cutNode && move != ttMove) {
-                newFdepth -= CUT_NODE_FREDUCTION;
-            }
 
             if (fdepth >= LMR_MIN_FDEPTH && movesTried >= LMR_MIN_MOVES + ROOT_NODE) {
                 Int32 lmrFreduction = [&] {
