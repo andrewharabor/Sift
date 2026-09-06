@@ -352,17 +352,17 @@ TUNABLE_CALLBACK(LMR_QUIET_DIVISOR, 236, 0, 0, 0, []() { LMR::init(); })
 static inline void LMR::init() {
     LMR_TABLE.fill({});
 
-    constexpr Float64 NOISY_BASE = Utils::floatDiv100(LMR_NOISY_BASE);
-    constexpr Float64 NOISY_DIVISOR = Utils::floatDiv100(LMR_NOISY_DIVISOR);
-    constexpr Float64 QUIET_BASE = Utils::floatDiv100(LMR_QUIET_BASE);
-    constexpr Float64 QUIET_DIVISOR = Utils::floatDiv100(LMR_QUIET_DIVISOR);
+    const Float64 noisyBase = Utils::floatDiv100(LMR_NOISY_BASE);
+    const Float64 noisyDivisor = Utils::floatDiv100(LMR_NOISY_DIVISOR);
+    const Float64 quietBase = Utils::floatDiv100(LMR_QUIET_BASE);
+    const Float64 quietDivisor = Utils::floatDiv100(LMR_QUIET_DIVISOR);
 
     for (Int32 depth = 1; depth < 256; depth++) {
         for (Int32 moves = 1; moves < 256; moves++) {
             const Float64 lnDepth = std::log(static_cast<Float64>(depth));
             const Float64 lnMoves = std::log(static_cast<Float64>(moves));
-            LMR_TABLE[0][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (NOISY_BASE + lnDepth * lnMoves / NOISY_DIVISOR));
-            LMR_TABLE[1][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (QUIET_BASE + lnDepth * lnMoves / QUIET_DIVISOR));
+            LMR_TABLE[0][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (noisyBase + lnDepth * lnMoves / noisyDivisor));
+            LMR_TABLE[1][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (quietBase + lnDepth * lnMoves / quietDivisor));
         }
     }
 }

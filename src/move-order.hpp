@@ -307,7 +307,7 @@ private:
         }
     }
 
-    constexpr bool badNoisy(Move move, Int32 score) noexcept {
+    bool badNoisy(Move move, Int32 score) noexcept {
         const Int32 margin = -score * MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_SCALE / 1024 + MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET;
         return !position_.see(move, margin);
     }
