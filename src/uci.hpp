@@ -40,8 +40,8 @@ public:
         OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), [](const Option &) {}));
 
 #if defined(OPEN_BENCH_TUNE)
-        for (Tunable &tunable : TUNABLES) {
-            OPTIONS.add(Option(tunable.name(), SpinOption(tunable.value(), tunable.value(), tunable.min(), tunable.max()), [&tunable](const Option &option) { tunable.update(static_cast<Int32>(option.spinValue())); }));
+        for (Tunable *tunable : TUNABLES) {
+            OPTIONS.add(Option(tunable->name(), SpinOption(tunable->value(), tunable->value(), tunable->min(), tunable->max()), [tunable](const Option &option) { tunable->update(static_cast<Int32>(option.spinValue())); }));
         }
 #endif
 

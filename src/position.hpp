@@ -1302,14 +1302,6 @@ public:
         return bool(favorable);
     }
 
-    Int32 mvv(Move move) const noexcept {
-        assert(move != Move::NULL_MOVE);
-        assert(capture(move));
-
-        PieceType capturedType = (move.type() == MoveType::EN_PASSANT) ? PieceType::PAWN : pieceAt(move.to()).type();
-        return MVV_PIECE_VALUES[static_cast<USize>(capturedType)];
-    }
-
 private:
     static constexpr USize RESERVED_STATES = 256;
 

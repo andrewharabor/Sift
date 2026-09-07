@@ -21,6 +21,7 @@ public:
     Tunable() : name_(), value_(), min_(), max_(), callback_() {}
     Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback);
 
+    constexpr operator Int32() const noexcept { return value_; }
     constexpr explicit operator std::string() const { return name_ + ", int, " + std::to_string(value_) + ", " + std::to_string(min_) + ", " + std::to_string(max_) + ", " + std::to_string(step()) + ", " + std::to_string(learningRate()); }
 
     const std::string &name() const noexcept { return name_; }
@@ -50,30 +51,30 @@ public:
 
     static void init() noexcept;
 
-    constexpr std::vector<Tunable>::iterator begin() noexcept { return tunables_.begin(); }
-    constexpr std::vector<Tunable>::const_iterator begin() const noexcept { return tunables_.begin(); }
-    constexpr std::vector<Tunable>::iterator end() noexcept { return tunables_.end(); }
-    constexpr std::vector<Tunable>::const_iterator end() const noexcept { return tunables_.end(); }
+    constexpr std::vector<Tunable *>::iterator begin() noexcept { return tunables_.begin(); }
+    constexpr std::vector<Tunable *>::const_iterator begin() const noexcept { return tunables_.begin(); }
+    constexpr std::vector<Tunable *>::iterator end() noexcept { return tunables_.end(); }
+    constexpr std::vector<Tunable *>::const_iterator end() const noexcept { return tunables_.end(); }
 
-    void add(const Tunable &tunable) { tunables_.push_back(tunable); }
+    void add(Tunable &tunable) { tunables_.push_back(&tunable); }
 
     void update(const std::string &name, Int32 value) {
-        for (Tunable &tunable : tunables_) {
-            if (tunable.name() == name) {
-                tunable.update(value);
+        for (Tunable *tunable : tunables_) {
+            if (tunable->name() == name) {
+                tunable->update(value);
                 break;
             }
         }
     }
 
     void openBenchConfig() const noexcept {
-        for (const Tunable &tunable : tunables_) {
-            std::cout << std::string(tunable) << std::endl;
+        for (const Tunable *tunable : tunables_) {
+            std::cout << std::string(*tunable) << std::endl;
         }
     }
 
 private:
-    std::vector<Tunable> tunables_;
+    std::vector<Tunable *> tunables_;
 };
 
 inline TunableList TUNABLES;
@@ -95,26 +96,10 @@ inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 m
 
 static constexpr Int32 FDEPTH_SCALE = 128;
 
-TUNABLE(TT_REPLACE_DEPTH_OFFSET, 512, 0, 0);
-TUNABLE(TT_REPLACE_PV_SCALE, 256, 0, 0);
-TUNABLE(TT_QUALITY_FDEPTH_SCALE, 128, 0, 0);
-TUNABLE(TT_QUALITY_AGE_DIFF_SCALE, 256, 0, 0);
-
-static inline std::array<Int32, 7> MVV_PIECE_VALUES;
-
-namespace MVV {
-
-static void init();
-
-}
-
-TUNABLE_CALLBACK(MVV_PAWN_VALUE, 964, 0, 0, []() { MVV::init(); });
-TUNABLE_CALLBACK(MVV_KNIGHT_VALUE, 2465, 0, 0, []() { MVV::init(); });
-TUNABLE_CALLBACK(MVV_BISHOP_VALUE, 2360, 0, 0, []() { MVV::init(); });
-TUNABLE_CALLBACK(MVV_ROOK_VALUE, 4725, 0, 0, []() { MVV::init(); });
-TUNABLE_CALLBACK(MVV_QUEEN_VALUE, 7181, 0, 0, []() { MVV::init(); });
-
-static inline void MVV::init() { MVV_PIECE_VALUES = {MVV_PAWN_VALUE, MVV_KNIGHT_VALUE, MVV_BISHOP_VALUE, MVV_ROOK_VALUE, MVV_QUEEN_VALUE, 0, 0}; }
+TUNABLE(TT_REPLACE_DEPTH_OFFSET, 512, 0, 1024);
+TUNABLE(TT_REPLACE_PV_SCALE, 256, 0, 768);
+TUNABLE(TT_QUALITY_DEPTH_SCALE, 128, 0, 512);
+TUNABLE(TT_QUALITY_AGE_DIFF_SCALE, 256, 0, 512);
 
 static inline std::array<Int32, 7> SEE_PIECE_VALUES;
 
@@ -124,11 +109,11 @@ static void init();
 
 }
 
-TUNABLE_CALLBACK(SEE_PAWN_VALUE, 97, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 434, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 464, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_ROOK_VALUE, 646, 0, 0, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1289, 0, 0, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_PAWN_VALUE, 97, 50, 200, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 434, 300, 700, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 464, 300, 700, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_ROOK_VALUE, 646, 400, 1000, []() { SEE::init(); });
+TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1289, 800, 1600, []() { SEE::init(); });
 
 static inline void SEE::init() { SEE_PIECE_VALUES = {SEE_PAWN_VALUE, SEE_KNIGHT_VALUE, SEE_BISHOP_VALUE, SEE_ROOK_VALUE, SEE_QUEEN_VALUE, 0, 0}; }
 
@@ -497,7 +482,6 @@ TUNABLE(QSEARCH_SEE_PRUNING_MARGIN, -81, 0, 0);
 static constexpr Int32 QSEARCH_MAX_MOVES = 2;
 
 inline void TunableList::init() noexcept {
-    MVV::init();
     SEE::init();
     LMR::init();
     LMP::init();

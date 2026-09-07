@@ -174,7 +174,7 @@ private:
 
     Int32 quality(Int32 age, Int32 fdepth) const noexcept {
         Int32 ageDiff = (MAX_AGE + 1 + age_ - age) & MAX_AGE;
-        return TT_QUALITY_FDEPTH_SCALE * fdepth / FDEPTH_SCALE - (TT_QUALITY_AGE_DIFF_SCALE * ageDiff);
+        return TT_QUALITY_DEPTH_SCALE * fdepth / FDEPTH_SCALE - (TT_QUALITY_AGE_DIFF_SCALE * ageDiff);
     }
 
     Int32 retrieve(Int16 score, Int32 ply) const noexcept {
