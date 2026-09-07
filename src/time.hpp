@@ -116,12 +116,8 @@ private:
             return Utils::floatDiv100(TIME_SCALE_MATE_SCORE);
         }
 
-        if (Score::win(score)) {
-            return Utils::floatDiv100(TIME_SCALE_WIN_SCORE);
-        }
-
-        if (Score::loss(score)) {
-            return Utils::floatDiv100(TIME_SCALE_LOSS_SCORE);
+        if (Score::decisive(score)) {
+            return Utils::floatDiv100(TIME_SCALE_DECISIVE_SCORE);
         }
 
         Float64 scale = 1.0;

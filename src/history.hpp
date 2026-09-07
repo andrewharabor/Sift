@@ -307,7 +307,7 @@ public:
     void updateCorrHist(const Position &position, std::span<const HistoryStackEntry> stack, USize ply, Int32 fdepth, Int32 searchScore, Int32 staticEval) noexcept {
         const Color color = position.sideToMove();
 
-        const Int32 bonus = std::clamp((searchScore - staticEval) * fdepth / CORR_HIST_BONUS_FDEPTH_DIVISOR, -CORR_HIST_PENALTY_MAX, CORR_HIST_BONUS_MAX);
+        const Int32 bonus = std::clamp((searchScore - staticEval) * fdepth / 1024, -CORR_HIST_PENALTY_MAX, CORR_HIST_BONUS_MAX);
 
         updatePawnCorrHist(position, color, bonus);
         updateFriendlyNonPawnCorrHist(position, color, bonus);

@@ -490,7 +490,7 @@ private:
                         freduction = 0;
                     } else if (score >= beta) {
                         beta = std::min(score + delta, Score::MAX);
-                        freduction = std::min(freduction + WINDOW_FREDUCTION, WINDOW_MAX_FREDUCTION);
+                        freduction = std::min(freduction + WINDOW_FAIL_HIGH_FREDUCTION, WINDOW_MAX_FREDUCTION);
                     } else {
                         break;
                     }
@@ -764,7 +764,7 @@ private:
                     }
 
                     if (score >= beta) {
-                        if (fdepth <= NMP_NO_VERIF_MAX_DEPTH || thread.nmpMinPly > 0 || score >= beta + NMP_NO_VERIF_MARGIN) {
+                        if (fdepth <= NMP_NO_VERIF_MAX_FDEPTH || thread.nmpMinPly > 0 || score >= beta + NMP_NO_VERIF_MARGIN) {
                             return (Score::win(score)) ? beta : score;
                         }
 
