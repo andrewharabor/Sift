@@ -32,12 +32,7 @@ public:
     Callback callback() const noexcept { return callback_; }
 
     constexpr void update(Int32 value) noexcept {
-        if (value < min_) {
-            value = min_;
-        } else if (value > max_) {
-            value = max_;
-        }
-        value_ = value;
+        value_ = std::clamp(value, min_, max_);
         callback_();
     }
 
