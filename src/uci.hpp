@@ -102,6 +102,8 @@ public:
             moves();
         } else if (cmd == Command::EVAL) {
             eval();
+        } else if (cmd == Command::RAW_EVAL) {
+            rawEval();
         } else if (cmd == Command::FEN) {
             fen();
         } else if (cmd == Command::HASH) {
@@ -131,6 +133,7 @@ private:
         BOARD,
         MOVES,
         EVAL,
+        RAW_EVAL,
         FEN,
         HASH,
         HELP,
@@ -176,6 +179,8 @@ private:
             return Command::MOVES;
         } else if (token == "eval") {
             return Command::EVAL;
+        } else if (token == "raweval") {
+            return Command::RAW_EVAL;
         } else if (token == "fen") {
             return Command::FEN;
         } else if (token == "hash") {
@@ -570,6 +575,14 @@ private:
             std::cout << normedScore << " cp";
         }
         std::cout << std::endl;
+    }
+
+    void rawEval() const {
+        std::unique_lock<std::mutex> lock = lockStdout();
+
+        NNUE nnue = NNUE();
+        nnue.state().set(position_);
+        std::cout << nnue.forward(position_) << std::endl;
     }
 
     void fen() const {
