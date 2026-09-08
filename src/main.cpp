@@ -20,27 +20,23 @@ int main(int argc, const char *argv[]) {
     UCI uci = UCI();
 
     if (argc > 1) {
-        std::string args = argv[1];
-
 #if defined(OPEN_BENCH_TUNE)
-        if (args == "obconfig") {
+        if (std::string_view(argv[1]) == "obconfig") {
             TUNABLES.openBenchConfig();
+
             return 0;
-    }
+        }
 #endif
 
-        for (int i = 2; i < argc; i++) {
-            args += " ";
-            args += argv[i];
-        }
-
-        uci.execute(args);
-        while (uci.searching()) {
-            std::this_thread::yield();
+        for (int i = 1; i < argc; i++) {
+            uci.execute(argv[i]);
+            while (uci.searching()) {
+                std::this_thread::yield();
+            }
         }
 
         return 0;
-}
+    }
 
 
     uci.run();
