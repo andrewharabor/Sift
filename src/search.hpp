@@ -961,10 +961,10 @@ private:
                             fextension -= SE_FAIL_HIGH_NEG_FEXTENSION;
                         } else if (cutNode) {
                             fextension -= SE_CUT_NODE_NEG_FEXTENSION;
-                        } else if (ttEntry.score <= score) {
-                            fextension -= SE_SCORE_NEG_FEXTENSION;
                         } else if (ttEntry.score <= alpha) {
                             fextension -= SE_FAIL_LOW_NEG_FEXTENSION;
+                        } else if (ttEntry.score <= score) {
+                            fextension -= SE_SCORE_NEG_FEXTENSION;
                         }
 
                         if constexpr (!PV_NODE) {
