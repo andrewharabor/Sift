@@ -81,7 +81,7 @@ inline TunableList TUNABLES;
 
 inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback) : name_(name), value_(value), min_(min), max_(max), callback_(std::move(callback)) { TUNABLES.add(*this); }
 
-#if defined(OPEN_BENCH_TUNE)
+#if defined(SPSA_TUNE)
 #define TUNABLE_CALLBACK(name, val, min, max, callback) \
     inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, callback); \
     inline Int32 &name = name##_TUNABLE.value();

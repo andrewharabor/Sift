@@ -119,7 +119,7 @@ ifeq ($(MODE),release)
 	endif
 else ifeq ($(MODE),tune)
 	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
-	CPP_FLAGS += -DOPEN_BENCH_TUNE
+	CPP_FLAGS += -DSPSA_TUNE
 	ifneq ($(DETECTED_OS),windows)
 		CXX_FLAGS += -flto
 		LD_FLAGS  += -flto
