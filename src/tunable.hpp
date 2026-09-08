@@ -87,7 +87,7 @@ public:
             std::cout << "    \"value\": " << tunable->value() << "," << std::endl;
             std::cout << "    \"min_value\": " << tunable->min() << "," << std::endl;
             std::cout << "    \"max_value\": " << tunable->max() << "," << std::endl;
-            std::cout << "    \"step\": " << tunable->step() << "," << std::endl;
+            std::cout << "    \"step\": " << tunable->step() << std::endl;
             std::cout << "  }";
         }
 
