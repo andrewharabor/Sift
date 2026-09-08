@@ -62,6 +62,10 @@ else
 	SEP = /
 endif
 
+ifneq ($(strip $(EXE)),)
+	MAIN_EXEC := $(EXE)
+endif
+
 ifeq ($(ARCH),native)
 	PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
 	CXX_FLAGS += -march=native
