@@ -444,7 +444,7 @@ private:
     void bench(std::istringstream &stream) {
         std::unique_lock<std::mutex> lock = lockStdout();
 
-        Int32 depth;
+        Int32 depth = Bench::DEFAULT_DEPTH;
         stream >> depth;
 
         UInt64 nodes = 0;

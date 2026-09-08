@@ -10,6 +10,8 @@ namespace Sift {
 
 namespace Bench {
 
+static constexpr Int32 DEFAULT_DEPTH = 15;
+
 static constexpr USize TEST_COUNT = 50;
 
 static constexpr std::array<std::string_view, TEST_COUNT> TEST_CASES = {
