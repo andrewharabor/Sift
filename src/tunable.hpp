@@ -22,10 +22,10 @@ public:
     Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback);
 
     constexpr operator Int32() const noexcept { return value_; }
-    constexpr explicit operator std::string() const { return name_ + ", int, " + std::to_string(value_) + ", " + std::to_string(min_) + ", " + std::to_string(max_) + ", " + std::to_string(step()) + ", " + std::to_string(learningRate()); }
 
     const std::string &name() const noexcept { return name_; }
     constexpr Int32 &value() noexcept { return value_; }
+    constexpr Int32 value() const noexcept { return value_; }
     constexpr Int32 min() const noexcept { return min_; }
     constexpr Int32 max() const noexcept { return max_; }
     constexpr Float64 step() const noexcept { return std::abs(max_ - min_) / 20.0; }
@@ -69,8 +69,30 @@ public:
 
     void openBenchConfig() const noexcept {
         for (const Tunable *tunable : tunables_) {
-            std::cout << std::string(*tunable) << std::endl;
+            std::cout << tunable->name() + ", int, " + std::to_string(tunable->value()) + ", " + std::to_string(tunable->min()) + ", " + std::to_string(tunable->max()) + ", " + std::to_string(tunable->step()) + ", " + std::to_string(tunable->learningRate()) << std::endl;
         }
+    }
+
+    void weatherFactoryConfig() const noexcept {
+        std::cout << "{" << std::endl;
+        bool first = true;
+        for (const Tunable *tunable : tunables_) {
+            if (!first) {
+                std::cout << "," << std::endl;
+            }
+
+            first = false;
+
+            std::cout << "  \"" << tunable->name() << "\": {" << std::endl;
+            std::cout << "    \"value\": " << tunable->value() << "," << std::endl;
+            std::cout << "    \"min_value\": " << tunable->min() << "," << std::endl;
+            std::cout << "    \"max_value\": " << tunable->max() << "," << std::endl;
+            std::cout << "    \"step\": " << tunable->step() << "," << std::endl;
+            std::cout << "  }";
+        }
+
+        std::cout << std::endl;
+        std::cout << "}" << std::endl;
     }
 
 private:

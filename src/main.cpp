@@ -25,6 +25,10 @@ int main(int argc, const char *argv[]) {
             TUNABLES.openBenchConfig();
 
             return 0;
+        } else if (std::string_view(argv[1]) == "wfconfig") {
+            TUNABLES.weatherFactoryConfig();
+
+            return 0;
         }
 #endif
 
