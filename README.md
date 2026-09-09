@@ -1,4 +1,4 @@
 
-<h1 align="center"> Sift </h1>
+# Sift
 
-<p align="center"> Sift is a superhuman chess engine written in C++. </p>
+Sift is a superhuman chess engine written in C++.
