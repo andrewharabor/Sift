@@ -352,32 +352,32 @@ public:
 
     constexpr UInt64 hash() const noexcept { return state().hash; }
     constexpr UInt64 pawnHash() const noexcept { return state().pawnHash; }
-    constexpr UInt64 nonPawnHash(Color color) const noexcept { return state().nonPawnHashes[static_cast<USize>(color)]; }
+    constexpr UInt64 nonPawnHash(Color color) const noexcept { return state().nonPawnHashes[color.index()]; }
     constexpr UInt64 minorPieceHash() const noexcept { return state().minorPieceHash; }
     constexpr UInt64 majorPieceHash() const noexcept { return state().majorPieceHash; }
 
     constexpr UInt8 checks() const noexcept { return state().checks; }
     constexpr Bitboard checkMask() const noexcept { return state().checkMask; }
 
-    constexpr Bitboard diagonalPinMask() const noexcept { return state().diagonalPinMask[static_cast<USize>(sideToMove_)]; }
+    constexpr Bitboard diagonalPinMask() const noexcept { return state().diagonalPinMask[sideToMove_.index()]; }
 
     constexpr Bitboard diagonalPinMask(Color color) const noexcept {
         assert(color != Color::NONE);
-        return state().diagonalPinMask[static_cast<USize>(color)];
+        return state().diagonalPinMask[color.index()];
     }
 
-    constexpr Bitboard orthogonalPinMask() const noexcept { return state().orthogonalPinMask[static_cast<USize>(sideToMove_)]; }
+    constexpr Bitboard orthogonalPinMask() const noexcept { return state().orthogonalPinMask[sideToMove_.index()]; }
 
     constexpr Bitboard orthogonalPinMask(Color color) const noexcept {
         assert(color != Color::NONE);
-        return state().orthogonalPinMask[static_cast<USize>(color)];
+        return state().orthogonalPinMask[color.index()];
     }
 
-    constexpr Bitboard pinners() const noexcept { return state().pinners[static_cast<USize>(sideToMove_)]; }
+    constexpr Bitboard pinners() const noexcept { return state().pinners[sideToMove_.index()]; }
 
     constexpr Bitboard pinners(Color color) const noexcept {
         assert(color != Color::NONE);
-        return state().pinners[static_cast<USize>(color)];
+        return state().pinners[color.index()];
     }
 
     constexpr Bitboard pinned() const noexcept { return (orthogonalPinMask() | diagonalPinMask()) & friendly(sideToMove_); }
@@ -392,7 +392,7 @@ public:
     constexpr const std::array<Piece, 64> &mailbox() const noexcept { return mailbox_; }
 
     constexpr Bitboard castlingPath(CastlingRights::Side castlingSide) const noexcept {
-        return CASTLING_PATH_BITBOARDS[static_cast<USize>(CastlingRights::hashIndex(castlingSide))];
+        return CASTLING_PATH_BITBOARDS[CastlingRights::hashIndex(castlingSide)];
     }
 
     template<typename NNUEState>
@@ -718,7 +718,7 @@ public:
 
     constexpr Bitboard friendly(Color color) const noexcept {
         assert(color != Color::NONE);
-        return occupancyBitboards_[static_cast<USize>(color)];
+        return occupancyBitboards_[color.index()];
     }
 
     constexpr Bitboard enemy(Color color) const noexcept {
@@ -730,17 +730,17 @@ public:
 
     constexpr Piece pieceAt(Square square) const noexcept {
         assert(square != Square::NONE);
-        return mailbox_[static_cast<USize>(square.index())];
+        return mailbox_[square.index()];
     }
 
     constexpr Bitboard pieces(PieceType pieceType) const noexcept {
         assert(pieceType != PieceType::NONE);
-        return pieceBitboards_[static_cast<USize>(pieceType)];
+        return pieceBitboards_[pieceType.index()];
     }
 
     constexpr Bitboard pieces(PieceType pieceType, Color color) const noexcept {
         assert(pieceType != PieceType::NONE && color != Color::NONE);
-        return pieceBitboards_[static_cast<USize>(pieceType)] & occupancyBitboards_[static_cast<USize>(color)];
+        return pieceBitboards_[pieceType.index()] & occupancyBitboards_[color.index()];
     }
 
     constexpr Bitboard pieces(Piece piece) const noexcept {
@@ -911,7 +911,7 @@ public:
             if (pieceType == PieceType::QUEEN) {
                 return state().checkZones[static_cast<USize>(PieceType::BISHOP)] | state().checkZones[static_cast<USize>(PieceType::ROOK)];
             }
-            return state().checkZones[static_cast<USize>(pieceType)];
+            return state().checkZones[pieceType.index()];
         }();
 
         return checkZone.get(move.to().index());
@@ -1191,7 +1191,7 @@ public:
             return margin <= 0;
         }
 
-        const auto pieceTypeValue = [](PieceType pieceType) { return SEE_PIECE_VALUES[static_cast<USize>(pieceType)]; };
+        const auto pieceTypeValue = [](PieceType pieceType) { return SEE_PIECE_VALUES[pieceType.index()]; };
 
         const Square from = move.from();
         const Square to = move.to();
@@ -1377,7 +1377,7 @@ private:
             if (pieceType == PieceType::PAWN) {
                 state().pawnHash ^= Zobrist::piece(piece, square);
             } else {
-                state().nonPawnHashes[static_cast<USize>(color)] ^= Zobrist::piece(piece, square);
+                state().nonPawnHashes[color.index()] ^= Zobrist::piece(piece, square);
                 if (pieceType == PieceType::KNIGHT || pieceType == PieceType::BISHOP || pieceType == PieceType::KING) {
                     state().minorPieceHash ^= Zobrist::piece(piece, square);
                 } else if (pieceType == PieceType::ROOK || pieceType == PieceType::QUEEN || pieceType == PieceType::KING) {
@@ -1386,9 +1386,9 @@ private:
             }
         }
 
-        pieceBitboards_[static_cast<USize>(pieceType)].set(index);
-        occupancyBitboards_[static_cast<USize>(color)].set(index);
-        mailbox_[static_cast<USize>(index)] = piece;
+        pieceBitboards_[pieceType.index()].set(index);
+        occupancyBitboards_[color.index()].set(index);
+        mailbox_[index] = piece;
 
         nnueState.addPiece(*this, piece, square);
     }
@@ -1407,7 +1407,7 @@ private:
             if (pieceType == PieceType::PAWN) {
                 state().pawnHash ^= Zobrist::piece(piece, square);
             } else {
-                state().nonPawnHashes[static_cast<USize>(color)] ^= Zobrist::piece(piece, square);
+                state().nonPawnHashes[color.index()] ^= Zobrist::piece(piece, square);
                 if (pieceType == PieceType::KNIGHT || pieceType == PieceType::BISHOP || pieceType == PieceType::KING) {
                     state().minorPieceHash ^= Zobrist::piece(piece, square);
                 } else if (pieceType == PieceType::ROOK || pieceType == PieceType::QUEEN || pieceType == PieceType::KING) {
@@ -1416,9 +1416,9 @@ private:
             }
         }
 
-        pieceBitboards_[static_cast<USize>(pieceType)].clear(index);
-        occupancyBitboards_[static_cast<USize>(color)].clear(index);
-        mailbox_[static_cast<USize>(index)] = Piece::NONE;
+        pieceBitboards_[pieceType.index()].clear(index);
+        occupancyBitboards_[color.index()].clear(index);
+        mailbox_[index] = Piece::NONE;
 
         nnueState.removePiece(*this, piece, square);
     }

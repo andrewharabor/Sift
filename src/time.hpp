@@ -42,8 +42,8 @@ public:
 
     void limits(const SearchLimits &limits, Color color, USize moveCount) noexcept {
         if (limits.clock.enabled) {
-            const MS time = std::max(MS(1), limits.clock.time[static_cast<USize>(color)] - limits.overhead);
-            const MS increment = limits.clock.increment[static_cast<USize>(color)];
+            const MS time = std::max(MS(1), limits.clock.time[color.index()] - limits.overhead);
+            const MS increment = limits.clock.increment[color.index()];
 
             const Float64 baseTimeScale = static_cast<Float64>((limits.clock.movesToGo > 0) ? limits.clock.movesToGo : TIME_BASE_TIME_SCALE);
             const auto baseTime = (time / baseTimeScale) + (increment * Utils::floatDiv100(TIME_BASE_TIME_INCREMENT_SCALE));

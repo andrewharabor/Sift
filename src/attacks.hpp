@@ -152,12 +152,12 @@ public:
 
     static Bitboard between(Square from, Square to) noexcept {
         assert(from != Square::NONE && to != Square::NONE);
-        return SQUARES_BETWEEN_BITBOARDS[static_cast<USize>(from.index())][static_cast<USize>(to.index())];
+        return SQUARES_BETWEEN_BITBOARDS[from.index()][to.index()];
     }
 
     static Bitboard aligned(Square from, Square to) noexcept {
         assert(from != Square::NONE && to != Square::NONE);
-        return SQUARES_ALIGNED_BITBOARDS[static_cast<USize>(from.index())][static_cast<USize>(to.index())];
+        return SQUARES_ALIGNED_BITBOARDS[from.index()][to.index()];
     }
 
 private:
@@ -296,7 +296,7 @@ private:
         assert(square != Square::NONE);
         const Bitboard edges = ((Bitboard(Rank::FIRST) | Bitboard(Rank::EIGHTH)) & ~Bitboard(square.rank())) | ((Bitboard(File::A) | Bitboard(File::H)) & ~Bitboard(square.file()));
         UInt64 occupied = 0ULL;
-        Magic &entry = table[static_cast<USize>(square.index())];
+        Magic &entry = table[square.index()];
         entry.mask = (attacks(square, occupied) & ~edges).bits();
 #if !defined(USE_PEXT)
         entry.magic = magic;
@@ -304,7 +304,7 @@ private:
 #endif
 
         if (square.index() < 63) {
-            table[static_cast<USize>(square.index() + 1)].attacks = entry.attacks + (1ULL << Bitboard(entry.mask).count());
+            table[square.index() + 1].attacks = entry.attacks + (1ULL << Bitboard(entry.mask).count());
         }
 
         do {

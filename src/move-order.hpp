@@ -290,9 +290,9 @@ private:
             Int32 &score = moveScores_[i];
 
             score += history_.noisyScore(position_, move) * MOVE_ORDER_NOISY_SCORE_SCALE / 1024;
-            score += SEE_PIECE_VALUES[static_cast<USize>(position_.capturedPiece(move).type())];
+            score += SEE_PIECE_VALUES[position_.capturedPiece(move).type().index()];
             if (move.type() == MoveType::PROMOTION) {
-                score += SEE_PIECE_VALUES[static_cast<USize>(move.promotion())] - SEE_PIECE_VALUES[static_cast<USize>(PieceType::PAWN)];
+                score += SEE_PIECE_VALUES[move.promotion().index()] - SEE_PIECE_VALUES[static_cast<USize>(PieceType::PAWN)];
             }
         }
     }

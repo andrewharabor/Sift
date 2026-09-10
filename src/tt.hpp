@@ -126,7 +126,7 @@ public:
 
     USize hashfull() const noexcept {
         USize count = 0;
-        USize sampleSize = std::min(size_, static_cast<USize>(1000));
+        USize sampleSize = std::min(size_, 1000UL);
         for (USize i = 0; i < sampleSize; i++) {
             for (USize j = 0; j < CLUSTER_SIZE; j++) {
                 const RawEntry &entry = table_[i].entries[j];

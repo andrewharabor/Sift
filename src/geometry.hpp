@@ -191,7 +191,7 @@ public:
 #if defined(USE_VBMI)
 
     static inline Permutation permutation(Square square) noexcept {
-        const auto indices = _mm512_loadu_si512(PERMUTATIONS[static_cast<USize>(square.index())].data());
+        const auto indices = _mm512_loadu_si512(PERMUTATIONS[square.index()].data());
         const auto valid = _mm512_testn_epi8_mask(indices, _mm512_set1_epi8(0x80));
         return Permutation{Vec{indices}, valid};
     };
@@ -223,7 +223,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[piece.index()] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) noexcept {
         const auto mask = _mm512_loadu_si512(INCOMING_THREAT_MASK.data());
@@ -238,7 +238,7 @@ public:
 #elif defined(USE_AVX2)
 
     static inline Permutation permutation(Square square) noexcept {
-        const auto indices = Vec::cast(PERMUTATIONS[static_cast<USize>(square.index())]);
+        const auto indices = Vec::cast(PERMUTATIONS[square.index()]);
         const Vec valid{{_mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80)), _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80))}};
         return Permutation{indices, valid};
     }
@@ -290,7 +290,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[piece.index()] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) noexcept {
         const auto mask = Vec::cast(INCOMING_THREAT_MASK);
@@ -307,7 +307,7 @@ public:
 #elif defined(USE_NEON)
 
     static inline Permutation permutation(Square square) {
-        const auto indices = Vec::load(PERMUTATIONS[static_cast<USize>(square.index())].data());
+        const auto indices = Vec::load(PERMUTATIONS[square.index()].data());
         const auto valid = Vec{vmvnq_u8(vshrq_n_s8(indices[0], 7)), vmvnq_u8(vshrq_n_s8(indices[1], 7)), vmvnq_u8(vshrq_n_s8(indices[2], 7)), vmvnq_u8(vshrq_n_s8(indices[3], 7))};
         return Permutation{indices, valid};
     }
@@ -346,7 +346,7 @@ public:
         return bitRays - (bitRays >> 7);
     }
 
-    static inline BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[static_cast<USize>(piece)] & closest; }
+    static inline BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[piece.index()] & closest; }
 
     static inline BitRays incomingAttackers(Vec bits, BitRays closest) {
         const auto mask = Vec::load(INCOMING_THREAT_MASK.data());

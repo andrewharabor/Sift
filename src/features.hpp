@@ -27,7 +27,7 @@ struct PSQFeature {
 
         const USize typeIdx = static_cast<USize>(piece.type());
 
-        const USize colorIdx = [piece, color]() -> USize {
+        const USize colorIdx = [this, color] {
             if constexpr (FeatureSet::MERGED_KINGS) {
                 if (piece.type() == PieceType::KING) {
                     return 0;
@@ -52,7 +52,7 @@ struct TIFeature {
     Square victimSq;
 
 private:
-    static constexpr MultiArray<Int32, 6, 6> PIECE_TARGET_MAP_PAWNS = {{
+    static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP_PAWNS = {{
         {0, 1, -1, 2, -1, -1},
         {0, 1, 2, 3, 4, -1},
         {0, 1, 2, 3, -1, -1},
@@ -61,7 +61,7 @@ private:
         {-1, -1, -1, -1, -1, -1},
     }};
 
-    static constexpr MultiArray<Int32, 6, 6> PIECE_TARGET_MAP_NO_PAWNS = {{
+    static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP_NO_PAWNS = {{
         {-1, 0, -1, 1, -1, -1},
         {0, 1, 2, 3, 4, -1},
         {0, 1, 2, 3, -1, -1},
@@ -71,13 +71,13 @@ private:
     }};
 
     template<typename FeatureSet>
-    static constexpr MultiArray<Int32, 6, 6> PIECE_TARGET_MAP = (FeatureSet::PAWN_PAWN_INPUTS) ? PIECE_TARGET_MAP_NO_PAWNS : PIECE_TARGET_MAP_PAWNS;
+    static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP = (FeatureSet::PAWN_PAWN_INPUTS) ? PIECE_TARGET_MAP_NO_PAWNS : PIECE_TARGET_MAP_PAWNS;
 
     template<typename FeatureSet>
-    static constexpr std::array<Int32, 6> PIECE_TARGET_COUNT = [] {
-        std::array<Int32, 6> counts = {};
+    static constexpr std::array<Int64, 6> PIECE_TARGET_COUNT = [] {
+        std::array<Int64, 6> counts = {};
         for (USize attacker = 0; attacker < 6; attacker++) {
-            Int32 count = 0;
+            Int64 count = 0;
             for (USize victim = 0; victim < 6; victim++) {
                 if (PIECE_TARGET_MAP<FeatureSet>[attacker][victim] >= 0) {
                     count++;
@@ -88,29 +88,29 @@ private:
         return counts;
     }();
 
-    static inline MultiArray<Int32, 64, 64> pieceIndices(Piece piece) noexcept {
+    static inline MultiArray<Int64, 64, 64> pieceIndices(Piece piece) noexcept {
         Attacks::init();
-        MultiArray<Int32, 64, 64> indices = {};
+        MultiArray<Int64, 64, 64> indices = {};
         for (UInt8 i = 0; i < 64; i++) {
             const Square from = Square(i);
             Bitboard attacks = Attacks::attacks(piece, from, Bitboard());
             for (UInt8 j = 0; j < 64; j++) {
                 const Square to = Square(j);
                 const Bitboard mask = attacks & (Bitboard(to).bits() - 1);
-                indices[i][j] = static_cast<Int32>(mask.count());
+                indices[i][j] = static_cast<Int64>(mask.count());
             }
         }
         return indices;
     }
 
-    static inline MultiArray<Int32, 12, 64, 64> PIECE_INDICES = [] {
-        MultiArray<Int32, 12, 64, 64> indices = {};
+    static inline MultiArray<Int64, 12, 64, 64> PIECE_INDICES = [] {
+        MultiArray<Int64, 12, 64, 64> indices = {};
         indices[static_cast<USize>(Piece::WHITE_PAWN)] = pieceIndices(Piece::WHITE_PAWN);
         indices[static_cast<USize>(Piece::BLACK_PAWN)] = pieceIndices(Piece::BLACK_PAWN);
         for (const PieceType pieceType : {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN, PieceType::KING}) {
-            const MultiArray<Int32, 64, 64> idx = pieceIndices(Piece(pieceType, Color::BLACK));
-            indices[static_cast<USize>(Piece(pieceType, Color::WHITE))] = idx;
-            indices[static_cast<USize>(Piece(pieceType, Color::BLACK))] = idx;
+            const MultiArray<Int64, 64, 64> idx = pieceIndices(Piece(pieceType, Color::BLACK));
+            indices[Piece(pieceType, Color::WHITE).index()] = idx;
+            indices[Piece(pieceType, Color::BLACK).index()] = idx;
         }
         return indices;
     }();
@@ -120,43 +120,43 @@ private:
         Attacks::init();
 
         struct {
-            std::array<std::pair<Int32, Int32>, 12> indices = {};
-            MultiArray<Int32, 12, 64> offsets = {};
+            std::array<std::pair<Int64, Int64>, 12> indices = {};
+            MultiArray<Int64, 12, 64> offsets = {};
         } offsets;
 
-        Int32 offset = 0;
+        Int64 offset = 0;
         for (UInt8 p = 0; p < 12; p++) {
             const Piece piece = Piece(p);
-            Int32 pieceOffset = 0;
+            Int64 pieceOffset = 0;
             for (UInt8 sq = 0; sq < 64; sq++) {
                 const Square square = Square(sq);
-                offsets.offsets[static_cast<USize>(piece)][sq] = pieceOffset;
+                offsets.offsets[piece.index()][sq] = pieceOffset;
                 if (piece.type() != PieceType::PAWN || (square.rank() > Rank::FIRST && square.rank() < Rank::EIGHTH)) {
                     const Bitboard attacks = Attacks::attacks(Piece(piece.type(), ~piece.color()), square, Bitboard());
-                    pieceOffset += static_cast<Int32>(attacks.count());
+                    pieceOffset += static_cast<Int64>(attacks.count());
                 }
             }
-            offsets.indices[static_cast<USize>(piece)] = {pieceOffset, offset};
-            offset += PIECE_TARGET_COUNT<FeatureSet>[static_cast<USize>(piece.type())] * pieceOffset;
+            offsets.indices[piece.index()] = {pieceOffset, offset};
+            offset += PIECE_TARGET_COUNT<FeatureSet>[piece.type().index()] * pieceOffset;
         }
         return offsets;
     }();
 
     template<typename FeatureSet>
-    static inline MultiArray<Int32, 12, 12, 2> ATTACK_INDICES = [] {
-        MultiArray<Int32, 12, 12, 2> indices = {};
+    static inline MultiArray<Int64, 12, 12, 2> ATTACK_INDICES = [] {
+        MultiArray<Int64, 12, 12, 2> indices = {};
         for (UInt8 i = 0; i < 12; i++) {
             const Piece attacker = Piece(i);
             for (UInt8 j = 0; j < 12; j++) {
                 const Piece victim = Piece(j);
                 const bool enemies = attacker.color() != victim.color();
-                const Int32 map = PIECE_TARGET_MAP<FeatureSet>[static_cast<USize>(attacker.type())][static_cast<USize>(victim.type())];
+                const Int64 map = PIECE_TARGET_MAP<FeatureSet>[attacker.type().index()][victim.type().index()];
                 const bool semiExcluded = ((attacker.type() == victim.type()) && (enemies || attacker.type() != PieceType::PAWN));
                 const bool excluded = map < 0;
                 const auto [pieceOffset, offset] = OFFSETS<FeatureSet>.indices[i];
-                const Int32 featureIdx = offset + (static_cast<Int32>(~victim.color()) * (PIECE_TARGET_COUNT<FeatureSet>[static_cast<USize>(attacker.type())] / 2) + map) * pieceOffset;
-                indices[i][j][0] = (excluded) ? std::numeric_limits<Int32>::min() : featureIdx;
-                indices[i][j][1] = (excluded || semiExcluded) ? std::numeric_limits<Int32>::min() : featureIdx;
+                const Int64 featureIdx = offset + (static_cast<Int64>(~victim.color()) * (PIECE_TARGET_COUNT<FeatureSet>[attacker.type().index()] / 2) + map) * pieceOffset;
+                indices[i][j][0] = (excluded) ? std::numeric_limits<Int64>::min() : featureIdx;
+                indices[i][j][1] = (excluded || semiExcluded) ? std::numeric_limits<Int64>::min() : featureIdx;
             }
         }
         return indices;
@@ -212,8 +212,8 @@ public:
         static constexpr std::array<Bitboard, 0> pawnsBefore = {};
         static constexpr std::array<Bitboard, 0> pawnsAfter = {};
 
-        constexpr void setPSQRefresh(Color color) noexcept { psqRefresh[static_cast<USize>(color)] = true; }
-        constexpr bool needsPSQRefresh(Color color) const noexcept { return psqRefresh[static_cast<USize>(color)]; }
+        constexpr void setPSQRefresh(Color color) noexcept { psqRefresh[color.index()] = true; }
+        constexpr bool needsPSQRefresh(Color color) const noexcept { return psqRefresh[color.index()]; }
 
         constexpr void addPSQFeature(PSQFeature feature) noexcept {
             assert(psqAddSize < 2);
@@ -269,7 +269,7 @@ public:
 
     static constexpr USize bucket(Color color, Square kingSquare) noexcept {
         kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-        return BUCKET_LAYOUT[static_cast<USize>(kingSquare)];
+        return BUCKET_LAYOUT[kingSquare.index()];
     }
 
     static constexpr USize refreshTableIdx(Color color, Square kingSquare) noexcept { return bucket(color, kingSquare); }
@@ -280,7 +280,7 @@ public:
         assert(kingSquare != Square::NONE);
         prevKingSquare = (color == Color::WHITE) ? prevKingSquare : prevKingSquare.flipped();
         kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-        return BUCKET_LAYOUT[static_cast<USize>(prevKingSquare)] != BUCKET_LAYOUT[static_cast<USize>(kingSquare)];
+        return BUCKET_LAYOUT[prevKingSquare.index()] != BUCKET_LAYOUT[kingSquare.index()];
     }
 };
 
@@ -340,12 +340,12 @@ public:
 
     static constexpr USize bucket(Color color, Square kingSquare) noexcept {
         kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-        return BUCKET_LAYOUT[static_cast<USize>(kingSquare)];
+        return BUCKET_LAYOUT[kingSquare.index()];
     }
 
     static constexpr USize refreshTableIdx(Color color, Square kingSquare) noexcept {
         kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-        return BUCKET_LAYOUT[static_cast<USize>(kingSquare)] * 2 + needsMirror(kingSquare);
+        return BUCKET_LAYOUT[kingSquare.index()] * 2 + needsMirror(kingSquare);
     }
 
     static constexpr bool needsRefresh(Color color, Square prevKingSquare, Square kingSquare) noexcept {
@@ -359,7 +359,7 @@ public:
 
         prevKingSquare = (color == Color::WHITE) ? prevKingSquare : prevKingSquare.flipped();
         kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-        return BUCKET_LAYOUT[static_cast<USize>(prevKingSquare)] != BUCKET_LAYOUT[static_cast<USize>(kingSquare)];
+        return BUCKET_LAYOUT[prevKingSquare.index()] != BUCKET_LAYOUT[kingSquare.index()];
     }
 };
 
@@ -445,19 +445,19 @@ public:
         std::array<TIFeature, MAX_TI_CHANGES> tiSubs = {};
         USize tiSubSize = 0;
 
-        constexpr void setTIRefresh(Color color) noexcept { tiRefresh[static_cast<USize>(color)] = true; };
-        constexpr bool needsTIRefresh(Color color) const noexcept { return tiRefresh[static_cast<USize>(color)]; }
+        constexpr void setTIRefresh(Color color) noexcept { tiRefresh[color.index()] = true; };
+        constexpr bool needsTIRefresh(Color color) const noexcept { return tiRefresh[color.index()]; }
 
-        constexpr void addTIFeature(TIFeature) noexcept {
+        constexpr void addTIFeature(TIFeature feature) noexcept {
             assert(tiAddSize < MAX_TI_CHANGES);
             tiAdds[tiAddSize++] = feature;
         };
 
-        constexpr void subTIFeature(TIFeature) noexcept {
+        constexpr void subTIFeature(TIFeature feature) noexcept {
             assert(tiSubSize < MAX_TI_CHANGES);
             tiSubs[tiSubSize++] = feature;
         };
-    }
+    };
 };
 
 template<typename PSQFeatureSet>
@@ -477,7 +477,7 @@ public:
             pawnsAfter[0] = whiteAfter;
             pawnsAfter[1] = blackAfter;
         };
-    }
+    };
 };
 
 }

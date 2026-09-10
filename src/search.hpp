@@ -313,8 +313,8 @@ public:
         multiPV_ = static_cast<USize>(OPTIONS["MultiPV"].spinValue());
 
         const Int32 contemptVal = WDL::unnormalize(static_cast<Int32>(OPTIONS["Contempt"].spinValue()), position.materialScore());
-        contempt_[static_cast<USize>(position.sideToMove())] = contemptVal;
-        contempt_[static_cast<USize>(~position.sideToMove())] = -contemptVal;
+        contempt_[position.sideToMove().index()] = contemptVal;
+        contempt_[(~position.sideToMove()).index()] = -contemptVal;
 
         setTimeUp(false);
         timeManager_.limits(limits, position.sideToMove(), legalMoves.size());
@@ -467,8 +467,8 @@ private:
 
                 if (depth >= OPTIMISM_MIN_DEPTH) {
                     const Int32 optimism = OPTIMISM_SCORE_SCALE * rootMove.averageScore / (std::abs(rootMove.averageScore) + OPTIMISM_DIVISOR_OFFSET);
-                    thread.optimism[static_cast<USize>(thread.position.sideToMove())] = optimism;
-                    thread.optimism[static_cast<USize>(~thread.position.sideToMove())] = -optimism;
+                    thread.optimism[thread.position.sideToMove().index()] = optimism;
+                    thread.optimism[(~thread.position.sideToMove()).index()] = -optimism;
                 }
 
                 while (true) {
