@@ -7,8 +7,6 @@ build/
 ft-acts.json
 *.nnue
 
-.vscode
-
 *.d
 
 *.slo
