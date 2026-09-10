@@ -51,6 +51,31 @@ struct TIFeature {
     Piece victim;
     Square victimSq;
 
+    template<typename FeatureSet>
+    constexpr Int64 index(Color color, Square kingSquare) const noexcept {
+        assert(attacker != Piece::NONE);
+        assert(attackerSq != Square::NONE);
+        assert(victim != Piece::NONE);
+        assert(victimSq != Square::NONE);
+        assert(color != Color::NONE);
+        assert(kingSquare != Square::NONE);
+
+        Piece atk = (color == Color::White) ? attacker : Piece(attacker.type(), ~attacker.color());
+        Square atkSq = (color == Color::White) ? attackerSq : attackerSq.flipped();
+        atkSq = FeatureSet::mirror(atkSq, kingSquare);
+        Piece vic = (color == Color::White) ? victim : Piece(victim.type(), ~victim.color());
+        Square vicSq = (color == Color::White) ? victimSq : victimSq.flipped();
+        vicSq = FeatureSet::mirror(vicSq, kingSquare);
+
+        const bool forwards = atkSq.index() < vicSq.index();
+
+        const Int64 attackIdx = ATTACK_INDICES<FeatureSet>[atk.index()][vic.index()][forwards];
+        const Int64 offset = OFFSETS<FeatureSet>.offsets[atk.index()][atkSq.index()];
+        const Int64 pieceIdx = PIECE_INDICES[atk.index()][atkSq.index()][vicSq.index()];
+
+        return FeatureSet::THREAT_OFFSET + attackIdx + offset + pieceIdx;
+    }
+
 private:
     static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP_PAWNS = {{
         {0, 1, -1, 2, -1, -1},
@@ -184,6 +209,38 @@ struct PPFeature {
         }
         return masks;
     }();
+
+    template<typename FeatureSet>
+    constexpr USize index(Color color, Square kingSquare) const noexcept {
+        assert(squareA != Square::NONE);
+        assert(colorA != Color::NONE);
+        assert(squareB != Square::NONE);
+        assert(colorB != Color::NONE);
+        assert(color != Color::NONE);
+        assert(kingSquare != Square::NONE);
+
+        const USize aID = pawnID<FeatureSet>(color, kingSquare, colorA, squareA);
+        const USize bID = pawnID<FeatureSet>(color, kingSquare, colorB, squareB);
+        const USize hi = std::max(aID, bID);
+        const USize lo = std::min(aID, bID);
+        return hi * (hi - 1) / 2 + lo;
+    }
+
+private:
+    template<typename FeatureSet>
+    static constexpr USize pawnID(Color color, Square kingSquare, Color pawnColor, Square pawnSquare) noexcept {
+        assert(color != Color::NONE);
+        assert(kingSquare != Square::NONE);
+        assert(pawnColor != Color::NONE);
+        assert(pawnSquare != Square::NONE);
+        assert(pawnSquare.index() >= 8 && pawnSquare.index() < 56);
+
+        Square pawnSq = (color == Color::WHITE) ? pawnSquare : pawnSquare.flipped();
+        pawnSq = FeatureSet::mirror(pawnSq, kingSquare);
+
+        const USize offset = (color != pawnColor) ? 48 : 0;
+        return offset + static_cast<USize>(pawnSq) - 8;
+    }
 };
 
 class PSQFeaturesBase {
