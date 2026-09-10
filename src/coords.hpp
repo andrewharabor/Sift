@@ -64,6 +64,8 @@ public:
     constexpr operator UInt8() const noexcept { return static_cast<UInt8>(file_); }
     constexpr explicit operator std::string() const noexcept { return std::string(1, static_cast<char>(file_) + 'a'); }
 
+    constexpr UInt8 index() const noexcept { return static_cast<UInt8>(file_); }
+
     constexpr FileEnum internal() const noexcept { return file_; }
 
 private:
@@ -122,6 +124,8 @@ public:
         assert(color != Color::NONE);
         return static_cast<UInt8>(rank_) == (static_cast<UInt8>(color) * 7);
     };
+
+    constexpr UInt8 index() const noexcept { return static_cast<UInt8>(rank_); }
 
     constexpr RankEnum internal() const noexcept { return rank_; }
 

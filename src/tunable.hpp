@@ -11,6 +11,18 @@
 #include "types.hpp"
 #include "utils.hpp"
 
+#if defined(EXTERNAL_TUNE)
+#define TUNABLE_CALLBACK(name, val, min, max, callback) \
+    inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, callback); \
+    inline Int32 &name = name##_TUNABLE.value();
+#else
+#define TUNABLE_CALLBACK(name, val, min, max, callback) \
+    static constexpr Int32 name = val;
+#endif
+
+#define TUNABLE(name, val, min, max) \
+    TUNABLE_CALLBACK(name, val, min, max, []() {})
+
 
 namespace Sift {
 
@@ -102,19 +114,6 @@ private:
 inline TunableList TUNABLES;
 
 inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback) : name_(name), value_(value), min_(min), max_(max), callback_(std::move(callback)) { TUNABLES.add(*this); }
-
-#if defined(EXTERNAL_TUNE)
-#define TUNABLE_CALLBACK(name, val, min, max, callback) \
-    inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, callback); \
-    inline Int32 &name = name##_TUNABLE.value();
-#else
-#define TUNABLE_CALLBACK(name, val, min, max, callback) \
-    static constexpr Int32 name = val;
-#endif
-
-#define TUNABLE(name, val, min, max) \
-    TUNABLE_CALLBACK(name, val, min, max, []() {})
-
 
 static constexpr Int32 FDEPTH_SCALE = 128;
 

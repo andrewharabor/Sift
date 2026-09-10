@@ -6,6 +6,7 @@
 namespace Sift {
 
 namespace Score {
+
 static constexpr Int32 MAX_PLY = 251;
 
 static constexpr Int32 MAX = 32700;

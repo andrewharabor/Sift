@@ -1,5 +1,47 @@
 #pragma once
 
+#if !defined(USE_AVX512) && !defined(USE_AVX2) && !defined(USE_NEON)
+
+#if defined(__AVX512F__) && (defined(__AVX512BW__) || defined(__AVX512VNNI__))
+#define USE_AVX512
+#endif
+
+#if defined(__AVX512VNNI__)
+#define USE_VNNI512
+#endif
+
+#if defined(__AVX512VBMI2__)
+#define USE_VBMI2
+#endif
+
+#if defined(__AVX512VBMI__)
+#define USE_VBMI
+#endif
+
+#if defined(__AVX2__)
+#define USE_AVX2
+#endif
+
+#if defined(__BMI2__)
+#define USE_BMI2
+#endif
+
+#if defined(__ARM_NEON)
+#define USE_NEON
+#endif
+
+#if defined(__ARM_FEATURE_DOTPROD)
+#define USE_NEON_DOTPROD
+#endif
+
+#endif
+
+#if !defined(USE_AVX512) && !defined(USE_AVX2) && !defined(USE_NEON)
+
+#error Unsupported architecture: No SIMD extension found
+
+#endif
+
 #if defined(USE_AVX2) || defined(USE_AVX512)
 #include <immintrin.h>
 #endif
@@ -13,10 +55,6 @@
 #include <cassert>
 
 #include "types.hpp"
-
-#if defined(USE_AVX512) || defined(USE_AVX2) || defined(USE_NEON)
-
-#define USE_SIMD
 
 #define SIMD_DECLARE_0_OPS(name) \
     template<typename Type> \
@@ -57,8 +95,6 @@
     inline auto name<Int16>(Vec<Int16> arg0, Vec<Int16> arg1, Vec<Int16> arg2) { return name##Int16(arg0, arg1, arg2); } \
     template<> \
     inline auto name<Int32>(Vec<Int32> arg0, Vec<Int32> arg1, Vec<Int32> arg2) { return name##Int32(arg0, arg1, arg2); }
-
-#endif
 
 
 namespace Sift {
@@ -553,11 +589,7 @@ public:
 
 }
 
-#if defined(USE_SIMD)
-
 #undef SIMD_DECLARE_0_OPS
 #undef SIMD_DECLARE_1_OP
 #undef SIMD_DECLARE_2_OPS
 #undef SIMD_DECLARE_3_OPS
-
-#endif

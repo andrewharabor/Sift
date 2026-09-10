@@ -1,11 +1,12 @@
 #pragma once
 
-#include <array>
-#include <functional>
-#include <mutex>
 #if defined(USE_PEXT)
 #include <immintrin.h>
 #endif
+
+#include <array>
+#include <functional>
+#include <mutex>
 #include <tuple>
 
 #include "bitboard.hpp"
@@ -317,8 +318,8 @@ private:
         static_assert(PIECE_TYPE_ENUM == PieceType::BISHOP || PIECE_TYPE_ENUM == PieceType::ROOK);
         assert(square != Square::NONE);
         static constexpr Int8 directions[2][4][2] = {
-            {{1, 1}, {1, -1}, {-1, -1}, {-1, 1}},
-            {{0, 1}, {1, 0}, {0, -1}, {-1, 0}}
+            {{1, 1},{1, -1},{-1, -1},{-1, 1}},
+            {{0, 1},{1, 0},{0, -1},{-1, 0}}
         };
         const bool isRook = (PIECE_TYPE_ENUM == PieceType::ROOK);
         Bitboard attacks = 0ULL;
