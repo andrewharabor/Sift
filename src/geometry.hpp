@@ -15,7 +15,7 @@ namespace Sift {
 using Bit = UInt8;
 using BitRays = UInt64;
 
-#if defined(USE_AVX512)
+#if defined(USE_VBMI)
 
 struct Vec {
     __m512i raw;
@@ -188,7 +188,7 @@ public:
         return sliders;
     }();
 
-#if defined(USE_AVX512)
+#if defined(USE_VBMI)
 
     static inline Permutation permutation(Square square) noexcept {
         const auto indices = _mm512_loadu_si512(PERMUTATIONS[static_cast<USize>(square.index())].data());

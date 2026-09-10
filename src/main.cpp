@@ -20,7 +20,7 @@ int main(int argc, const char *argv[]) {
     UCI uci = UCI();
 
     if (argc > 1) {
-#if defined(SPSA_TUNE)
+#if defined(EXTERNAL_TUNE)
         if (std::string_view(argv[1]) == "obconfig") {
             TUNABLES.openBenchConfig();
 

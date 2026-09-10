@@ -66,42 +66,59 @@ ifneq ($(strip $(EXE)),)
 	MAIN_EXEC := $(EXE)
 endif
 
+PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
 ifeq ($(ARCH),native)
-	PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
 	CXX_FLAGS += -march=native
-	ifneq ($(findstring __POPCNT__, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_POPCNT
-	endif
-	ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
-		ifeq ($(findstring __znver1, $(PROPERTIES)),)
-			ifeq ($(findstring __znver2, $(PROPERTIES)),)
-				CPP_FLAGS += -DUSE_PEXT
-			endif
+	ifneq ($(findstring __AVX512F__, $(PROPERTIES)),)
+		ifneq ($(findstring __AVX512BW__, $(PROPERTIES)),)
+			CPP_FLAGS += -DUSE_AVX512
+		else ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
+			CPP_FLAGS += -DUSE_AVX512
 		endif
+	endif
+	ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
+		CPP_FLAGS += -DUSE_VNNI512
+	endif
+	ifneq ($(findstring __AVX512VBMI2__, $(PROPERTIES)),)
+		CPP_FLAGS += -DUSE_VBMI2
+	endif
+	ifneq ($(findstring __AVX512VBMI__, $(PROPERTIES)),)
+		CPP_FLAGS += -DUSE_VBMI
 	endif
 	ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
 		CPP_FLAGS += -DUSE_AVX2
 	endif
-	ifneq ($(findstring __AVX512VBMI2__, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_AVX512
-	endif
 	ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
-		CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
+		CPP_FLAGS += -DUSE_NEON
 	endif
-else ifeq ($(ARCH),avx2)
-	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt
-else ifeq ($(ARCH),avx2-pext)
-	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT -DUSE_PEXT
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2
+	ifneq ($(findstring __ARM_FEATURE_DOTPROD, $(PROPERTIES)),)
+		CPP_FLAGS += -DUSE_NEON_DOTPROD
+	endif
+	ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
+		ifeq ($(findstring __znver1, $(PROPERTIES)),)
+			ifeq ($(findstring __znver2, $(PROPERTIES)),)
+				CPP_FLAGS += -DUSE_BMI2 -DUSE_PEXT
+			endif
+		endif
+	endif
+	ifneq ($(findstring __POPCNT__, $(PROPERTIES)),)
+		CPP_FLAGS += -DUSE_POPCNT
+	endif
 else ifeq ($(ARCH),avx512)
-	CPP_FLAGS += -DUSE_AVX2 -DUSE_AVX512 -DUSE_POPCNT -DUSE_PEXT
-	CXX_FLAGS += -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mavx -mfma -mavx2 -mpopcnt -mbmi -mbmi2 -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw
-else ifeq ($(ARCH),neon)
+	CXX_FLAGS += -march=icelake-client -mtune=znver4
+	CPP_FLAGS += -DUSE_AVX512 -DUSE_VNNI512 -DUSE_VBMI2 -DUSE_VBMI -DUSE_AVX2 -DUSE_BMI2 -DUSE_PEXT -DUSE_POPCNT
+else ifeq ($(ARCH),avx2-bmi2)
+	CXX_FLAGS += -march=haswell -mtune=znver3
+	CPP_FLAGS +=  -DUSE_AVX2 -DUSE_BMI2 -DUSE_PEXT -DUSE_POPCNT
+else ifeq ($(ARCH),zen2)
+	CXX_FLAGS += -march=bdver4 -mno-tbm -mno-sse4a -mtune=znver2
+	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT
+else ifeq ($(ARCH),armv8-4)
+	CXX_FLAGS += -march=armv8.4-a
 	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
-	CXX_FLAGS += -march=armv8.2-a+dotprod
-else ifeq ($(ARCH),generic)
-	CPP_FLAGS += -DUSE_GENERIC
+else ifeq ($(ARCH),apple-m1)
+	CXX_FLAGS += -mcpu=apple-m1 --target=arm64-apple-macos11
+	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
 endif
 
 ifeq ($(DETECTED_OS),windows)
@@ -109,6 +126,10 @@ ifeq ($(DETECTED_OS),windows)
 else
 	CXX_FLAGS += -pthread
 	LD_FLAGS  += -pthread
+endif
+
+ifeq ($(DETECTED_OS),darwin)
+	LDFLAGS += -fuse-ld=lld
 endif
 
 ifeq ($(MODE),release)
@@ -119,7 +140,7 @@ ifeq ($(MODE),release)
 	endif
 else ifeq ($(MODE),tune)
 	CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
-	CPP_FLAGS += -DSPSA_TUNE
+	CPP_FLAGS += -DEXTERNAL_TUNE
 	ifneq ($(DETECTED_OS),windows)
 		CXX_FLAGS += -flto
 		LD_FLAGS  += -flto
@@ -184,7 +205,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|avx2|avx2-pext|avx512|neon|generic]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2-bmi2|zen2|armv8-4|apple-m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"
