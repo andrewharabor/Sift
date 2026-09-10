@@ -8,19 +8,18 @@
 #include "color.hpp"
 #include "types.hpp"
 
+#define SQUARE_DECLARE_RANK(x)                           \
+    static constexpr SquareEnum A##x = SquareEnum::A##x; \
+    static constexpr SquareEnum B##x = SquareEnum::B##x; \
+    static constexpr SquareEnum C##x = SquareEnum::C##x; \
+    static constexpr SquareEnum D##x = SquareEnum::D##x; \
+    static constexpr SquareEnum E##x = SquareEnum::E##x; \
+    static constexpr SquareEnum F##x = SquareEnum::F##x; \
+    static constexpr SquareEnum G##x = SquareEnum::G##x; \
+    static constexpr SquareEnum H##x = SquareEnum::H##x
+
 
 namespace Sift {
-
-#define SQUARE_DECLARE_RANK(X)                                         \
-    static constexpr SquareEnum A##X = SquareEnum::A##X; \
-    static constexpr SquareEnum B##X = SquareEnum::B##X; \
-    static constexpr SquareEnum C##X = SquareEnum::C##X; \
-    static constexpr SquareEnum D##X = SquareEnum::D##X; \
-    static constexpr SquareEnum E##X = SquareEnum::E##X; \
-    static constexpr SquareEnum F##X = SquareEnum::F##X; \
-    static constexpr SquareEnum G##X = SquareEnum::G##X; \
-    static constexpr SquareEnum H##X = SquareEnum::H##X
-
 
 class File {
 public:
@@ -352,3 +351,5 @@ private:
 };
 
 }
+
+#undef SQUARE_DECLARE_RANK

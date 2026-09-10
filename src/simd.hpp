@@ -14,6 +14,52 @@
 
 #include "types.hpp"
 
+#if defined(USE_AVX512) || defined(USE_AVX2) || defined(USE_NEON)
+
+#define USE_SIMD
+
+#define SIMD_DECLARE_0_OPS(name) \
+    template<typename Type> \
+    inline auto name() = delete; \
+    template<> \
+    inline auto name<Int8>() { return name##Int8(); } \
+    template<> \
+    inline auto name<Int16>() { return name##Int16(); } \
+    template<> \
+    inline auto name<Int32>() { return name##Int32(); }
+
+#define SIMD_DECLARE_1_OP(name, arg0) \
+    template<typename Type> \
+    inline auto name(Type arg0) = delete; \
+    template<> \
+    inline auto name<Int8>(Int8 arg0) { return name##Int8(arg0); } \
+    template<> \
+    inline auto name<Int16>(Int16 arg0) { return name##Int16(arg0); } \
+    template<> \
+    inline auto name<Int32>(Int32 arg0) { return name##Int32(arg0); }
+
+#define SIMD_DECLARE_2_OPS(name, arg0, arg1) \
+    template<typename Type> \
+    inline auto name(Vec<Type> arg0, Vec<Type> arg1) = delete; \
+    template<> \
+    inline auto name<Int8>(Vec<Int8> arg0, Vec<Int8> arg1) { return name##Int8(arg0, arg1); } \
+    template<> \
+    inline auto name<Int16>(Vec<Int16> arg0, Vec<Int16> arg1) { return name##Int16(arg0, arg1); } \
+    template<> \
+    inline auto name<Int32>(Vec<Int32> arg0, Vec<Int32> arg1) { return name##Int32(arg0, arg1); }
+
+#define SIMD_DECLARE_3_OPS(name, arg0, arg1, arg2) \
+    template<typename Type> \
+    inline auto name(Vec<Type> arg0, Vec<Type> arg1, Vec<Type> arg2) = delete; \
+    template<> \
+    inline auto name<Int8>(Vec<Int8> arg0, Vec<Int8> arg1, Vec<Int8> arg2) { return name##Int8(arg0, arg1, arg2); } \
+    template<> \
+    inline auto name<Int16>(Vec<Int16> arg0, Vec<Int16> arg1, Vec<Int16> arg2) { return name##Int16(arg0, arg1, arg2); } \
+    template<> \
+    inline auto name<Int32>(Vec<Int32> arg0, Vec<Int32> arg1, Vec<Int32> arg2) { return name##Int32(arg0, arg1, arg2); }
+
+#endif
+
 
 namespace Sift {
 
@@ -120,7 +166,7 @@ public:
 #endif
     }
 
-    static inline VecInt32 dotProdInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
+    static inline VecInt32 mulAddAdjAccInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
 #if defined(USE_VNNI512)
         return _mm512_dpwssd_epi32(sum, a, b);
 #else
@@ -214,7 +260,7 @@ public:
 #endif
     }
 
-    static inline VecInt32 dotProdInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
+    static inline VecInt32 mulAddAdjAccInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
 #if defined(USE_VNNI256)
         return _mm256_dpwssd_epi32(sum, a, b);
 #else
@@ -250,7 +296,7 @@ public:
     static inline VecInt8 clampInt8(VecInt8 v, VecInt8 min, VecInt8 max) noexcept { return minInt8(maxInt8(v, min), max); }
     static inline VecInt8 addInt8(VecInt8 a, VecInt8 b) noexcept { return vaddq_s8(a, b); }
     static inline VecInt8 subInt8(VecInt8 a, VecInt8 b) noexcept { return vsubq_s8(a, b); }
-    static inline VecInt8 shiftLeftInt8(VecInt8 v, Int32 shift) noexcept { return vshlq_s8(v, vdupq_n_s8(static_cast<UInt8>(shift))); }
+    static inline VecInt8 shiftLeftInt8(VecInt8 v, Int32 shift) noexcept { return vshlq_s8(v, vdupq_n_s8(static_cast<Int8>(shift))); }
 
     static inline VecInt16 loadInt16(const void *ptr) noexcept { return vld1q_s16(static_cast<const Int16 *>(ptr)); }
     static inline void storeInt16(void *ptr, VecInt16 v) noexcept { vst1q_s16(static_cast<Int16 *>(ptr), v); }
@@ -302,12 +348,216 @@ public:
 #endif
     }
 
-    static inline VecInt32 dotProdInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
+    static inline VecInt32 mulAddAdjAccInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
         const auto prod = mulAddAdjInt16(a, b);
         return addInt32(sum, prod);
     }
 
 #endif
+
+#if defined(USE_SIMD)
+
+    template<typename Type>
+    struct VecImpl {};
+
+    template<>
+    struct VecImpl<UInt8> {
+        using VecType = VecUInt8;
+    };
+
+    template<>
+    struct VecImpl<UInt16> {
+        using VecType = VecUInt16;
+    };
+
+    template<>
+    struct VecImpl<Int8> {
+        using VecType = VecInt8;
+    };
+
+    template<>
+    struct VecImpl<Int16> {
+        using VecType = VecInt16;
+    };
+
+    template<>
+    struct VecImpl<Int32> {
+        using VecType = VecInt32;
+    };
+
+    template<typename Type>
+    using Vec = typename VecImpl<Type>::VecType;
+
+    template<typename Type>
+    struct WidenedVecImpl {};
+
+    template<>
+    struct WidenedVecImpl<Int8> {
+        using VecType = VecInt16;
+    };
+
+    template<>
+    struct WidenedVecImpl<Int16> {
+        using VecType = VecInt32;
+    };
+
+    template<typename Type>
+    using WidenedVec = typename WidenedVecImpl<Type>::VecType;
+
+    template<typename Type>
+    struct PackedVecImpl {};
+
+    template<>
+    struct PackedVecImpl<Int16> {
+        using VecType = VecInt8;
+    };
+
+    template<>
+    struct PackedVecImpl<Int32> {
+        using VecType = VecInt16;
+    };
+
+    template<typename Type>
+    using PackedVec = typename PackedVecImpl<Type>::VecType;
+
+    template<typename Type>
+    static constexpr USize CHUNK_SIZE = sizeof(Vec<Type>) / sizeof(Type);
+
+    SIMD_DECLARE_0_OPS(zero);
+    SIMD_DECLARE_1_OP(set, v);
+    SIMD_DECLARE_2_OPS(add, a, b);
+    SIMD_DECLARE_2_OPS(sub, a, b);
+    SIMD_DECLARE_2_OPS(min, a, b);
+    SIMD_DECLARE_2_OPS(max, a, b);
+    SIMD_DECLARE_3_OPS(clamp, v, min, max);
+
+    template<typename Type>
+    inline auto load(const void *ptr) = delete;
+
+    template<>
+    inline auto load<UInt8>(const void *ptr) { return loadUInt8(ptr); }
+
+    template<>
+    inline auto load<Int8>(const void *ptr) { return loadInt8(ptr); }
+
+    template<>
+    inline auto load<Int16>(const void *ptr) { return loadInt16(ptr); }
+
+    template<>
+    inline auto load<Int32>(const void *ptr) { return loadInt32(ptr); }
+
+    template<typename Type>
+    inline auto store(void *ptr, Vec<Type> v) = delete;
+
+    template<>
+    inline auto store<UInt8>(void *ptr, Vec<UInt8> v) { storeUInt8(ptr, v); }
+
+    template<>
+    inline auto store<Int8>(void *ptr, Vec<Int8> v) { storeInt8(ptr, v); }
+
+    template<>
+    inline auto store<Int16>(void *ptr, Vec<Int16> v) { storeInt16(ptr, v); }
+
+    template<>
+    inline auto store<Int32>(void *ptr, Vec<Int32> v) { storeInt32(ptr, v); }
+
+    template<typename Type>
+    inline auto shiftLeft(Vec<Type> v, Int32 shift) = delete;
+
+    template<>
+    inline auto shiftLeft<Int8>(Vec<Int8> v, Int32 shift) { return shiftLeftInt8(v, shift); }
+
+    template<>
+    inline auto shiftLeft<Int16>(Vec<Int16> v, Int32 shift) { return shiftLeftInt16(v, shift); }
+
+    template<>
+    inline auto shiftLeft<Int32>(Vec<Int32> v, Int32 shift) { return shiftLeftInt32(v, shift); }
+
+    template<typename Type>
+    inline auto shiftRight(Vec<Type> v, Int32 shift) = delete;
+
+    template<>
+    inline auto shiftRight<Int16>(Vec<Int16> v, Int32 shift) { return shiftRightInt16(v, shift); }
+
+    template<>
+    inline auto shiftRight<Int32>(Vec<Int32> v, Int32 shift) { return shiftRightInt32(v, shift); }
+
+    template<typename Type, Int32 SHIFT>
+    inline auto shift(Vec<Type> v) {
+        if constexpr (SHIFT > 0) {
+            return shiftLeft<Type>(v, SHIFT);
+        } else if constexpr (SHIFT < 0) {
+            return shiftRight<Type>(v, -SHIFT);
+        } else {
+            return v;
+        }
+    }
+
+    template<typename Type>
+    inline auto mulAddAdj(Vec<Type> a, Vec<Type> b) = delete;
+
+    template<>
+    inline auto mulAddAdj<Int16>(Vec<Int16> a, Vec<Int16> b) { return mulAddAdjInt16(a, b); }
+
+    template<typename Type>
+    inline auto mulLo(Vec<Type> a, Vec<Type> b) = delete;
+
+    template<>
+    inline auto mulLo<Int16>(Vec<Int16> a, Vec<Int16> b) { return mulLoInt16(a, b); }
+
+    template<>
+    inline auto mulLo<Int32>(Vec<Int32> a, Vec<Int32> b) { return mulLoInt32(a, b); }
+
+    template<typename Type>
+    inline auto shiftLeftMulHi(Vec<Type> a, Vec<Type> b, Int32 shift) = delete;
+
+    template<>
+    inline auto shiftLeftMulHi<Int16>(Vec<Int16> a, Vec<Int16> b, Int32 shift) { return shiftLeftMulHiInt16(a, b, shift); }
+
+    template<typename Type>
+    inline auto packUs(Vec<Type> a, Vec<Type> b) = delete;
+
+    template<>
+    inline auto packUs<Int16>(Vec<Int16> a, Vec<Int16> b) { return packUsInt16(a, b); }
+
+    template<>
+    inline auto packUs<Int32>(Vec<Int32> a, Vec<Int32> b) { return packUsInt32(a, b); }
+
+    template<typename Type>
+    inline auto horizAdd(Vec<Type> v) = delete;
+
+    template<>
+    inline auto horizAdd<Int32>(Vec<Int32> v) { return horizAddInt32(v); }
+
+    template<typename Type>
+    inline auto nonzeroMask(Vec<Type> v) = delete;
+
+    template<>
+    inline auto nonzeroMask<UInt8>(Vec<UInt8> v) { return nonzeroMaskUInt8(v); }
+
+    template<typename Type>
+    inline auto dotProd(Vec<Type> sum, Vec<UInt8> u, Vec<Int8> i) = delete;
+
+    template<>
+    inline auto dotProd<Int32>(Vec<Int32> sum, Vec<UInt8> u, Vec<Int8> i) { return dotProdUInt8Int8(sum, u, i); }
+
+    template<typename Type>
+    inline auto mulAddAdjAcc(WidenedVec<Type> sum, Vec<Type> a, Vec<Type> b) = delete;
+
+    template<>
+    inline auto mulAddAdjAcc<Int16>(WidenedVec<Int16> sum, Vec<Int16> a, Vec<Int16> b) { return mulAddAdjAccInt16(sum, a, b); }
+
+#endif
+
 };
 
 }
+
+#if defined(USE_SIMD)
+
+#undef SIMD_DECLARE_0_OPS
+#undef SIMD_DECLARE_1_OP
+#undef SIMD_DECLARE_2_OPS
+#undef SIMD_DECLARE_3_OPS
+
+#endif
