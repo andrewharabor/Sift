@@ -293,12 +293,7 @@ public:
 
     constexpr const FeatureTransformer &ft() const noexcept { return ft_; }
 
-    inline AlignedArray<SIMD::ALIGNMENT, typename Arch::OutputType, Arch::OUTPUT_SIZE> forward(const Position &position, InputType friendlyPSQInputs, InputType enemyPSQInputs, InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept {
-        AlignedArray<SIMD::ALIGNMENT, typename Arch::OutputType, Arch::OUTPUT_SIZE> outputs;
-        const USize bucket = Output::bucket(position);
-        arch_.forward(bucket, friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs, outputs.data);
-        return outputs;
-    }
+    inline typename Arch::OutputType forward(const Position &position, InputType friendlyPSQInputs, InputType enemyPSQInputs, InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept { return arch_.forward(Output::bucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs); }
 
     inline bool load(NetLoader &loader) noexcept {
         if (!ft_.load(loader) || !arch_.load(loader)) {

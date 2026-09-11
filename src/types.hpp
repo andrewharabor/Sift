@@ -39,9 +39,4 @@ struct MultiArrayImpl<Type, SIZE> {
 template<typename Type, USize... SIZES>
 using MultiArray = typename Internal::MultiArrayImpl<Type, SIZES...>::ArrayType;
 
-template<USize ALIGNMENT, typename Type, USize SIZE>
-struct alignas(ALIGNMENT) AlignedArray {
-    std::array<Type, SIZE> data;
-};
-
 }
