@@ -119,6 +119,8 @@ else ifeq ($(ARCH),armv8-4)
 else ifeq ($(ARCH),apple-m1)
 	CXX_FLAGS += -mcpu=apple-m1 --target=arm64-apple-macos11
 	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
+else ifeq ($(ARCH),generic)
+	CPP_FLAGS += -DUSE_GENERIC
 endif
 
 ifeq ($(DETECTED_OS),windows)
@@ -205,7 +207,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2-bmi2|zen2|armv8-4|apple-m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2-bmi2|zen2|armv8-4|apple-m1|generic]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"
