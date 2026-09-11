@@ -58,7 +58,7 @@
 
 #define SIMD_DECLARE_0_OPS(name) \
     template<typename Type> \
-    inline auto name() = delete; \
+    static inline auto name() = delete; \
     template<> \
     inline auto name<Int8>() { return name##Int8(); } \
     template<> \
@@ -68,7 +68,7 @@
 
 #define SIMD_DECLARE_1_OP(name, arg0) \
     template<typename Type> \
-    inline auto name(Type arg0) = delete; \
+    static inline auto name(Type arg0) = delete; \
     template<> \
     inline auto name<Int8>(Int8 arg0) { return name##Int8(arg0); } \
     template<> \
@@ -78,7 +78,7 @@
 
 #define SIMD_DECLARE_2_OPS(name, arg0, arg1) \
     template<typename Type> \
-    inline auto name(Vec<Type> arg0, Vec<Type> arg1) = delete; \
+    static inline auto name(Vec<Type> arg0, Vec<Type> arg1) = delete; \
     template<> \
     inline auto name<Int8>(Vec<Int8> arg0, Vec<Int8> arg1) { return name##Int8(arg0, arg1); } \
     template<> \
@@ -88,7 +88,7 @@
 
 #define SIMD_DECLARE_3_OPS(name, arg0, arg1, arg2) \
     template<typename Type> \
-    inline auto name(Vec<Type> arg0, Vec<Type> arg1, Vec<Type> arg2) = delete; \
+    static inline auto name(Vec<Type> arg0, Vec<Type> arg1, Vec<Type> arg2) = delete; \
     template<> \
     inline auto name<Int8>(Vec<Int8> arg0, Vec<Int8> arg1, Vec<Int8> arg2) { return name##Int8(arg0, arg1, arg2); } \
     template<> \
@@ -125,9 +125,77 @@ using VecInt32 = int32x4_t;
 
 #endif
 
-class SIMD {
+namespace Internal {
 
+template<typename Type>
+struct VecImpl {};
+
+template<>
+struct VecImpl<UInt8> {
+    using VecType = VecUInt8;
+};
+
+template<>
+struct VecImpl<UInt16> {
+    using VecType = VecUInt16;
+};
+
+template<>
+struct VecImpl<Int8> {
+    using VecType = VecInt8;
+};
+
+template<>
+struct VecImpl<Int16> {
+    using VecType = VecInt16;
+};
+
+template<>
+struct VecImpl<Int32> {
+    using VecType = VecInt32;
+};
+
+template<typename Type>
+struct WidenedVecImpl {};
+
+template<>
+struct WidenedVecImpl<Int8> {
+    using VecType = VecInt16;
+};
+
+template<>
+struct WidenedVecImpl<Int16> {
+    using VecType = VecInt32;
+};
+
+template<typename Type>
+struct PackedVecImpl {};
+
+template<>
+struct PackedVecImpl<Int16> {
+    using VecType = VecInt8;
+};
+
+template<>
+struct PackedVecImpl<Int32> {
+    using VecType = VecInt16;
+};
+
+}
+
+template<typename Type>
+using Vec = typename Internal::VecImpl<Type>::VecType;
+
+template<typename Type>
+using WidenedVec = typename Internal::WidenedVecImpl<Type>::VecType;
+
+template<typename Type>
+using PackedVec = typename Internal::PackedVecImpl<Type>::VecType;
+
+class SIMD {
 public:
+    template<typename Type>
+    static constexpr USize CHUNK_SIZE = sizeof(Vec<Type>) / sizeof(Type);
 
 #if defined(USE_AVX512)
 
@@ -391,74 +459,6 @@ public:
 
 #endif
 
-#if defined(USE_SIMD)
-
-    template<typename Type>
-    struct VecImpl {};
-
-    template<>
-    struct VecImpl<UInt8> {
-        using VecType = VecUInt8;
-    };
-
-    template<>
-    struct VecImpl<UInt16> {
-        using VecType = VecUInt16;
-    };
-
-    template<>
-    struct VecImpl<Int8> {
-        using VecType = VecInt8;
-    };
-
-    template<>
-    struct VecImpl<Int16> {
-        using VecType = VecInt16;
-    };
-
-    template<>
-    struct VecImpl<Int32> {
-        using VecType = VecInt32;
-    };
-
-    template<typename Type>
-    using Vec = typename VecImpl<Type>::VecType;
-
-    template<typename Type>
-    struct WidenedVecImpl {};
-
-    template<>
-    struct WidenedVecImpl<Int8> {
-        using VecType = VecInt16;
-    };
-
-    template<>
-    struct WidenedVecImpl<Int16> {
-        using VecType = VecInt32;
-    };
-
-    template<typename Type>
-    using WidenedVec = typename WidenedVecImpl<Type>::VecType;
-
-    template<typename Type>
-    struct PackedVecImpl {};
-
-    template<>
-    struct PackedVecImpl<Int16> {
-        using VecType = VecInt8;
-    };
-
-    template<>
-    struct PackedVecImpl<Int32> {
-        using VecType = VecInt16;
-    };
-
-    template<typename Type>
-    using PackedVec = typename PackedVecImpl<Type>::VecType;
-
-    template<typename Type>
-    static constexpr USize CHUNK_SIZE = sizeof(Vec<Type>) / sizeof(Type);
-
     SIMD_DECLARE_0_OPS(zero);
     SIMD_DECLARE_1_OP(set, v);
     SIMD_DECLARE_2_OPS(add, a, b);
@@ -468,7 +468,7 @@ public:
     SIMD_DECLARE_3_OPS(clamp, v, min, max);
 
     template<typename Type>
-    inline auto load(const void *ptr) = delete;
+    static inline auto load(const void *ptr) = delete;
 
     template<>
     inline auto load<UInt8>(const void *ptr) { return loadUInt8(ptr); }
@@ -483,7 +483,7 @@ public:
     inline auto load<Int32>(const void *ptr) { return loadInt32(ptr); }
 
     template<typename Type>
-    inline auto store(void *ptr, Vec<Type> v) = delete;
+    static inline auto store(void *ptr, Vec<Type> v) = delete;
 
     template<>
     inline auto store<UInt8>(void *ptr, Vec<UInt8> v) { storeUInt8(ptr, v); }
@@ -498,7 +498,7 @@ public:
     inline auto store<Int32>(void *ptr, Vec<Int32> v) { storeInt32(ptr, v); }
 
     template<typename Type>
-    inline auto shiftLeft(Vec<Type> v, Int32 shift) = delete;
+    static inline auto shiftLeft(Vec<Type> v, Int32 shift) = delete;
 
     template<>
     inline auto shiftLeft<Int8>(Vec<Int8> v, Int32 shift) { return shiftLeftInt8(v, shift); }
@@ -510,7 +510,7 @@ public:
     inline auto shiftLeft<Int32>(Vec<Int32> v, Int32 shift) { return shiftLeftInt32(v, shift); }
 
     template<typename Type>
-    inline auto shiftRight(Vec<Type> v, Int32 shift) = delete;
+    static inline auto shiftRight(Vec<Type> v, Int32 shift) = delete;
 
     template<>
     inline auto shiftRight<Int16>(Vec<Int16> v, Int32 shift) { return shiftRightInt16(v, shift); }
@@ -519,7 +519,7 @@ public:
     inline auto shiftRight<Int32>(Vec<Int32> v, Int32 shift) { return shiftRightInt32(v, shift); }
 
     template<typename Type, Int32 SHIFT>
-    inline auto shift(Vec<Type> v) {
+    static  inline auto shift(Vec<Type> v) {
         if constexpr (SHIFT > 0) {
             return shiftLeft<Type>(v, SHIFT);
         } else if constexpr (SHIFT < 0) {
@@ -530,7 +530,7 @@ public:
     }
 
     template<typename Type>
-    inline auto mulAddAdj(Vec<Type> a, Vec<Type> b) = delete;
+    static  inline auto mulAddAdj(Vec<Type> a, Vec<Type> b) = delete;
 
     template<>
     inline auto mulAddAdj<Int16>(Vec<Int16> a, Vec<Int16> b) { return mulAddAdjInt16(a, b); }
@@ -551,7 +551,7 @@ public:
     inline auto shiftLeftMulHi<Int16>(Vec<Int16> a, Vec<Int16> b, Int32 shift) { return shiftLeftMulHiInt16(a, b, shift); }
 
     template<typename Type>
-    inline auto packUs(Vec<Type> a, Vec<Type> b) = delete;
+    static inline auto packUs(Vec<Type> a, Vec<Type> b) = delete;
 
     template<>
     inline auto packUs<Int16>(Vec<Int16> a, Vec<Int16> b) { return packUsInt16(a, b); }
@@ -566,25 +566,22 @@ public:
     inline auto horizAdd<Int32>(Vec<Int32> v) { return horizAddInt32(v); }
 
     template<typename Type>
-    inline auto nonzeroMask(Vec<Type> v) = delete;
+    static  inline auto nonzeroMask(Vec<Type> v) = delete;
 
     template<>
     inline auto nonzeroMask<UInt8>(Vec<UInt8> v) { return nonzeroMaskUInt8(v); }
 
     template<typename Type>
-    inline auto dotProd(Vec<Type> sum, Vec<UInt8> u, Vec<Int8> i) = delete;
+    static  inline auto dotProd(Vec<Type> sum, Vec<UInt8> u, Vec<Int8> i) = delete;
 
     template<>
     inline auto dotProd<Int32>(Vec<Int32> sum, Vec<UInt8> u, Vec<Int8> i) { return dotProdUInt8Int8(sum, u, i); }
 
     template<typename Type>
-    inline auto mulAddAdjAcc(WidenedVec<Type> sum, Vec<Type> a, Vec<Type> b) = delete;
+    static  inline auto mulAddAdjAcc(WidenedVec<Type> sum, Vec<Type> a, Vec<Type> b) = delete;
 
     template<>
     inline auto mulAddAdjAcc<Int16>(WidenedVec<Int16> sum, Vec<Int16> a, Vec<Int16> b) { return mulAddAdjAccInt16(sum, a, b); }
-
-#endif
-
 };
 
 }

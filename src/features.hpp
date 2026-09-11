@@ -10,6 +10,7 @@
 #include "color.hpp"
 #include "coords.hpp"
 #include "piece.hpp"
+#include "types.hpp"
 
 
 namespace Sift {
@@ -60,11 +61,11 @@ struct TIFeature {
         assert(color != Color::NONE);
         assert(kingSquare != Square::NONE);
 
-        Piece atk = (color == Color::White) ? attacker : Piece(attacker.type(), ~attacker.color());
-        Square atkSq = (color == Color::White) ? attackerSq : attackerSq.flipped();
+        Piece atk = (color == Color::WHITE) ? attacker : Piece(attacker.type(), ~attacker.color());
+        Square atkSq = (color == Color::WHITE) ? attackerSq : attackerSq.flipped();
         atkSq = FeatureSet::mirror(atkSq, kingSquare);
-        Piece vic = (color == Color::White) ? victim : Piece(victim.type(), ~victim.color());
-        Square vicSq = (color == Color::White) ? victimSq : victimSq.flipped();
+        Piece vic = (color == Color::WHITE) ? victim : Piece(victim.type(), ~victim.color());
+        Square vicSq = (color == Color::WHITE) ? victimSq : victimSq.flipped();
         vicSq = FeatureSet::mirror(vicSq, kingSquare);
 
         const bool forwards = atkSq.index() < vicSq.index();
@@ -243,7 +244,7 @@ private:
     }
 };
 
-class PSQFeaturesBase {
+class PSQBaseInputs {
 public:
     static constexpr bool THREAT_INPUTS = false;
     static constexpr bool PAWN_PAWN_INPUTS = false;
@@ -292,7 +293,7 @@ public:
     };
 };
 
-class SingleBucket : PSQFeaturesBase {
+class SingleBucketInputs : PSQBaseInputs {
 public:
     static constexpr USize PSQ_FEATURES = 768;
     static constexpr USize BUCKET_COUNT = 1;
@@ -307,7 +308,7 @@ public:
 };
 
 template<USize... BUCKET_INDICES>
-class KingBuckets : PSQFeaturesBase {
+class KingBucketInputs : PSQBaseInputs {
     static_assert(sizeof...(BUCKET_INDICES) == 64);
 
 private:
@@ -341,7 +342,7 @@ public:
     }
 };
 
-using HalfKA = KingBuckets<
+using HalfKAInputs = KingBucketInputs<
     0, 1, 2, 3, 4, 5, 6, 7,
     8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23,
@@ -358,7 +359,7 @@ enum class MirroredKingSide : UInt8 {
 };
 
 template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
-class KingBucketsMirrored : PSQFeaturesBase {
+class MirroredKingBucketInputs : PSQBaseInputs {
     static_assert(sizeof...(BUCKET_INDICES) == 32);
 
 private:
@@ -421,7 +422,7 @@ public:
 };
 
 template<MirroredKingSide SIDE>
-using SingleBucketMirrored = KingBucketsMirrored<
+using MirroredSingleBucketInputs = MirroredKingBucketInputs<
     SIDE,
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -434,7 +435,7 @@ using SingleBucketMirrored = KingBucketsMirrored<
 >;
 
 template <MirroredKingSide SIDE>
-using HalfKAMirrored = KingBucketsMirrored<
+using MirroredHalfKAInputs = MirroredKingBucketInputs<
     SIDE,
     0, 1, 2, 3,
     4, 5, 6, 7,
@@ -447,7 +448,7 @@ using HalfKAMirrored = KingBucketsMirrored<
 >;
 
 template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
-class KingBucketsMergedMirrored : KingBucketsMirrored<SIDE, BUCKET_INDICES...> {
+class MergedMirroredKingBucketInputs : MirroredKingBucketInputs<SIDE, BUCKET_INDICES...> {
     static_assert(sizeof...(BUCKET_INDICES) == 32);
 
     static constexpr bool VALID_LAYOUT = [] {
@@ -474,7 +475,7 @@ public:
 };
 
 template <MirroredKingSide SIDE>
-using HalfKAV2Mirrored = KingBucketsMergedMirrored<
+using MirroredHalfKAV2Inputs = MergedMirroredKingBucketInputs<
     SIDE,
     0, 1, 2, 3,
     4, 5, 6, 7,
@@ -493,7 +494,7 @@ public:
     static constexpr USize THREAT_FEATURES = 60144;
     static constexpr USize MAX_TI_CHANGES = 128;
 
-    struct Updates : PSQFeaturesBase::Updates {
+    struct Updates : PSQBaseInputs::Updates {
         std::array<bool, 2> tiRefresh = {};
 
         std::array<TIFeature, MAX_TI_CHANGES> tiAdds = {};
