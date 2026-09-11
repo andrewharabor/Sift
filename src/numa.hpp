@@ -116,9 +116,9 @@ public:
 
     static inline USize nodeCount() noexcept { return 1; }
 
-    static inline USize getNode([[maybe_unused]] USize threadID) noexcept { return 0; }
+    static inline USize getNode(USize) noexcept { return 0; }
 
-    static inline void bindThread([[maybe_unused]] USize threadID) noexcept {}
+    static inline void bindThread(USize) noexcept {}
 };
 
 template<typename Type>

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <concepts>
 #include <span>
 
 #include "bitboard.hpp"
@@ -250,6 +249,48 @@ struct FeatureTransformer {
     inline bool load(NetLoader &loader) noexcept { return loader.load(psqWeights) && loader.load(threatWeights) && loader.load(biases); }
 
     static constexpr USize byteSize() noexcept { return sizeof(PSQWeightType) * PSQ_WEIGHT_SIZE + sizeof(ThreatWeightType) * THREAT_WEIGHT_SIZE + sizeof(OutputType) * BIAS_SIZE; }
+};
+
+class ReLUActivation {
+public:
+    template<typename Type, Type MAX>
+    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
+        static const Vec<Type> zero = SIMD::zero<Type>();
+        const Vec<Type> clamped = SIMD::max<Type>(inputs, zero);
+        return SIMD::mulAddAdjAcc<Type>(sum, clamped, weights);
+    }
+
+    template<typename Type, Type MAX>
+    static inline Type quantize(Type value) noexcept { return value; }
+};
+
+class CReLUActivation {
+public:
+    template<typename Type, Type MAX>
+    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
+        static const Vec<Type> zero = SIMD::zero<Type>();
+        static const Vec<Type> max = SIMD::set<Type>(MAX);
+        const Vec<Type> clamped = SIMD::clamp<Type>(inputs, zero, max);
+        return SIMD::mulAddAdjAcc<Type>(sum, clamped, weights);
+    }
+
+    template<typename Type, Type MAX>
+    static inline Type quantize(Type value) noexcept { return value; }
+};
+
+class SCReLUActivation {
+public:
+    template<typename Type, Type MAX>
+    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
+        static const Vec<Type> zero = SIMD::zero<Type>();
+        static const Vec<Type> max = SIMD::set<Type>(MAX);
+        const Vec<Type> clamped = SIMD::clamp<Type>(inputs, zero, max);
+        const Vec<Type> crelu = SIMD::mulLo<Type>(clamped, weights);
+        return SIMD::mulAddAdjAcc<Type>(sum, crelu, clamped);
+    }
+
+    template<typename Type, Type MAX>
+    static inline Type quantize(Type value) noexcept { return value / MAX; }
 };
 
 class SingleBucketOutput {
