@@ -23,10 +23,7 @@ namespace Sift {
 class NUMA {
 public:
     static inline void init() {
-        if (numa_available() < 0) {
-            throw std::runtime_error("NUMA is not supported");
-            std::terminate();
-        }
+        assert(numa_available() >= 0);
         threadMapping();
     }
 
@@ -50,11 +47,8 @@ private:
 
             for (int node = 0; node < numNodes; node++) {
                 auto *cpuMask = numa_allocate_cpumask();
-                if (numa_node_to_cpus(node, cpuMask) != 0) {
-                    numa_free_cpumask(cpuMask);
-                    throw std::runtime_error("Failed to get CPU mask for NUMA node " + std::to_string(node));
-                    std::terminate();
-                }
+
+                assert(numa_node_to_cpus(node, cpuMask) == 0);
 
                 cpu_set_t cpuSet;
                 CPU_ZERO(&cpuSet);
