@@ -254,8 +254,7 @@ struct FeatureTransformer {
     static constexpr USize byteSize() noexcept { return sizeof(PSQWeightType) * PSQ_WEIGHT_SIZE + sizeof(ThreatWeightType) * THREAT_WEIGHT_SIZE + sizeof(OutputType) * BIAS_SIZE; }
 };
 
-class ReLUActivation {
-public:
+struct ReLUActivation {
     template<typename Type, Type MAX>
     static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
         static const Vec<Type> zero = SIMD::zero<Type>();
@@ -267,8 +266,7 @@ public:
     static inline Type quantize(Type value) noexcept { return value; }
 };
 
-class CReLUActivation {
-public:
+struct CReLUActivation {
     template<typename Type, Type MAX>
     static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
         static const Vec<Type> zero = SIMD::zero<Type>();
@@ -281,8 +279,7 @@ public:
     static inline Type quantize(Type value) noexcept { return value; }
 };
 
-class SCReLUActivation {
-public:
+struct SCReLUActivation {
     template<typename Type, Type MAX>
     static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
         static const Vec<Type> zero = SIMD::zero<Type>();

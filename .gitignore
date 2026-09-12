@@ -4,7 +4,7 @@ permute-*
 
 build/
 
-ft-acts.json
+ft-acts.txt
 *.nnue
 
 *.d

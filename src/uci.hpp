@@ -13,6 +13,7 @@
 #include "bench.hpp"
 #include "color.hpp"
 #include "eval.hpp"
+#include "inference.hpp"
 #include "move.hpp"
 #include "move-gen.hpp"
 #include "nnue.hpp"
@@ -476,10 +477,11 @@ private:
         std::cout << "nodes " << nodes;
         std::cout << " time " << time;
         std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
-#if defined(MEASURE_SPARSITY)
-        std::cout << " sparsity " << NNUE::saveFTActs("ft-acts.json");
-#endif
         std::cout << std::endl;
+
+#if defined(MEASURE_SPARSITY)
+        SparseIterator::writeFtActCounts();
+#endif
     }
 
     void perft(std::istringstream &stream) {
