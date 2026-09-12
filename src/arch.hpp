@@ -6,6 +6,7 @@
 #include <fstream>
 #include <span>
 
+#include "loader.hpp"
 #include "simd.hpp"
 #include "types.hpp"
 
@@ -127,5 +128,68 @@ private:
 #endif
 
 };
+
+template<typename FeatureSet, USize L1_SIZE, Int32 FT_QUANT, Int32 L1_QUANT, typename Activation, typename Output, Int32 SCALE>
+class SingleLayerArch {
+public:
+    static constexpr bool PAIRWISE = false;
+    static constexpr bool NEEDS_FT_PERMUTE = false;
+
+private:
+    using InputType = std::span<const Int16, L1_SIZE>;
+
+    static constexpr USize OUTPUT_BUCKET_COUNT = Output::BUCKET_COUNT;
+    static constexpr USize WEIGHT_SIZE = OUTPUT_BUCKET_COUNT * L1_SIZE * 2;
+    static constexpr USize BIAS_SIZE = OUTPUT_BUCKET_COUNT;
+
+    static constexpr Int32 QUANT = FT_QUANT * L1_QUANT;
+
+    NET_PARAM(Int16, WEIGHT_SIZE, l1Weights);
+    NET_PARAM(Int16, BIAS_SIZE, l1Biases);
+
+public:
+    inline Int32 forward(USize bucket, InputType friendlyPSQInputs, InputType enemyPSQInputs, InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept {
+        const USize weightOffset = bucket * L1_SIZE * 2;
+        const USize biasOffset = bucket;
+
+        Vec<Int32> sum = SIMD::zero<Int32>();
+        for (USize i = 0; i < L1_SIZE; i += SIMD::CHUNK_SIZE<Int16>) {
+            Vec<Int16> friendlyInputs = SIMD::load<Int16>(&friendlyPSQInputs[i]);
+            Vec<Int16> enemyInputs = SIMD::load<Int16>(&enemyPSQInputs[i]);
+            if constexpr (FeatureSet::THREAT_INPUTS) {
+                friendlyInputs = SIMD::add<Int16>(friendlyInputs, SIMD::load<Int16>(&friendlyThreatInputs[i]));
+                enemyInputs = SIMD::add<Int16>(enemyInputs, SIMD::load<Int16>(&enemyThreatInputs[i]));
+            }
+            const Vec<Int16> friendlyWeights = SIMD::load<Int16>(&l1Weights[weightOffset + i]);
+            const Vec<Int16> enemyWeights = SIMD::load<Int16>(&l1Weights[L1_SIZE + weightOffset + i]);
+            sum = Activation::template actDotAcc<static_cast<Int16>(FT_QUANT)>(sum, friendlyInputs, friendlyWeights);
+            sum = Activation::template actDotAcc<static_cast<Int16>(FT_QUANT)>(sum, enemyInputs, enemyWeights);
+        }
+
+        const Int32 total = SIMD::horizAdd<Int32>(sum);
+        const Int32 bias = static_cast<Int32>(l1Biases[biasOffset]);
+        const Int32 output = bias + Activation::template output<FT_QUANT>(total);
+        return output * SCALE / QUANT;
+    }
+
+    inline bool load(ByteLoader &loader) noexcept { return loader.load(l1Weights) && loader.load(l1Biases); }
+
+    constexpr USize byteSize() const noexcept { return sizeof(Int16) * WEIGHT_SIZE + sizeof(Int16) * BIAS_SIZE; }
+
+    template<typename Type>
+    static inline void permuteParam(std::span<Type>) {}
+
+    static inline void permuteFTParams(std::span<const Int16>, std::span<const Int8>, std::span<const Int16>) {}
+};
+
+// template<typename FeatureSet, USize L1_SIZE, USize L2_SIZE, USize L3_SIZE, Int32 FT_SCALE_BITS, Int32 FT_QUANT_BITS, Int32 L1_QUANT_BITS, bool DUAL_ACTIVATION, bool SKIP_L2, typename Output, Int32 SCALE>
+// class PairwiseMultilayerArch {
+// public:
+
+// private:
+
+// public:
+
+// };
 
 }

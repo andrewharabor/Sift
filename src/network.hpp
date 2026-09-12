@@ -22,23 +22,25 @@ namespace Sift {
 template<typename FeatureTransformer>
 class PSQAccumulator {
 private:
-    using Type = typename FeatureTransformer::OutputType;
-
     static constexpr USize INPUT_SIZE = FeatureTransformer::PSQ_INPUT_SIZE;
     static constexpr USize WEIGHT_SIZE = FeatureTransformer::PSQ_WEIGHT_SIZE;
     static constexpr USize OUTPUT_SIZE = FeatureTransformer::OUTPUT_SIZE;
 
-    alignas(SIMD::ALIGNMENT) MultiArray<Type, 2, OUTPUT_SIZE> output_;
+    using OutputType = std::span<Int16, OUTPUT_SIZE>;
+    using ConstOutputType = std::span<const Int16, OUTPUT_SIZE>;
+    using WeightType = std::span<const Int16, WEIGHT_SIZE>;
+
+    alignas(SIMD::ALIGNMENT) MultiArray<Int16, 2, OUTPUT_SIZE> output_;
 
 public:
     PSQAccumulator() noexcept : output_() {}
 
-    inline std::span<const Type, OUTPUT_SIZE> output(Color color) const noexcept {
+    inline ConstOutputType output(Color color) const noexcept {
         assert(color != Color::NONE);
         return output_[color.index()];
     }
 
-    inline std::span<Type, OUTPUT_SIZE> output(Color color) noexcept {
+    inline OutputType output(Color color) noexcept {
         assert(color != Color::NONE);
         return output_[color.index()];
     }
@@ -53,9 +55,10 @@ public:
         assert(sub < INPUT_SIZE);
         assert(add < INPUT_SIZE);
 
-        std::span<const Type, OUTPUT_SIZE> src = acc.output(color);
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+
+        ConstOutputType src = acc.output(color);
+        OutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize subOffset = sub * OUTPUT_SIZE;
         USize addOffset = add * OUTPUT_SIZE;
 
@@ -73,9 +76,9 @@ public:
         assert(sub2 < INPUT_SIZE);
         assert(add < INPUT_SIZE);
 
-        std::span<const Type, OUTPUT_SIZE> src = acc.output(color);
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        ConstOutputType src = acc.output(color);
+        OutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize subOffset1 = sub1 * OUTPUT_SIZE;
         USize subOffset2 = sub2 * OUTPUT_SIZE;
         USize addOffset = add * OUTPUT_SIZE;
@@ -96,9 +99,9 @@ public:
         assert(add1 < INPUT_SIZE);
         assert(add2 < INPUT_SIZE);
 
-        std::span<const Type, OUTPUT_SIZE> src = acc.output(color);
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        ConstOutputType src = acc.output(color);
+        OutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize subOffset1 = sub1 * OUTPUT_SIZE;
         USize subOffset2 = sub2 * OUTPUT_SIZE;
         USize addOffset1 = add1 * OUTPUT_SIZE;
@@ -119,8 +122,8 @@ public:
         assert(color != Color::NONE);
         assert(feature < INPUT_SIZE);
 
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        OutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize addOffset = feature * OUTPUT_SIZE;
 
         assert(addOffset + OUTPUT_SIZE <= WEIGHT_SIZE);
@@ -134,8 +137,8 @@ public:
         assert(color != Color::NONE);
         assert(feature < INPUT_SIZE);
 
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        ConstOutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize subOffset = feature * OUTPUT_SIZE;
 
         assert(subOffset + OUTPUT_SIZE <= WEIGHT_SIZE);
@@ -152,8 +155,8 @@ public:
         assert(feature3 < INPUT_SIZE);
         assert(feature4 < INPUT_SIZE);
 
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        OutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize addOffset1 = feature1 * OUTPUT_SIZE;
         USize addOffset2 = feature2 * OUTPUT_SIZE;
         USize addOffset3 = feature3 * OUTPUT_SIZE;
@@ -176,8 +179,8 @@ public:
         assert(feature3 < INPUT_SIZE);
         assert(feature4 < INPUT_SIZE);
 
-        std::span<Type, OUTPUT_SIZE> dst = output(color);
-        std::span<const Type, WEIGHT_SIZE> delta = ft.psqWeights;
+        ConstOutputType dst = output(color);
+        WeightType delta = ft.psqWeights;
         USize subOffset1 = feature1 * OUTPUT_SIZE;
         USize subOffset2 = feature2 * OUTPUT_SIZE;
         USize subOffset3 = feature3 * OUTPUT_SIZE;
@@ -224,11 +227,8 @@ struct RefreshTable {
     }
 };
 
-template<typename PSQType, typename ThreatType, USize OUTPUTS, typename FeatureSet>
+template<USize OUTPUTS, typename FeatureSet>
 struct FeatureTransformer {
-    using PSQWeightType = PSQType;
-    using ThreatWeightType = ThreatType;
-    using OutputType = PSQType;
     using InputFeatureSet = FeatureSet;
     using Accumulator = PSQAccumulator<FeatureTransformer>;
     using RefreshTable = RefreshTable<FeatureTransformer, FeatureSet::REFRESH_TABLE_SIZE>;
@@ -242,55 +242,55 @@ struct FeatureTransformer {
     static_assert(PSQ_INPUT_SIZE > 0);
     static_assert(OUTPUT_SIZE > 0);
 
-    NET_PARAM(PSQWeightType, PSQ_WEIGHT_SIZE, psqWeights);
-    NET_PARAM(ThreatWeightType, THREAT_WEIGHT_SIZE, threatWeights);
-    NET_PARAM(OutputType, BIAS_SIZE, biases);
+    NET_PARAM(Int16, PSQ_WEIGHT_SIZE, psqWeights);
+    NET_PARAM(Int8, THREAT_WEIGHT_SIZE, threatWeights);
+    NET_PARAM(Int16, BIAS_SIZE, biases);
 
-    constexpr const PSQWeightType *psqWeightPtr(USize featureIdx) const noexcept { return &psqWeights[featureIdx * OUTPUT_SIZE]; }
-    constexpr const ThreatWeightType *threatWeightPtr(USize featureIdx) const noexcept { return &threatWeights[featureIdx * OUTPUT_SIZE]; }
+    constexpr const Int16 *psqWeightPtr(USize featureIdx) const noexcept { return &psqWeights[featureIdx * OUTPUT_SIZE]; }
+    constexpr const Int8 *threatWeightPtr(USize featureIdx) const noexcept { return &threatWeights[featureIdx * OUTPUT_SIZE]; }
 
-    inline bool load(NetLoader &loader) noexcept { return loader.load(psqWeights) && loader.load(threatWeights) && loader.load(biases); }
+    inline bool load(ByteLoader &loader) noexcept { return loader.load(psqWeights) && loader.load(threatWeights) && loader.load(biases); }
 
-    static constexpr USize byteSize() noexcept { return sizeof(PSQWeightType) * PSQ_WEIGHT_SIZE + sizeof(ThreatWeightType) * THREAT_WEIGHT_SIZE + sizeof(OutputType) * BIAS_SIZE; }
+    static constexpr USize byteSize() noexcept { return sizeof(Int16) * PSQ_WEIGHT_SIZE + sizeof(Int8) * THREAT_WEIGHT_SIZE + sizeof(Int16) * BIAS_SIZE; }
 };
 
 struct ReLUActivation {
-    template<typename Type, Type MAX>
-    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
-        static const Vec<Type> zero = SIMD::zero<Type>();
-        const Vec<Type> clamped = SIMD::max<Type>(inputs, zero);
-        return SIMD::mulAddAdjAcc<Type>(sum, clamped, weights);
+    template<Int16 MAX>
+    static inline WidenedVec<Int16> actDotAcc(WidenedVec<Int16> sum, Vec<Int16> inputs, Vec<Int16> weights) noexcept {
+        static const Vec<Int16> zero = SIMD::zero<Int16>();
+        const Vec<Int16> clamped = SIMD::max<Int16>(inputs, zero);
+        return SIMD::mulAddAdjAcc<Int16>(sum, clamped, weights);
     }
 
-    template<typename Type, Type MAX>
-    static inline Type quantize(Type value) noexcept { return value; }
+    template<Int32 MAX>
+    static inline Int32 output(Int32 value) noexcept { return value; }
 };
 
 struct CReLUActivation {
-    template<typename Type, Type MAX>
-    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
-        static const Vec<Type> zero = SIMD::zero<Type>();
-        static const Vec<Type> max = SIMD::set<Type>(MAX);
-        const Vec<Type> clamped = SIMD::clamp<Type>(inputs, zero, max);
-        return SIMD::mulAddAdjAcc<Type>(sum, clamped, weights);
+    template<Int16 MAX>
+    static inline WidenedVec<Int16> actDotAcc(WidenedVec<Int16> sum, Vec<Int16> inputs, Vec<Int16> weights) noexcept {
+        static const Vec<Int16> zero = SIMD::zero<Int16>();
+        static const Vec<Int16> max = SIMD::set<Int16>(MAX);
+        const Vec<Int16> clamped = SIMD::clamp<Int16>(inputs, zero, max);
+        return SIMD::mulAddAdjAcc<Int16>(sum, clamped, weights);
     }
 
-    template<typename Type, Type MAX>
-    static inline Type quantize(Type value) noexcept { return value; }
+    template<Int32 MAX>
+    static inline Int32 output(Int32 value) noexcept { return value; }
 };
 
 struct SCReLUActivation {
-    template<typename Type, Type MAX>
-    static inline WidenedVec<Type> actDotAcc(WidenedVec<Type> sum, Vec<Type> inputs, Vec<Type> weights) noexcept {
-        static const Vec<Type> zero = SIMD::zero<Type>();
-        static const Vec<Type> max = SIMD::set<Type>(MAX);
-        const Vec<Type> clamped = SIMD::clamp<Type>(inputs, zero, max);
-        const Vec<Type> crelu = SIMD::mulLo<Type>(clamped, weights);
-        return SIMD::mulAddAdjAcc<Type>(sum, crelu, clamped);
+    template<Int16 MAX>
+    static inline WidenedVec<Int16> actDotAcc(WidenedVec<Int16> sum, Vec<Int16> inputs, Vec<Int16> weights) noexcept {
+        static const Vec<Int16> zero = SIMD::zero<Int16>();
+        static const Vec<Int16> max = SIMD::set<Int16>(MAX);
+        const Vec<Int16> clamped = SIMD::clamp<Int16>(inputs, zero, max);
+        const Vec<Int16> crelu = SIMD::mulLo<Int16>(clamped, weights);
+        return SIMD::mulAddAdjAcc<Int16>(sum, crelu, clamped);
     }
 
-    template<typename Type, Type MAX>
-    static inline Type quantize(Type value) noexcept { return value / MAX; }
+    template<Int32 MAX>
+    static inline Int32 output(Int32 value) noexcept { return value / MAX; }
 };
 
 class SingleBucketOutput {
@@ -329,20 +329,21 @@ private:
 
 template<typename FeatureTransformer, typename Output, typename Arch>
 class PerspectiveNetwork {
-public:
-    using InputType = std::span<const typename FeatureTransformer::OutputType, FeatureTransformer::OUTPUT_SIZE>;
+private:
+    using InputType = std::span<const Int16, FeatureTransformer::OUTPUT_SIZE>;
 
+public:
     constexpr const FeatureTransformer &ft() const noexcept { return ft_; }
 
-    inline typename Arch::OutputType forward(const Position &position, InputType friendlyPSQInputs, InputType enemyPSQInputs, InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept { return arch_.forward(Output::bucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs); }
+    inline Int32 forward(const Position &position, InputType friendlyPSQInputs, InputType enemyPSQInputs, InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept { return arch_.forward(Output::bucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs); }
 
-    inline bool load(NetLoader &loader) noexcept {
+    inline bool load(ByteLoader &loader) noexcept {
         if (!ft_.load(loader) || !arch_.load(loader)) {
             return false;
         }
 
         if (Arch::NEEDS_FT_PERMUTE) {
-            Arch::template permuteFT<typename FeatureTransformer::PSQWeightType, typename FeatureTransformer::ThreatWeightType, typename FeatureTransformer::OutputType>(ft_.psqWeights, ft_.threatWeights, ft_.biases);
+            Arch::permuteFTParams(ft_.psqWeights, ft_.threatWeights, ft_.biases);
         }
         return true;
     }

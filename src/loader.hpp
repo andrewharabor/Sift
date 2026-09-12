@@ -10,9 +10,9 @@
 
 namespace Sift {
 
-class NetLoader {
+class ByteLoader {
 public:
-    explicit NetLoader(const std::byte *buffer, USize size) noexcept : buffer_(buffer), remaining_(size) {}
+    explicit ByteLoader(const std::byte *buffer, USize size) noexcept : buffer_(buffer), remaining_(size) {}
 
     template<typename Type, USize SIZE>
     bool load(std::span<const Type, SIZE> &dst) noexcept {
