@@ -57,7 +57,7 @@ namespace NetConfig {
 // using Updates = InputFeatureSet::Updates;
 
 // using FeatureTransformer = Sift::FeatureTransformer<L1_SIZE, InputFeatureSet>;
-// using PSQAccumulator = FeatureTransformer::PSQAccumulator;
+// using Accumulator = FeatureTransformer::Accumulator;
 // using RefreshTable = FeatureTransformer::RefreshTable;
 
 // using Output = MaterialCountBucketOutput<8>;
@@ -98,7 +98,7 @@ using PSQFeatureSet = MergedMirroredKingBucketInputs<
     12, 12, 13, 13,
     12, 12, 13, 13,
     14, 14, 15, 15,
-    14, 14, 15, 15,
+    14, 14, 15, 15
 >;
 
 using InputFeatureSet = ThreatInputs<PSQFeatureSet>;
@@ -106,7 +106,7 @@ using InputFeatureSet = ThreatInputs<PSQFeatureSet>;
 using Updates = InputFeatureSet::Updates;
 
 using FeatureTransformer = Sift::FeatureTransformer<L1_SIZE, InputFeatureSet>;
-using PSQAccumulator = FeatureTransformer::PSQAccumulator;
+using Accumulator = FeatureTransformer::Accumulator;
 using RefreshTable = FeatureTransformer::RefreshTable;
 
 using Output = MaterialCountBucketOutput<8>;

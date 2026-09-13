@@ -22,7 +22,7 @@
 namespace Sift {
 
 template<typename FeatureTransformer>
-class PSQAccumulator {
+class Accumulator {
 private:
     static constexpr USize INPUT_SIZE = FeatureTransformer::PSQ_INPUT_SIZE;
     static constexpr USize WEIGHT_SIZE = FeatureTransformer::PSQ_WEIGHT_SIZE;
@@ -35,7 +35,7 @@ private:
     alignas(SIMD::ALIGNMENT) MultiArray<Int16, 2, OUTPUT_SIZE> output_;
 
 public:
-    PSQAccumulator() noexcept : output_() {}
+    Accumulator() noexcept : output_() {}
 
     inline ConstOutputType output(Color color) const noexcept {
         assert(color != Color::NONE);
@@ -52,7 +52,7 @@ public:
         std::ranges::copy(ft.biases, output_[1].begin());
     }
 
-    inline void sub1Add1From(const PSQAccumulator &acc, const FeatureTransformer &ft, Color color, USize sub, USize add) noexcept {
+    inline void sub1Add1From(const Accumulator &acc, const FeatureTransformer &ft, Color color, USize sub, USize add) noexcept {
         assert(color != Color::NONE);
         assert(sub < INPUT_SIZE);
         assert(add < INPUT_SIZE);
@@ -72,7 +72,7 @@ public:
         }
     }
 
-    inline void sub2Add1From(const PSQAccumulator &acc, const FeatureTransformer &ft, Color color, USize sub1, USize sub2, USize add) noexcept {
+    inline void sub2Add1From(const Accumulator &acc, const FeatureTransformer &ft, Color color, USize sub1, USize sub2, USize add) noexcept {
         assert(color != Color::NONE);
         assert(sub1 < INPUT_SIZE);
         assert(sub2 < INPUT_SIZE);
@@ -94,7 +94,7 @@ public:
         }
     }
 
-    inline void sub2Add2From(const PSQAccumulator &acc, const FeatureTransformer &ft, Color color, USize sub1, USize sub2, USize add1, USize add2) noexcept {
+    inline void sub2Add2From(const Accumulator &acc, const FeatureTransformer &ft, Color color, USize sub1, USize sub2, USize add1, USize add2) noexcept {
         assert(color != Color::NONE);
         assert(sub1 < INPUT_SIZE);
         assert(sub2 < INPUT_SIZE);
@@ -218,7 +218,7 @@ struct RefreshTableEntry {
 
 template<typename FeatureTransformer, USize SIZE>
 struct RefreshTable {
-    std::array<RefreshTableEntry<PSQAccumulator<FeatureTransformer>>, SIZE> entries = {};
+    std::array<RefreshTableEntry<Accumulator<FeatureTransformer>>, SIZE> entries = {};
 
     inline void init(const FeatureTransformer &ft) noexcept {
         for (auto &entry : entries) {
@@ -232,7 +232,7 @@ struct RefreshTable {
 template<USize OUTPUTS, typename FeatureSet>
 struct FeatureTransformer {
     using InputFeatureSet = FeatureSet;
-    using PSQAccumulator = PSQAccumulator<FeatureTransformer>;
+    using Accumulator = Accumulator<FeatureTransformer>;
     using RefreshTable = RefreshTable<FeatureTransformer, FeatureSet::REFRESH_TABLE_SIZE>;
 
     static constexpr USize PSQ_INPUT_SIZE = FeatureSet::BUCKET_COUNT * FeatureSet::PSQ_FEATURES;
