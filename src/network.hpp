@@ -230,7 +230,7 @@ struct RefreshTable {
 template<USize OUTPUTS, typename FeatureSet>
 struct FeatureTransformer {
     using InputFeatureSet = FeatureSet;
-    using Accumulator = PSQAccumulator<FeatureTransformer>;
+    using PSQAccumulator = PSQAccumulator<FeatureTransformer>;
     using RefreshTable = RefreshTable<FeatureTransformer, FeatureSet::REFRESH_TABLE_SIZE>;
 
     static constexpr USize PSQ_INPUT_SIZE = FeatureSet::BUCKET_COUNT * FeatureSet::PSQ_FEATURES;
@@ -293,14 +293,14 @@ struct SCReLUActivation {
     static inline Int32 output(Int32 value) noexcept { return value / MAX; }
 };
 
-class SingleBucketOutput {
+struct SingleBucketOutput {
 public:
     static constexpr USize BUCKET_COUNT = 1;
 
     static constexpr USize bucket(const Position &) noexcept { return 0; }
 };
 
-class OppColoredBishopBucketOutput {
+struct OppColoredBishopBucketOutput {
 public:
     static constexpr USize BUCKET_COUNT = 2;
 
@@ -315,7 +315,7 @@ private:
 };
 
 template<USize BUCKETS>
-class MaterialBucketOutput {
+struct MaterialCountBucketOutput {
     static_assert(BUCKETS == 2 || BUCKETS == 4 || BUCKETS == 8 || BUCKETS == 16 || BUCKETS == 32);
 
 public:
@@ -348,7 +348,7 @@ public:
         return true;
     }
 
-    constexpr USize byteSize() const noexcept { return FeatureTransformer::byteSize() + Arch::byteSize(); }
+    static constexpr USize byteSize() noexcept { return FeatureTransformer::byteSize() + Arch::byteSize(); }
 
 private:
     FeatureTransformer ft_;

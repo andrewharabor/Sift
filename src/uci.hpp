@@ -13,7 +13,6 @@
 #include "bench.hpp"
 #include "color.hpp"
 #include "eval.hpp"
-#include "inference.hpp"
 #include "move.hpp"
 #include "move-gen.hpp"
 #include "nnue.hpp"
@@ -47,7 +46,7 @@ public:
 #endif
 
         genLegalMoves();
-    }
+        }
 
     void run() {
         std::string line;
@@ -480,7 +479,7 @@ private:
         std::cout << std::endl;
 
 #if defined(MEASURE_SPARSITY)
-        SparseIterator::writeFtActCounts();
+        SparseIterator<NetConfig::L1_SIZE>::writeFtActCounts();
 #endif
     }
 
@@ -612,6 +611,6 @@ private:
         legalMoves_.clear();
         MoveGen::legal(position_, legalMoves_);
     }
-};
+    };
 
 }

@@ -244,7 +244,7 @@ private:
     }
 };
 
-class PSQBaseInputs {
+struct PSQBaseInputs {
 public:
     static constexpr bool THREAT_INPUTS = false;
     static constexpr bool PAWN_PAWN_INPUTS = false;
@@ -293,7 +293,7 @@ public:
     };
 };
 
-class SingleBucketInputs : PSQBaseInputs {
+struct SingleBucketInputs : PSQBaseInputs {
 public:
     static constexpr USize PSQ_FEATURES = 768;
     static constexpr USize BUCKET_COUNT = 1;
@@ -308,7 +308,7 @@ public:
 };
 
 template<USize... BUCKET_INDICES>
-class KingBucketInputs : PSQBaseInputs {
+struct KingBucketInputs : PSQBaseInputs {
     static_assert(sizeof...(BUCKET_INDICES) == 64);
 
 private:
@@ -359,7 +359,7 @@ enum class MirroredKingSide : UInt8 {
 };
 
 template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
-class MirroredKingBucketInputs : PSQBaseInputs {
+struct MirroredKingBucketInputs : PSQBaseInputs {
     static_assert(sizeof...(BUCKET_INDICES) == 32);
 
 private:
@@ -448,16 +448,17 @@ using MirroredHalfKAInputs = MirroredKingBucketInputs<
 >;
 
 template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
-class MergedMirroredKingBucketInputs : MirroredKingBucketInputs<SIDE, BUCKET_INDICES...> {
+struct MergedMirroredKingBucketInputs : MirroredKingBucketInputs<SIDE, BUCKET_INDICES...> {
     static_assert(sizeof...(BUCKET_INDICES) == 32);
 
     static constexpr bool VALID_LAYOUT = [] {
+        const auto abs = [](Int32 a) { return (a > 0) ? a : -a; };
         constexpr std::array<USize, 32> HALF_LAYOUT = {BUCKET_INDICES...};
         for (Int32 sq1 = 0; sq1 < 32; sq1++) {
             for (Int32 sq2 = 0; sq2 < 32; sq2++) {
                 if (HALF_LAYOUT[static_cast<USize>(sq1)] == HALF_LAYOUT[static_cast<USize>(sq2)]) {
-                    const Int32 rankDiff = std::abs(sq1 / 4 - sq2 / 4);
-                    const Int32 fileDiff = std::abs(sq1 % 4 - sq2 % 4);
+                    const Int32 rankDiff = abs(sq1 / 4 - sq2 / 4);
+                    const Int32 fileDiff = abs(sq1 % 4 - sq2 % 4);
                     if (rankDiff > 1 || fileDiff > 1) {
                         return false;
                     }
@@ -488,7 +489,7 @@ using MirroredHalfKAV2Inputs = MergedMirroredKingBucketInputs<
 >;
 
 template<typename PSQFeatureSet>
-class ThreatInputs : PSQFeatureSet {
+struct ThreatInputs : PSQFeatureSet {
 public:
     static constexpr bool THREAT_INPUTS = true;
     static constexpr USize THREAT_FEATURES = 60144;
@@ -519,7 +520,7 @@ public:
 };
 
 template<typename PSQFeatureSet>
-class PawnPawnThreatInputs : ThreatInputs<PSQFeatureSet> {
+struct PawnPawnThreatInputs : ThreatInputs<PSQFeatureSet> {
 public:
     static constexpr bool PAWN_PAWN_INPUTS = true;
     static constexpr USize THREAT_FEATURES = 64368;

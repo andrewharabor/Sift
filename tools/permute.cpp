@@ -6,6 +6,7 @@
 #include "history.hpp"
 #include "network.hpp"
 #include "arch.hpp"
+#include "nnue.hpp"
 
 int main(void) {
     return 0;

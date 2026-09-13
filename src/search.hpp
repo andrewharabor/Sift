@@ -17,7 +17,7 @@
 #include "move-gen.hpp"
 #include "move-order.hpp"
 #include "move.hpp"
-#include "nnue.hpp"
+// #include "nnue.hpp"
 #include "numa.hpp"
 #include "option.hpp"
 #include "position.hpp"
