@@ -18,7 +18,7 @@ namespace Sift {
 template<USize L1_SIZE>
 class SparseIterator {
 
-#if defined(USE_AVX512) && defined(USE_VBMI2)
+#if defined(USE_VBMI2)
 
 public:
     inline void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {

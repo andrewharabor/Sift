@@ -289,6 +289,12 @@ public:
         constexpr void addTIFeature(TIFeature) noexcept {};
         constexpr void subTIFeature(TIFeature) noexcept {};
 
+        template<typename Function>
+        inline void writeAddTIFeatures(Function) noexcept {};
+
+        template<typename Function>
+        inline void writeSubTIFeatures(Function) noexcept {};
+
         constexpr void setPawns(Bitboard, Bitboard, Bitboard, Bitboard) noexcept {};
     };
 };
@@ -301,6 +307,7 @@ public:
     static constexpr bool MIRRORED = false;
     static constexpr bool MERGED_KINGS = false;
 
+    static constexpr bool needsMirror(Square) noexcept { return false; }
     static constexpr Square mirror(Square square, Square) noexcept { return square; }
     static constexpr USize bucket(Color, Square) noexcept { return 0; }
     static constexpr USize refreshTableIdx(Color, Square) noexcept { return 0; }
@@ -323,6 +330,7 @@ public:
 
     static_assert(BUCKET_COUNT > 1);
 
+    static constexpr bool needsMirror(Square) noexcept { return false; }
     static constexpr Square mirror(Square square, Square) noexcept { return square; }
 
     static constexpr USize bucket(Color color, Square kingSquare) noexcept {
@@ -377,6 +385,13 @@ private:
         return layout;
     }();
 
+public:
+    static constexpr USize PSQ_FEATURES = 768;
+    static constexpr USize BUCKET_COUNT = *std::ranges::max_element(BUCKET_LAYOUT) + 1;
+    static constexpr USize REFRESH_TABLE_SIZE = BUCKET_COUNT * 2;
+    static constexpr bool MIRRORED = true;
+    static constexpr bool MERGED_KINGS = false;
+
     static constexpr bool needsMirror(Square kingSquare) noexcept {
         if constexpr (SIDE == MirroredKingSide::ABCD) {
             return kingSquare.file() > File::D;
@@ -384,13 +399,6 @@ private:
             return kingSquare.file() < File::E;
         }
     }
-
-public:
-    static constexpr USize PSQ_FEATURES = 768;
-    static constexpr USize BUCKET_COUNT = *std::ranges::max_element(BUCKET_LAYOUT) + 1;
-    static constexpr USize REFRESH_TABLE_SIZE = BUCKET_COUNT * 2;
-    static constexpr bool MIRRORED = true;
-    static constexpr bool MERGED_KINGS = false;
 
     static constexpr Square mirror(Square square, Square kingSquare) noexcept {
         return (needsMirror(kingSquare)) ? square.mirrored() : square;
@@ -516,6 +524,12 @@ public:
             assert(tiSubSize < MAX_TI_CHANGES);
             tiSubs[tiSubSize++] = feature;
         };
+
+        template<typename Function>
+        inline void writeAddTIFeatures(Function func) noexcept { tiAddSize += func(&tiAdds[tiAddSize]); };
+
+        template<typename Function>
+        inline void writeSubTIFeatures(Function func) noexcept { tiSubSize += func(&tiSubs[tiSubSize]); };
     };
 };
 
@@ -530,7 +544,7 @@ public:
         std::array<Bitboard, 2> pawnsBefore = {};
         std::array<Bitboard, 2> pawnsAfter = {};
 
-        constexpr void setPawns(Bitboard blackBefore, Bitboard whiteBefore, Bitboard blackAfter, Bitboard whiteAfter) noexcept {
+        constexpr void setPawns(Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter, Bitboard blackAfter) noexcept {
             pawnsBefore[0] = whiteBefore;
             pawnsBefore[1] = blackBefore;
             pawnsAfter[0] = whiteAfter;

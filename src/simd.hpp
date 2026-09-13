@@ -1,5 +1,9 @@
 #pragma once
 
+#if !defined(USE_AVX2) && !defined(USE_AVX512) && !defined(USE_NEON)
+#error Unsupported architecture: no SIMD extension found!
+#endif
+
 #if defined(USE_AVX2) || defined(USE_AVX512)
 #include <immintrin.h>
 #endif
@@ -15,10 +19,6 @@
 #include <cstring>
 
 #include "types.hpp"
-
-#if defined(USE_AVX512) || defined(USE_AVX2) || defined(USE_NEON)
-#define USE_SIMD
-#endif
 
 #define SIMD_DECLARE_0_OPS(name) \
     template<typename Type> \
@@ -87,14 +87,6 @@ using VecInt8 = int8x16_t;
 using VecInt16 = int16x8_t;
 using VecInt32 = int32x4_t;
 
-#else
-
-using VecUInt8 = std::array<UInt8, 16>;
-using VecUInt16 = std::array<UInt16, 8>;
-using VecInt8 = std::array<Int8, 16>;
-using VecInt16 = std::array<Int16, 8>;
-using VecInt32 = std::array<Int32, 4>;
-
 #endif
 
 #if defined(USE_AVX512) || defined(USE_AVX2)
@@ -104,10 +96,6 @@ using Vec128UInt16 = __m128i;
 #elif defined(USE_NEON)
 
 using Vec128UInt16 = uint16x8_t;
-
-#else
-
-using Vec128UInt16 = std::array<UInt16, 8>;
 
 #endif
 
@@ -440,349 +428,6 @@ public:
         return addInt32(sum, prod);
     }
 
-#else
-
-    static constexpr std::uintptr_t ALIGNMENT = 1;
-
-    static constexpr bool PACK_REORDER = false;
-    static constexpr USize PACK_GROUPING = 1;
-    static constexpr USize PACK_SIZE = 0;
-    static constexpr std::array<USize, PACK_SIZE> PACK_ORDERING = {};
-
-    static inline VecUInt8 loadUInt8(const void *ptr) noexcept {
-        VecUInt8 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline void storeUInt8(void *ptr, VecUInt8 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline VecUInt8 zeroUInt8() noexcept {
-        VecUInt8 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline VecUInt16 loadUInt16(const void *ptr) noexcept {
-        VecUInt16 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline void storeUInt16(void *ptr, VecUInt16 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline VecUInt16 zeroUInt16() noexcept {
-        VecUInt16 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline VecInt8 loadInt8(const void *ptr) noexcept {
-        VecInt8 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline VecInt16 widenLoadInt8(const void *ptr) noexcept {
-        std::array<Int8, 8> v;
-        std::memcpy(v.data(), ptr, sizeof(v));
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = static_cast<Int16>(v[i]);
-        }
-        return vec;
-    }
-
-    static inline void storeInt8(void *ptr, VecInt8 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline VecInt8 zeroInt8() noexcept {
-        VecInt8 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline VecInt8 setInt8(Int8 v) noexcept {
-        VecInt8 vec;
-        vec.fill(v);
-        return vec;
-    }
-
-    static inline VecInt8 minInt8(VecInt8 a, VecInt8 b) noexcept {
-        VecInt8 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt8 maxInt8(VecInt8 a, VecInt8 b) noexcept {
-        VecInt8 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::max(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt8 clampInt8(VecInt8 v, VecInt8 min, VecInt8 max) noexcept {
-        VecInt8 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(std::max(v[i], min[i]), max[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt8 addInt8(VecInt8 a, VecInt8 b) noexcept {
-        VecInt8 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] + b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt8 subInt8(VecInt8 a, VecInt8 b) noexcept {
-        VecInt8 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] - b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt16 loadInt16(const void *ptr) noexcept {
-        VecInt16 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline void storeInt16(void *ptr, VecInt16 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline VecInt16 zeroInt16() noexcept {
-        VecInt16 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline VecInt16 setInt16(Int16 v) noexcept {
-        VecInt16 vec;
-        vec.fill(v);
-        return vec;
-    }
-
-    static inline VecInt16 minInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt16 maxInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::max(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt16 clampInt16(VecInt16 v, VecInt16 min, VecInt16 max) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(std::max(v[i], min[i]), max[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt16 addInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] + b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt16 subInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] - b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt16 mulLoInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] * b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = static_cast<Int16>(static_cast<Int32>(v[i]) << shift);
-        }
-        return vec;
-    }
-
-    static inline VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = static_cast<Int16>(static_cast<Int32>(v[i]) >> shift);
-        }
-        return vec;
-    }
-
-    static inline VecInt16 shiftLeftMulHiInt16(VecInt16 a, VecInt16 b, Int32 shift) noexcept {
-        VecInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = static_cast<Int16>(((static_cast<Int32>(a[i]) << shift) * static_cast<Int32>(b[i])) >> 16);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 mulAddAdjInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = static_cast<Int32>(a[2 * i]) * static_cast<Int32>(b[2 * i]) + static_cast<Int32>(a[2 * i + 1]) * static_cast<Int32>(b[2 * i + 1]);
-        }
-        return vec;
-    }
-
-    static inline VecUInt8 packUsInt16(VecInt16 a, VecInt16 b) noexcept {
-        VecUInt8 vec;
-        for (USize i = 0; i < vec.size() / 2; i++) {
-            vec[i] = static_cast<UInt8>(a[i]);
-            vec[i + vec.size() / 2] = static_cast<UInt8>(b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 loadInt32(const void *ptr) noexcept {
-        VecInt32 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline void storeInt32(void *ptr, VecInt32 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline VecInt32 zeroInt32() noexcept {
-        VecInt32 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline VecInt32 setInt32(Int32 v) noexcept {
-        VecInt32 vec;
-        vec.fill(v);
-        return vec;
-    }
-
-    static inline VecInt32 minInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 maxInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::max(a[i], b[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 clampInt32(VecInt32 v, VecInt32 min, VecInt32 max) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = std::min(std::max(v[i], min[i]), max[i]);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 addInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] + b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt32 subInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] - b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt32 mulLoInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] * b[i];
-        }
-        return vec;
-    }
-
-    static inline VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = v[i] << shift;
-        }
-        return vec;
-    }
-
-    static inline VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = v[i] >> shift;
-        }
-        return vec;
-    }
-
-    static inline VecUInt16 packUsInt32(VecInt32 a, VecInt32 b) noexcept {
-        VecUInt16 vec;
-        for (USize i = 0; i < vec.size() / 2; i++) {
-            vec[i] = static_cast<UInt16>(a[i]);
-            vec[i + vec.size() / 2] = static_cast<UInt16>(b[i]);
-        }
-        return vec;
-    }
-
-    static inline Int32 horizAddInt32(VecInt32 v) noexcept {
-        Int32 sum = 0;
-        for (USize i = 0; i < v.size(); i++) {
-            sum += v[i];
-        }
-        return sum;
-    }
-
-    static inline UInt32 nonzeroMaskUInt8(VecUInt8 v) {
-        UInt32 mask = 0;
-        for (USize i = 0; i < v.size(); i += 4) {
-            if (v[i] != 0 || v[i + 1] != 0 || v[i + 2] != 0 || v[i + 3] != 0) {
-                mask |= (1u << (i / 4));
-            }
-        }
-        return mask;
-    }
-
-    static inline VecInt32 dotProdUInt8Int8(VecInt32 sum, VecUInt8 u, VecInt8 i) noexcept {
-        VecInt32 vec;
-        for (USize j = 0; j < vec.size(); j++) {
-            vec[j] = sum[j] + static_cast<Int32>(u[4 * j]) * static_cast<Int32>(i[4 * j]) + static_cast<Int32>(u[4 * j + 1]) * static_cast<Int32>(i[4 * j + 1]) + static_cast<Int32>(u[4 * j + 2]) * static_cast<Int32>(i[4 * j + 2]) + static_cast<Int32>(u[4 * j + 3]) * static_cast<Int32>(i[4 * j + 3]);
-        }
-        return vec;
-    }
-
-    static inline VecInt32 mulAddAdjAccInt16(VecInt32 sum, VecInt16 a, VecInt16 b) noexcept {
-        VecInt32 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = sum[i] + static_cast<Int32>(a[2 * i]) * static_cast<Int32>(b[2 * i]) + static_cast<Int32>(a[2 * i + 1]) * static_cast<Int32>(b[2 * i + 1]);
-        }
-        return vec;
-    }
-
 #endif
 
 #if defined(USE_AVX512) || defined(USE_AVX2)
@@ -800,36 +445,6 @@ public:
     static inline Vec128UInt16 zero128UInt16() noexcept { return vdupq_n_u16(0); }
     static inline Vec128UInt16 set128UInt16(UInt16 v) noexcept { return vdupq_n_u16(v); }
     static inline Vec128UInt16 add128UInt16(Vec128UInt16 a, Vec128UInt16 b) noexcept { return vaddq_u16(a, b); }
-
-#else
-
-    static inline Vec128UInt16 load128UInt16(const void *ptr) noexcept {
-        Vec128UInt16 vec;
-        std::memcpy(vec.data(), ptr, sizeof(vec));
-        return vec;
-    }
-
-    static inline void usStore128UInt16(void *ptr, Vec128UInt16 v) noexcept { std::memcpy(ptr, v.data(), sizeof(v)); }
-
-    static inline Vec128UInt16 zero128UInt16() noexcept {
-        Vec128UInt16 vec;
-        vec.fill(0);
-        return vec;
-    }
-
-    static inline Vec128UInt16 set128UInt16(UInt16 v) noexcept {
-        Vec128UInt16 vec;
-        vec.fill(v);
-        return vec;
-    }
-
-    static inline Vec128UInt16 add128UInt16(Vec128UInt16 a, Vec128UInt16 b) noexcept {
-        Vec128UInt16 vec;
-        for (USize i = 0; i < vec.size(); i++) {
-            vec[i] = a[i] + b[i];
-        }
-        return vec;
-    }
 
 #endif
 
