@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <span>
 
 #include "bitboard.hpp"
@@ -20,6 +21,315 @@
 
 
 namespace Sift {
+
+struct PSQBaseInputs {
+public:
+    static constexpr bool THREAT_INPUTS = false;
+    static constexpr bool PAWN_PAWN_INPUTS = false;
+    static constexpr USize THREAT_FEATURES = 0;
+    static constexpr USize THREAT_OFFSET = 0;
+    static constexpr USize MAX_TI_CHANGES = 0;
+
+    struct Updates {
+        std::array<bool, 2> psqRefresh = {};
+
+        std::array<PSQFeature, 2> psqAdds = {};
+        USize psqAddSize = 0;
+
+        std::array<PSQFeature, 2> psqSubs = {};
+        USize psqSubSize = 0;
+
+        static constexpr std::array<TIFeature, 0> tiAdds = {};
+        static constexpr USize tiAddSize = 0;
+
+        static constexpr std::array<TIFeature, 0> tiSubs = {};
+        static constexpr USize tiSubSize = 0;
+
+        static constexpr std::array<Bitboard, 0> pawnsBefore = {};
+        static constexpr std::array<Bitboard, 0> pawnsAfter = {};
+
+        constexpr void setPSQRefresh(Color color) noexcept { psqRefresh[color.index()] = true; }
+        constexpr bool needsPSQRefresh(Color color) const noexcept { return psqRefresh[color.index()]; }
+
+        constexpr void addPSQFeature(PSQFeature feature) noexcept {
+            assert(psqAddSize < 2);
+            psqAdds[psqAddSize++] = feature;
+        }
+
+        constexpr void subPSQFeature(PSQFeature feature) noexcept {
+            assert(psqSubSize < 2);
+            psqSubs[psqSubSize++] = feature;
+        }
+
+        constexpr void setTIRefresh(Color) noexcept {};
+        constexpr bool needsTIRefresh(Color) const noexcept { return false; }
+
+        constexpr void addTIFeature(TIFeature) noexcept {};
+        constexpr void subTIFeature(TIFeature) noexcept {};
+
+        template<typename Function>
+        inline void writeAddTIFeatures(Function) noexcept {};
+
+        template<typename Function>
+        inline void writeSubTIFeatures(Function) noexcept {};
+
+        constexpr void setPawns(Bitboard, Bitboard, Bitboard, Bitboard) noexcept {};
+    };
+};
+
+struct SingleBucketInputs : PSQBaseInputs {
+public:
+    static constexpr USize PSQ_FEATURES = 768;
+    static constexpr USize BUCKET_COUNT = 1;
+    static constexpr USize REFRESH_TABLE_SIZE = 1;
+    static constexpr bool MIRRORED = false;
+    static constexpr bool MERGED_KINGS = false;
+
+    static constexpr bool needsMirror(Square) noexcept { return false; }
+    static constexpr Square mirror(Square square, Square) noexcept { return square; }
+    static constexpr USize bucket(Color, Square) noexcept { return 0; }
+    static constexpr USize refreshTableIdx(Color, Square) noexcept { return 0; }
+    static constexpr bool needsRefresh(Color, Square, Square) noexcept { return false; }
+};
+
+template<USize... BUCKET_INDICES>
+struct KingBucketInputs : PSQBaseInputs {
+    static_assert(sizeof...(BUCKET_INDICES) == 64);
+
+private:
+    static constexpr std::array<USize, 64> BUCKET_LAYOUT = {BUCKET_INDICES...};
+
+public:
+    static constexpr USize PSQ_FEATURES = 768;
+    static constexpr USize BUCKET_COUNT = *std::ranges::max_element(BUCKET_LAYOUT) + 1;
+    static constexpr USize REFRESH_TABLE_SIZE = BUCKET_COUNT;
+    static constexpr bool MIRRORED = false;
+    static constexpr bool MERGED_KINGS = false;
+
+    static_assert(BUCKET_COUNT > 1);
+
+    static constexpr bool needsMirror(Square) noexcept { return false; }
+    static constexpr Square mirror(Square square, Square) noexcept { return square; }
+
+    static constexpr USize bucket(Color color, Square kingSquare) noexcept {
+        kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
+        return BUCKET_LAYOUT[kingSquare.index()];
+    }
+
+    static constexpr USize refreshTableIdx(Color color, Square kingSquare) noexcept { return bucket(color, kingSquare); }
+
+    static constexpr bool needsRefresh(Color color, Square prevKingSquare, Square kingSquare) noexcept {
+        assert(color != Color::NONE);
+        assert(prevKingSquare != Square::NONE);
+        assert(kingSquare != Square::NONE);
+        prevKingSquare = (color == Color::WHITE) ? prevKingSquare : prevKingSquare.flipped();
+        kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
+        return BUCKET_LAYOUT[prevKingSquare.index()] != BUCKET_LAYOUT[kingSquare.index()];
+    }
+};
+
+using HalfKAInputs = KingBucketInputs<
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23,
+    24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 34, 35, 36, 37, 38, 39,
+    40, 41, 42, 43, 44, 45, 46, 47,
+    48, 49, 50, 51, 52, 53, 54, 55,
+    56, 57, 58, 59, 60, 61, 62, 63
+>;
+
+enum class MirroredKingSide : UInt8 {
+    ABCD,
+    EFGH
+};
+
+template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
+struct MirroredKingBucketInputs : PSQBaseInputs {
+    static_assert(sizeof...(BUCKET_INDICES) == 32);
+
+private:
+    static constexpr std::array<USize, 64> BUCKET_LAYOUT = [] {
+        constexpr std::array<USize, 32> HALF_LAYOUT = {BUCKET_INDICES...};
+        std::array<USize, 64> layout = {};
+        for (USize rank = 0; rank < 8; rank++) {
+            for (USize file = 0; file < 4; file++) {
+                const USize halfIdx = rank * 4 + file;
+                const USize fullIdx = rank * 8 + file;
+                layout[fullIdx] = HALF_LAYOUT[halfIdx];
+                layout[fullIdx ^ 7] = HALF_LAYOUT[halfIdx];
+            }
+        }
+        return layout;
+    }();
+
+public:
+    static constexpr USize PSQ_FEATURES = 768;
+    static constexpr USize BUCKET_COUNT = *std::ranges::max_element(BUCKET_LAYOUT) + 1;
+    static constexpr USize REFRESH_TABLE_SIZE = BUCKET_COUNT * 2;
+    static constexpr bool MIRRORED = true;
+    static constexpr bool MERGED_KINGS = false;
+
+    static constexpr bool needsMirror(Square kingSquare) noexcept {
+        if constexpr (SIDE == MirroredKingSide::ABCD) {
+            return kingSquare.file() > File::D;
+        } else {
+            return kingSquare.file() < File::E;
+        }
+    }
+
+    static constexpr Square mirror(Square square, Square kingSquare) noexcept {
+        return (needsMirror(kingSquare)) ? square.mirrored() : square;
+    }
+
+    static constexpr USize bucket(Color color, Square kingSquare) noexcept {
+        kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
+        return BUCKET_LAYOUT[kingSquare.index()];
+    }
+
+    static constexpr USize refreshTableIdx(Color color, Square kingSquare) noexcept {
+        kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
+        return BUCKET_LAYOUT[kingSquare.index()] * 2 + needsMirror(kingSquare);
+    }
+
+    static constexpr bool needsRefresh(Color color, Square prevKingSquare, Square kingSquare) noexcept {
+        assert(color != Color::NONE);
+        assert(prevKingSquare != Square::NONE);
+        assert(kingSquare != Square::NONE);
+
+        if (needsMirror(prevKingSquare) != needsMirror(kingSquare)) {
+            return true;
+        }
+
+        prevKingSquare = (color == Color::WHITE) ? prevKingSquare : prevKingSquare.flipped();
+        kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
+        return BUCKET_LAYOUT[prevKingSquare.index()] != BUCKET_LAYOUT[kingSquare.index()];
+    }
+};
+
+template<MirroredKingSide SIDE>
+using MirroredSingleBucketInputs = MirroredKingBucketInputs<
+    SIDE,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+>;
+
+template <MirroredKingSide SIDE>
+using MirroredHalfKAInputs = MirroredKingBucketInputs<
+    SIDE,
+    0, 1, 2, 3,
+    4, 5, 6, 7,
+    8, 9, 10, 11,
+    12, 13, 14, 15,
+    16, 17, 18, 19,
+    20, 21, 22, 23,
+    24, 25, 26, 27,
+    28, 29, 30, 31
+>;
+
+template<MirroredKingSide SIDE, USize... BUCKET_INDICES>
+struct MergedMirroredKingBucketInputs : MirroredKingBucketInputs<SIDE, BUCKET_INDICES...> {
+    static_assert(sizeof...(BUCKET_INDICES) == 32);
+
+    static constexpr bool VALID_LAYOUT = [] {
+        const auto abs = [](Int32 a) { return (a > 0) ? a : -a; };
+        constexpr std::array<USize, 32> HALF_LAYOUT = {BUCKET_INDICES...};
+        for (Int32 sq1 = 0; sq1 < 32; sq1++) {
+            for (Int32 sq2 = 0; sq2 < 32; sq2++) {
+                if (HALF_LAYOUT[static_cast<USize>(sq1)] == HALF_LAYOUT[static_cast<USize>(sq2)]) {
+                    const Int32 rankDiff = abs(sq1 / 4 - sq2 / 4);
+                    const Int32 fileDiff = abs(sq1 % 4 - sq2 % 4);
+                    if (rankDiff > 1 || fileDiff > 1) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }();
+
+    static_assert(VALID_LAYOUT);
+
+public:
+    static constexpr USize PSQ_FEATURES = 704;
+    static constexpr bool MERGED_KINGS = true;
+};
+
+template <MirroredKingSide SIDE>
+using MirroredHalfKAV2Inputs = MergedMirroredKingBucketInputs<
+    SIDE,
+    0, 1, 2, 3,
+    4, 5, 6, 7,
+    8, 9, 10, 11,
+    12, 13, 14, 15,
+    16, 17, 18, 19,
+    20, 21, 22, 23,
+    24, 25, 26, 27,
+    28, 29, 30, 31
+>;
+
+template<typename PSQFeatureSet>
+struct ThreatInputs : PSQFeatureSet {
+public:
+    static constexpr bool THREAT_INPUTS = true;
+    static constexpr USize THREAT_FEATURES = 60144;
+    static constexpr USize MAX_TI_CHANGES = 128;
+
+    struct Updates : PSQBaseInputs::Updates {
+        std::array<bool, 2> tiRefresh = {};
+
+        std::array<TIFeature, MAX_TI_CHANGES> tiAdds = {};
+        USize tiAddSize = 0;
+
+        std::array<TIFeature, MAX_TI_CHANGES> tiSubs = {};
+        USize tiSubSize = 0;
+
+        constexpr void setTIRefresh(Color color) noexcept { tiRefresh[color.index()] = true; };
+        constexpr bool needsTIRefresh(Color color) const noexcept { return tiRefresh[color.index()]; }
+
+        constexpr void addTIFeature(TIFeature feature) noexcept {
+            assert(tiAddSize < MAX_TI_CHANGES);
+            tiAdds[tiAddSize++] = feature;
+        };
+
+        constexpr void subTIFeature(TIFeature feature) noexcept {
+            assert(tiSubSize < MAX_TI_CHANGES);
+            tiSubs[tiSubSize++] = feature;
+        };
+
+        template<typename Function>
+        inline void writeAddTIFeatures(Function func) noexcept { tiAddSize += func(&tiAdds[tiAddSize]); };
+
+        template<typename Function>
+        inline void writeSubTIFeatures(Function func) noexcept { tiSubSize += func(&tiSubs[tiSubSize]); };
+    };
+};
+
+template<typename PSQFeatureSet>
+struct PawnPawnThreatInputs : ThreatInputs<PSQFeatureSet> {
+public:
+    static constexpr bool PAWN_PAWN_INPUTS = true;
+    static constexpr USize THREAT_FEATURES = 64368;
+    static constexpr USize THREAT_OFFSET = 4560;
+
+    struct Updates : ThreatInputs<PSQFeatureSet>::Updates {
+        std::array<Bitboard, 2> pawnsBefore = {};
+        std::array<Bitboard, 2> pawnsAfter = {};
+
+        constexpr void setPawns(Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter, Bitboard blackAfter) noexcept {
+            pawnsBefore[0] = whiteBefore;
+            pawnsBefore[1] = blackBefore;
+            pawnsAfter[0] = whiteAfter;
+            pawnsAfter[1] = blackAfter;
+        };
+    };
+};
 
 template<typename FeatureTransformer>
 class Accumulator {
@@ -355,240 +665,6 @@ public:
 private:
     FeatureTransformer ft_;
     Arch arch_;
-};
-
-template<typename FeatureSet>
-class BoardObserver {
-public:
-    typename FeatureSet::Updates updates;
-
-    inline void kingMove(Color color, Square from, Square to) noexcept {
-        if (FeatureSet::needsRefresh(color, from, to)) {
-            updates.setPSQRefresh(color);
-        }
-
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            if (FeatureSet::needsMirror(from) != FeatureSet::needsMirror(to)) {
-                updates.setThreatRefresh(color);
-            }
-        }
-    }
-
-    inline void addPiece(const Position &position, Piece piece, Square square) noexcept {
-        updates.addPSQFeature(PSQFeature(piece, square));
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            updateTIFeaturesOnChange<true>(position, piece, square);
-        }
-    }
-
-    inline void removePiece(const Position &position, Piece piece, Square square) noexcept {
-        updates.subPSQFeature(PSQFeature(piece, square));
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            updateTIFeaturesOnChange<false>(position, piece, square);
-        }
-    }
-
-    inline void transmutePiece(const Position &position, Piece fromPiece, Piece toPiece, Square square) noexcept {
-        updates.subPSQFeature(PSQFeature(fromPiece, square));
-        updates.addPSQFeature(PSQFeature(toPiece, square));
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            updateTIFeaturesOnTransmute(position, fromPiece, toPiece, square);
-        }
-    }
-
-    inline void movePiece(const Position &position, Piece fromPiece, Piece toPiece, Square fromSquare, Square toSquare) noexcept {
-        updates.subPSQFeature(PSQFeature(fromPiece, fromSquare));
-        updates.addPSQFeature(PSQFeature(toPiece, toSquare));
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            updateTIFeaturesOnMove(position, fromPiece, toPiece, fromSquare, toSquare);
-        }
-    }
-
-    inline void pawnChanges(Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter, Bitboard blackAfter) noexcept {
-        if constexpr (FeatureSet::PAWN_PAWN_INPUTS) {
-            updates.setPawns(whiteBefore, blackBefore, whiteAfter, blackAfter);
-        }
-    }
-
-private:
-
-#if defined(USE_VBMI2)
-
-    template<bool ADD, bool OUTGOING>
-    inline void pushDirectTIFeatures(const Vector &indices, const Vector &rays, BitRays bits, Piece piece, Square square) noexcept {
-        const auto pair2Shuffle = _mm512_set_epi8(
-            79, 15, 79, 15, 78, 14, 78, 14, 77, 13, 77, 13, 76, 12, 76, 12, 75, 11, 75, 11,
-            74, 10, 74, 10, 73, 9, 73, 9, 72, 8, 72, 8, 71, 7, 71, 7, 70, 6, 70, 6, 69, 5,
-            69, 5, 68, 4, 68, 4, 67, 3, 67, 3, 66, 2, 66, 2, 65, 1, 65, 1, 64, 0, 64, 0
-        );
-
-        const auto pair1 = _mm512_set1_epi16(static_cast<Int16>(piece.index() | (square.index() << 8)));
-        const auto pair2Square = _mm512_maskz_compress_epi8(bits, indices.raw);
-        const auto pair2Piece = _mm512_maskz_compress_epi8(bits, rays.raw);
-        const auto pair2 = _mm512_permutex2var_epi8(pair2Piece, pair2Shuffle, pair2Square);
-
-        constexpr UInt64 MASK = (OUTGOING) ? 0xCCCCCCCCCCCCCCCC : 0x3333333333333333;
-        const auto vector = _mm512_mask_mov_epi8(pair1, MASK, pair2);
-
-        const auto writeFeatures = [&](TIFeature *ptr) {
-            _mm512_storeu_si512(ptr, vector);
-            return static_cast<USize>(std::popcount(bits));
-        };
-
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            if constexpr (ADD) {
-                updates.writeAddTIFeatures(writeFeatures);
-            } else {
-                updates.writeSubTIFeatures(writeFeatures);
-            }
-        }
-    }
-
-    template<bool ADD>
-    inline void pushXRayTIFeatures(const Vector &indices, const Vector &rays, BitRays sliders, BitRays victims) noexcept {
-        assert(std::popcount(sliders) == std::popcount(victims));
-
-        const USize count = static_cast<USize>(std::popcount(victims));
-
-        const auto piece1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, rays.raw));
-        const auto square1 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(sliders, indices.raw));
-        const auto piece2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, rays.flipped().raw));
-        const auto square2 = _mm512_castsi512_si128(_mm512_maskz_compress_epi8(victims, indices.flipped().raw));
-
-        const auto pair1 = _mm_unpacklo_epi8(piece1, square1);
-        const auto pair2 = _mm_unpacklo_epi8(piece2, square2);
-        const auto tuple1 = _mm_unpacklo_epi16(pair1, pair2);
-        const auto tuple2 = _mm_unpackhi_epi16(pair1, pair2);
-
-        const auto writeFeatures = [&](TIFeature *ptr) {
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(ptr) + 0, tuple1);
-            _mm_storeu_si128(reinterpret_cast<__m128i *>(ptr) + 1, tuple2);
-            return count;
-        };
-
-        if constexpr (FeatureSet::THREAT_INPUTS) {
-            if constexpr (ADD) {
-                updates.writeSubTIFeatures(writeFeatures);
-            } else {
-                updates.writeAddTIFeatures(writeFeatures);
-            }
-        }
-    }
-
-#else
-
-    template<bool ADD, bool OUTGOING>
-    inline void pushDirectTIFeatures(const Vector &indices, const Vector &rays, BitRays bits, Piece piece, Square square) noexcept {
-        std::array<Piece, 64> pieces;
-        std::array<Square, 64> squares;
-        std::memcpy(pieces.data(), &rays, sizeof(pieces));
-        std::memcpy(squares.data(), &indices, sizeof(squares));
-
-        for (; bits; bits &= (bits - 1)) {
-            const USize i = static_cast<USize>(std::countr_zero(bits));
-            const Piece other = pieces[i];
-            const Square otherSquare = squares[i];
-            const Piece attacker = (OUTGOING) ? piece : other;
-            const Square attackerSquare = (OUTGOING) ? square : otherSquare;
-            const Piece victim = (OUTGOING) ? other : piece;
-            const Square victimSquare = (OUTGOING) ? otherSquare : square;
-            const TIFeature feature = TIFeature(attacker, attackerSquare, victim, victimSquare);
-
-            if constexpr (FeatureSet::THREAT_INPUTS) {
-                if constexpr (ADD) {
-                    updates.addTIFeature(feature);
-                } else {
-                    updates.subTIFeature(feature);
-                }
-            }
-        }
-    }
-
-    template<bool ADD>
-    inline void pushXRayTIFeatures(const Vector &indices, const Vector &rays, BitRays sliders, BitRays victims) noexcept {
-        std::array<Piece, 64> pieces;
-        std::array<Square, 64> squares;
-        std::memcpy(pieces.data(), &rays, sizeof(pieces));
-        std::memcpy(squares.data(), &indices, sizeof(squares));
-
-        for (; sliders; sliders &= (sliders - 1), victims &= (victims - 1)) {
-            const USize i = static_cast<USize>(std::countr_zero(sliders));
-            const USize j = static_cast<USize>((std::countr_zero(victims) + 32) % 64);
-            const Piece attacker = pieces[i];
-            const Square attackerSquare = squares[i];
-            const Piece victim = pieces[j];
-            const Square victimSquare = squares[j];
-            const TIFeature feature = TIFeature(attacker, attackerSquare, victim, victimSquare);
-
-            if constexpr (FeatureSet::THREAT_INPUTS) {
-                if constexpr (ADD) {
-                    updates.subTIFeature(feature);
-                } else {
-                    updates.addTIFeature(feature);
-                }
-            }
-        }
-
-        assert(!sliders && !victims);
-    }
-
-#endif
-
-    template<bool ADD>
-    inline void updateTIFeaturesOnChange(const Position &position, Piece piece, Square square) noexcept {
-        const Permutation perm = Geometry::permutation(square);
-        const auto [rays, bits] = Geometry::permuteMailbox(perm, position.mailbox());
-        const BitRays closest = Geometry::closestOccupied(bits);
-        const BitRays outgoing = Geometry::outgoingThreats(piece, closest);
-        const BitRays incomingAttackers = Geometry::incomingAttackers(bits, closest);
-        const BitRays incomingSliders = Geometry::incomingSliders(bits, closest);
-        const BitRays victimMask = std::rotr(closest & 0xFEFEFEFEFEFEFEFE, 32);
-        const BitRays valid = Geometry::rayFill(victimMask) & Geometry::rayFill(incomingSliders);
-
-        pushDirectTIFeatures<ADD, true>(perm.indices, rays, outgoing, piece, square);
-        pushDirectTIFeatures<ADD, false>(perm.indices, rays, incomingAttackers, piece, square);
-        pushXRayTIFeatures<ADD>(perm.indices, rays, incomingSliders & valid, victimMask & valid);
-    }
-
-    inline void updateTIFeaturesOnTransmute(const Position &position, Piece oldPiece, Piece newPiece, Square square) noexcept {
-        const Permutation perm = Geometry::permutation(square);
-        const auto [rays, bits] = Geometry::permuteMailbox(perm, position.mailbox());
-        const BitRays closest = Geometry::closestOccupied(bits);
-        const BitRays oldOutgoing = Geometry::outgoingThreats(oldPiece, closest);
-        const BitRays newOutgoing = Geometry::outgoingThreats(newPiece, closest);
-        const BitRays incomingAttackers = Geometry::incomingAttackers(bits, closest);
-
-        pushDirectTIFeatures<false, true>(perm.indices, rays, oldOutgoing, oldPiece, square);
-        pushDirectTIFeatures<false, false>(perm.indices, rays, incomingAttackers, oldPiece, square);
-        pushDirectTIFeatures<true, true>(perm.indices, rays, newOutgoing, newPiece, square);
-        pushDirectTIFeatures<true, false>(perm.indices, rays, incomingAttackers, newPiece, square);
-    }
-
-    inline void updateTIFeaturesOnMove(const Position &position, Piece fromPiece, Piece toPiece, Square fromSquare, Square toSquare) noexcept {
-        const Permutation fromPerm = Geometry::permutation(fromSquare);
-        const Permutation toPerm = Geometry::permutation(toSquare);
-        const auto [fromRays, fromBits] = Geometry::permuteMailbox(fromPerm, position.mailbox(), toSquare);
-        const auto [toRays, toBits] = Geometry::permuteMailbox(toPerm, position.mailbox());
-        const BitRays fromClosest = Geometry::closestOccupied(fromBits);
-        const BitRays toClosest = Geometry::closestOccupied(toBits);
-        const BitRays fromOutgoing = Geometry::outgoingThreats(fromPiece, fromClosest);
-        const BitRays toOutgoing = Geometry::outgoingThreats(toPiece, toClosest);
-        const BitRays fromIncomingAttackers = Geometry::incomingAttackers(fromBits, fromClosest);
-        const BitRays toIncomingAttackers = Geometry::incomingAttackers(toBits, toClosest);
-        const BitRays fromIncomingSliders = Geometry::incomingSliders(fromBits, fromClosest);
-        const BitRays toIncomingSliders = Geometry::incomingSliders(toBits, toClosest);
-        const BitRays fromVictimMask = std::rotr(fromClosest & 0xFEFEFEFEFEFEFEFE, 32);
-        const BitRays toVictimMask = std::rotr(toClosest & 0xFEFEFEFEFEFEFEFE, 32);
-        const BitRays fromValid = Geometry::rayFill(fromVictimMask) & Geometry::rayFill(fromIncomingSliders);
-        const BitRays toValid = Geometry::rayFill(toVictimMask) & Geometry::rayFill(toIncomingSliders);
-
-        pushDirectTIFeatures<false, true>(fromPerm.indices, fromRays, fromOutgoing, fromPiece, fromSquare);
-        pushDirectTIFeatures<false, false>(fromPerm.indices, fromRays, fromIncomingAttackers, fromPiece, fromSquare);
-        pushDirectTIFeatures<true, true>(toPerm.indices, toRays, toOutgoing, toPiece, toSquare);
-        pushDirectTIFeatures<true, false>(toPerm.indices, toRays, toIncomingAttackers, toPiece, toSquare);
-        pushXRayTIFeatures<false>(fromPerm.indices, fromRays, fromIncomingSliders & fromValid, fromVictimMask & fromValid);
-        pushXRayTIFeatures<true>(toPerm.indices, toRays, toIncomingSliders & toValid, toVictimMask & toValid);
-    }
 };
 
 }
