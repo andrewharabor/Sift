@@ -4,6 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#define NET_PARAM(Type, SIZE, name) \
+    std::span<const Type, SIZE> name = std::span<const Type, SIZE>{static_cast<const Type *>(nullptr), SIZE}
+
 
 namespace Sift {
 

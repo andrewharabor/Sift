@@ -27,7 +27,7 @@ struct PSQFeature {
 
         const USize typeIdx = static_cast<USize>(piece.type());
 
-        const USize colorIdx = [this, color] {
+        const USize colorIdx = [this, color]() -> USize {
             if constexpr (FeatureSet::MERGED_KINGS) {
                 if (piece.type() == PieceType::KING) {
                     return 0;
@@ -179,7 +179,7 @@ private:
                 const bool semiExcluded = ((attacker.type() == victim.type()) && (enemies || attacker.type() != PieceType::PAWN));
                 const bool excluded = map < 0;
                 const auto [pieceOffset, offset] = OFFSETS<FeatureSet>.indices[i];
-                const Int64 featureIdx = offset + (static_cast<Int64>(~victim.color()) * (PIECE_TARGET_COUNT<FeatureSet>[attacker.type().index()] / 2) + map) * pieceOffset;
+                const Int64 featureIdx = offset + (static_cast<Int64>(victim.color()) * (PIECE_TARGET_COUNT<FeatureSet>[attacker.type().index()] / 2) + map) * pieceOffset;
                 indices[i][j][0] = (excluded) ? std::numeric_limits<Int64>::min() : featureIdx;
                 indices[i][j][1] = (excluded || semiExcluded) ? std::numeric_limits<Int64>::min() : featureIdx;
             }
@@ -211,7 +211,7 @@ struct PPFeature {
     }();
 
     template<typename FeatureSet>
-    constexpr USize index(Color color, Square kingSquare) const noexcept {
+    constexpr UInt16 index(Color color, Square kingSquare) const noexcept {
         assert(squareA != Square::NONE);
         assert(colorA != Color::NONE);
         assert(squareB != Square::NONE);
@@ -219,16 +219,16 @@ struct PPFeature {
         assert(color != Color::NONE);
         assert(kingSquare != Square::NONE);
 
-        const USize aID = pawnID<FeatureSet>(color, kingSquare, colorA, squareA);
-        const USize bID = pawnID<FeatureSet>(color, kingSquare, colorB, squareB);
-        const USize hi = std::max(aID, bID);
-        const USize lo = std::min(aID, bID);
+        const UInt16 aID = pawnID<FeatureSet>(color, kingSquare, colorA, squareA);
+        const UInt16 bID = pawnID<FeatureSet>(color, kingSquare, colorB, squareB);
+        const UInt16 hi = std::max(aID, bID);
+        const UInt16 lo = std::min(aID, bID);
         return hi * (hi - 1) / 2 + lo;
     }
 
 private:
     template<typename FeatureSet>
-    static constexpr USize pawnID(Color color, Square kingSquare, Color pawnColor, Square pawnSquare) noexcept {
+    static constexpr UInt16 pawnID(Color color, Square kingSquare, Color pawnColor, Square pawnSquare) noexcept {
         assert(color != Color::NONE);
         assert(kingSquare != Square::NONE);
         assert(pawnColor != Color::NONE);
@@ -238,8 +238,8 @@ private:
         Square pawnSq = (color == Color::WHITE) ? pawnSquare : pawnSquare.flipped();
         pawnSq = FeatureSet::mirror(pawnSq, kingSquare);
 
-        const USize offset = (color != pawnColor) ? 48 : 0;
-        return offset + static_cast<USize>(pawnSq) - 8;
+        const UInt16 offset = (color != pawnColor) ? 48 : 0;
+        return offset + static_cast<UInt16>(pawnSq) - 8;
     }
 };
 
