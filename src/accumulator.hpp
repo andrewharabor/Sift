@@ -7,6 +7,7 @@
 
 #include "bitboard.hpp"
 #include "color.hpp"
+#include "piece.hpp"
 #include "types.hpp"
 
 
@@ -23,25 +24,27 @@ private:
     using ConstOutputType = std::span<const Int16, OUTPUT_SIZE>;
     using WeightType = std::span<const Int16, WEIGHT_SIZE>;
 
-    alignas(SIMD::ALIGNMENT) MultiArray<Int16, 2, OUTPUT_SIZE> output_;
+    alignas(SIMD::ALIGNMENT) MultiArray<Int16, 2, OUTPUT_SIZE> data_;
 
 public:
-    Accumulator() noexcept : output_() {}
+    Accumulator() noexcept : data_() {}
 
-    inline ConstOutputType output(Color color) const noexcept {
+    inline ConstOutputType data(Color color) const noexcept {
         assert(color != Color::NONE);
-        return output_[color.index()];
+        return data_[color.index()];
     }
 
-    inline OutputType output(Color color) noexcept {
+    inline OutputType data(Color color) noexcept {
         assert(color != Color::NONE);
-        return output_[color.index()];
+        return data_[color.index()];
     }
 
     inline void init(const FeatureTransformer &ft) noexcept {
-        std::ranges::copy(ft.biases, output_[0].begin());
-        std::ranges::copy(ft.biases, output_[1].begin());
+        std::ranges::copy(ft.biases, data_[0].begin());
+        std::ranges::copy(ft.biases, data_[1].begin());
     }
+
+    inline void copy(Color color, const Accumulator &other) { std::ranges::copy(other.data(color), data_[color.index()].begin()); }
 
     inline void sub1Add1From(const Accumulator &acc, const FeatureTransformer &ft, Color color, USize sub, USize add) noexcept {
         assert(color != Color::NONE);
@@ -49,8 +52,8 @@ public:
         assert(add < INPUT_SIZE);
 
 
-        ConstOutputType src = acc.output(color);
-        OutputType dst = output(color);
+        ConstOutputType src = acc.data(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize subOffset = sub * OUTPUT_SIZE;
         USize addOffset = add * OUTPUT_SIZE;
@@ -69,8 +72,8 @@ public:
         assert(sub2 < INPUT_SIZE);
         assert(add < INPUT_SIZE);
 
-        ConstOutputType src = acc.output(color);
-        OutputType dst = output(color);
+        ConstOutputType src = acc.data(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize subOffset1 = sub1 * OUTPUT_SIZE;
         USize subOffset2 = sub2 * OUTPUT_SIZE;
@@ -92,8 +95,8 @@ public:
         assert(add1 < INPUT_SIZE);
         assert(add2 < INPUT_SIZE);
 
-        ConstOutputType src = acc.output(color);
-        OutputType dst = output(color);
+        ConstOutputType src = acc.data(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize subOffset1 = sub1 * OUTPUT_SIZE;
         USize subOffset2 = sub2 * OUTPUT_SIZE;
@@ -115,7 +118,7 @@ public:
         assert(color != Color::NONE);
         assert(feature < INPUT_SIZE);
 
-        OutputType dst = output(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize addOffset = feature * OUTPUT_SIZE;
 
@@ -130,7 +133,7 @@ public:
         assert(color != Color::NONE);
         assert(feature < INPUT_SIZE);
 
-        ConstOutputType dst = output(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize subOffset = feature * OUTPUT_SIZE;
 
@@ -148,7 +151,7 @@ public:
         assert(feature3 < INPUT_SIZE);
         assert(feature4 < INPUT_SIZE);
 
-        OutputType dst = output(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize addOffset1 = feature1 * OUTPUT_SIZE;
         USize addOffset2 = feature2 * OUTPUT_SIZE;
@@ -172,7 +175,7 @@ public:
         assert(feature3 < INPUT_SIZE);
         assert(feature4 < INPUT_SIZE);
 
-        ConstOutputType dst = output(color);
+        OutputType dst = data(color);
         WeightType delta = ft.psqWeights;
         USize subOffset1 = feature1 * OUTPUT_SIZE;
         USize subOffset2 = feature2 * OUTPUT_SIZE;
@@ -225,18 +228,25 @@ struct UpdatableAccumulator {
 
 template<typename Accumulator>
 struct RefreshTableEntry {
-    Accumulator accumulator = Accumulator();
-    MultiArray<Bitboard, 2, 2> pieceBitboardSet = {};
-    MultiArray<Bitboard, 2, 6> occupancyBitboardSet = {};
+    Accumulator acc = Accumulator();
+    std::array<Bitboard, 6> pieceBitboards = {};
+    std::array<Bitboard, 2> occupancyBitboards = {};
 
-    constexpr std::span<Bitboard, 2> pieceBitboards(Color color) noexcept {
-        assert(color != Color::NONE);
-        return pieceBitboardSet[color.index()];
+    constexpr Bitboard pieces(Piece piece) const noexcept {
+        assert(piece != Piece::NONE);
+        return pieceBitboards[piece.type().index()] & occupancyBitboards[piece.color().index()];
     }
 
-    constexpr std::span<Bitboard, 6> occupancyBitboards(Color color) noexcept {
-        assert(color != Color::NONE);
-        return occupancyBitboardSet[color.index()];
+    constexpr void updateBitboards(const Position &position) noexcept {
+        for (UInt8 pt = 0; pt < 6; pt++) {
+            const PieceType pieceType = PieceType(pt);
+            pieceBitboards[pieceType.index()] = position.pieces(pieceType);
+        }
+
+        for (UInt8 c = 0; c < 2; c++) {
+            const Color color = Color(c);
+            occupancyBitboards[color.index()] = position.friendly(color);
+        }
     }
 };
 
@@ -246,9 +256,9 @@ struct RefreshTable {
 
     inline void init(const FeatureTransformer &ft) noexcept {
         for (auto &entry : entries) {
-            entry.accumulator.init(ft);
-            entry.pieceBitboardSet.fill(Bitboard());
-            entry.occupancyBitboardSet.fill(Bitboard());
+            entry.acc.init(ft);
+            entry.pieceBitboards.fill(Bitboard());
+            entry.occupancyBitboards.fill(Bitboard());
         }
     }
 };

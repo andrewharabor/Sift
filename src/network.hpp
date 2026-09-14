@@ -2,6 +2,7 @@
 
 #include <span>
 
+#include "position.hpp"
 #include "reader.hpp"
 #include "types.hpp"
 

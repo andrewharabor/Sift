@@ -24,7 +24,7 @@ public:
         const auto indices = _mm512_maskz_compress_epi16(mask, base_);
         _mm512_storeu_si512(&indices_[count_], indices);
         base_ = _mm512_add_epi16(base_, _mm512_set1_epi16(32));
-        count_ += std::popcount(mask);
+        count_ += static_cast<USize>(std::popcount(mask));
 
         assert(count_ <= indices_.size());
     }
@@ -57,7 +57,7 @@ public:
             const Vec128UInt16 indices = SIMD::add128UInt16(base_, nonzero);
             SIMD::usStore128UInt16(&indices_[count_], indices);
             base_ = SIMD::add128UInt16(base_, SIMD::set128UInt16(8));
-            count_ += std::popcount(byte);
+            count_ += static_cast<USize>(std::popcount(byte));
         }
 
         assert(count_ <= indexes_.size());

@@ -19,8 +19,7 @@ public:
     static constexpr bool THREAT_INPUTS = false;
     static constexpr bool PAWN_PAWN_INPUTS = false;
     static constexpr USize THREAT_FEATURES = 0;
-    static constexpr USize THREAT_OFFSET = 0;
-    static constexpr USize MAX_TI_CHANGES = 0;
+    static constexpr Int64 THREAT_OFFSET = 0;
 
     struct Updates {
         std::array<bool, 2> psqRefresh = {};
@@ -271,27 +270,26 @@ struct ThreatInputs : PSQFeatureSet {
 public:
     static constexpr bool THREAT_INPUTS = true;
     static constexpr USize THREAT_FEATURES = 60144;
-    static constexpr USize MAX_TI_CHANGES = 128;
 
     struct Updates : PSQBaseInputs::Updates {
         std::array<bool, 2> tiRefresh = {};
 
-        std::array<TIFeature, MAX_TI_CHANGES> tiAdds = {};
+        std::array<TIFeature, 128> tiAdds = {};
         USize tiAddSize = 0;
 
-        std::array<TIFeature, MAX_TI_CHANGES> tiSubs = {};
+        std::array<TIFeature, 128> tiSubs = {};
         USize tiSubSize = 0;
 
         constexpr void setTIRefresh(Color color) noexcept { tiRefresh[color.index()] = true; };
         constexpr bool needsTIRefresh(Color color) const noexcept { return tiRefresh[color.index()]; }
 
         constexpr void addTIFeature(TIFeature feature) noexcept {
-            assert(tiAddSize < MAX_TI_CHANGES);
+            assert(tiAddSize < 128);
             tiAdds[tiAddSize++] = feature;
         };
 
         constexpr void subTIFeature(TIFeature feature) noexcept {
-            assert(tiSubSize < MAX_TI_CHANGES);
+            assert(tiSubSize < 128);
             tiSubs[tiSubSize++] = feature;
         };
 
@@ -308,7 +306,7 @@ struct PawnPawnThreatInputs : ThreatInputs<PSQFeatureSet> {
 public:
     static constexpr bool PAWN_PAWN_INPUTS = true;
     static constexpr USize THREAT_FEATURES = 64368;
-    static constexpr USize THREAT_OFFSET = 4560;
+    static constexpr Int64 THREAT_OFFSET = 4560;
 
     struct Updates : ThreatInputs<PSQFeatureSet>::Updates {
         std::array<Bitboard, 2> pawnsBefore = {};
