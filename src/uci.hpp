@@ -46,7 +46,7 @@ public:
 #endif
 
         genLegalMoves();
-        }
+    }
 
     void run() {
         std::string line;
@@ -479,7 +479,7 @@ private:
         std::cout << std::endl;
 
 #if defined(MEASURE_SPARSITY)
-        SparseIterator<NetConfig::L1_SIZE>::writeFtActCounts();
+        SparseIterator<NNUE::L1_SIZE>::writeFtActCounts();
 #endif
     }
 
@@ -611,6 +611,6 @@ private:
         legalMoves_.clear();
         MoveGen::legal(position_, legalMoves_);
     }
-    };
+};
 
 }
