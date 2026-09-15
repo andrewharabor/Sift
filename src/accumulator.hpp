@@ -234,7 +234,7 @@ namespace Sift {
             return pieceBitboards[color.index()][piece.type().index()] & occupancyBitboards[color.index()][piece.color().index()];
         }
 
-        constexpr void updateBitboards(const Position& position, Color color) noexcept {
+        constexpr void updateBitboards(Color color, const Position& position) noexcept {
             assert(color != Color::NONE);
             for (UInt8 pt = 0; pt < 6; pt++) {
                 const PieceType pieceType = PieceType(pt);

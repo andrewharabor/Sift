@@ -329,7 +329,7 @@ namespace Sift {
 
                 resetPSQAcc(entry.acc, color, position);
                 curr_->psqAcc.copy(color, entry.acc);
-                entry.updateBitboards(position, color);
+                entry.updateBitboards(color, position);
 
                 if constexpr (InputFeatureSet::THREAT_INPUTS) { resetThreatAcc(curr_->threatAcc, color, position); }
             }
@@ -786,7 +786,7 @@ namespace Sift {
                 subSize -= 1;
             }
 
-            entry.updateBitboards(position, color);
+            entry.updateBitboards(color, position);
 
             curr.psqAcc.copy(color, entry.acc);
 
