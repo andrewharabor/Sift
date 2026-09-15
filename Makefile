@@ -207,8 +207,8 @@ format: $(HEADERS) $(MAIN_SRCS) $(PERM_SRCS)
 
 .PHONY: clean
 clean:
-	$(RM_FILE) $(MAIN_EXEC)
-	$(RM_FILE) $(PERM_EXEC)
+	$(RM_FILE) Sift*
+	$(RM_FILE) permute-*
 	$(RM_DIR) $(BUILD_DIR)
 
 .PHONY: help
