@@ -10,7 +10,7 @@ namespace Sift {
 #if defined(MEASURE_SPARSITY)
         static constexpr Int32 DEFAULT_DEPTH = 17;
 #else
-        static constexpr Int32 DEFAULT_DEPTH = 10;
+        static constexpr Int32 DEFAULT_DEPTH = 13;
 #endif
 
         static constexpr USize TEST_COUNT = 50;

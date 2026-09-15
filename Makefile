@@ -1,6 +1,6 @@
 ARCH  ?= native
 BUILD ?= engine
-MODE  ?= tune
+MODE  ?= release
 NUMA ?= off
 
 MAIN_SRCS := src/main.cpp
