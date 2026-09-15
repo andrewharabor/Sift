@@ -270,7 +270,7 @@ namespace Sift {
         static constexpr Int32 FT_QUANT_BITS = 8;
         static constexpr Int32 L1_QUANT_BITS = 7;
 
-        static constexpr Int32 SCALE = 156;
+        static constexpr Int32 SCALE = 400;
 
         static constexpr bool DUAL_ACTIVATION = true;
         static constexpr bool SKIP_L2 = true;
