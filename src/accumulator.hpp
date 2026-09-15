@@ -225,23 +225,25 @@ namespace Sift {
     template<typename Accumulator>
     struct RefreshTableEntry {
         Accumulator acc = Accumulator();
-        std::array<Bitboard, 6> pieceBitboards = {};
-        std::array<Bitboard, 2> occupancyBitboards = {};
+        MultiArray<Bitboard, 2, 6> pieceBitboards = {};
+        MultiArray<Bitboard, 2, 2> occupancyBitboards = {};
 
-        constexpr Bitboard pieces(Piece piece) const noexcept {
+        constexpr Bitboard pieces(Color color, Piece piece) const noexcept {
+            assert(color != Color::NONE);
             assert(piece != Piece::NONE);
-            return pieceBitboards[piece.type().index()] & occupancyBitboards[piece.color().index()];
+            return pieceBitboards[color.index()][piece.type().index()] & occupancyBitboards[color.index()][piece.color().index()];
         }
 
-        constexpr void updateBitboards(const Position& position) noexcept {
+        constexpr void updateBitboards(const Position& position, Color color) noexcept {
+            assert(color != Color::NONE);
             for (UInt8 pt = 0; pt < 6; pt++) {
                 const PieceType pieceType = PieceType(pt);
-                pieceBitboards[pieceType.index()] = position.pieces(pieceType);
+                pieceBitboards[color.index()][pieceType.index()] = position.pieces(pieceType);
             }
 
             for (UInt8 c = 0; c < 2; c++) {
-                const Color color = Color(c);
-                occupancyBitboards[color.index()] = position.friendly(color);
+                const Color pieceColor = Color(c);
+                occupancyBitboards[color.index()][pieceColor.index()] = position.friendly(pieceColor);
             }
         }
     };
@@ -253,8 +255,8 @@ namespace Sift {
         inline void init(const FeatureTransformer& ft) noexcept {
             for (auto& entry : entries) {
                 entry.acc.init(ft);
-                entry.pieceBitboards.fill(Bitboard());
-                entry.occupancyBitboards.fill(Bitboard());
+                for (auto& colorBitboards : entry.pieceBitboards) { colorBitboards.fill(Bitboard()); }
+                for (auto& colorOccupancy : entry.occupancyBitboards) { colorOccupancy.fill(Bitboard()); }
             }
         }
     };

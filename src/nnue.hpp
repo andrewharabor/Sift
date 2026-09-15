@@ -329,7 +329,7 @@ namespace Sift {
 
                 resetPSQAcc(entry.acc, color, position);
                 curr_->psqAcc.copy(color, entry.acc);
-                entry.updateBitboards(position);
+                entry.updateBitboards(position, color);
 
                 if constexpr (InputFeatureSet::THREAT_INPUTS) { resetThreatAcc(curr_->threatAcc, color, position); }
             }
@@ -736,7 +736,7 @@ namespace Sift {
 
             for (UInt8 pc = 0; pc < 12; pc++) {
                 const Piece piece = Piece(pc);
-                const Bitboard before = entry.pieces(piece);
+                const Bitboard before = entry.pieces(color, piece);
                 const Bitboard after = position.pieces(piece);
 
                 Bitboard added = after & ~before;
@@ -786,7 +786,7 @@ namespace Sift {
                 subSize -= 1;
             }
 
-            entry.updateBitboards(position);
+            entry.updateBitboards(position, color);
 
             curr.psqAcc.copy(color, entry.acc);
 
