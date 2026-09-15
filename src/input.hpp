@@ -4,11 +4,13 @@
 #include <array>
 #include <cassert>
 
+#include "accumulator.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
 #include "features.hpp"
 #include "reader.hpp"
+#include "simd.hpp"
 #include "types.hpp"
 
 namespace Sift {

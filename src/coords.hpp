@@ -16,7 +16,7 @@
     static constexpr SquareEnum E##x = SquareEnum::E##x; \
     static constexpr SquareEnum F##x = SquareEnum::F##x; \
     static constexpr SquareEnum G##x = SquareEnum::G##x; \
-    static constexpr SquareEnum H##x = SquareEnum::H##x;
+    static constexpr SquareEnum H##x = SquareEnum::H##x
 
 namespace Sift {
     class File {

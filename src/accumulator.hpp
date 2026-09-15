@@ -8,6 +8,8 @@
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "piece.hpp"
+#include "position.hpp"
+#include "simd.hpp"
 #include "types.hpp"
 
 namespace Sift {

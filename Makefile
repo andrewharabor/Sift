@@ -13,6 +13,10 @@ PERM_SRCS := tools/permute.cpp
 PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
 PERM_DEPS := $(PERM_OBJS:%.o=%.d)
 
+recsearch = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+HEADERS := $(call recsearch,src,*.hpp)
+
 CPP_FLAGS := -MMD -MP -Isrc
 CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
 LD_FLAGS :=
@@ -48,14 +52,14 @@ CPP_FLAGS += -DNETWORK_FILE=$(NETWORK_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
 	MAIN_EXEC := Sift$(VERSION).exe
-	PERM_EXEC := permute-$(NETWORK_FILE).exe
+	PERM_EXEC := permute-$(ARCH).exe
 	MKDIR = mkdir
 	RM_FILE = del /f /q
 	RM_DIR = rmdir /s /q
 	SEP = \\
 else
 	MAIN_EXEC := Sift$(VERSION)
-	PERM_EXEC := permute-$(NETWORK_FILE)
+	PERM_EXEC := permute-$(ARCH)
 	MKDIR = mkdir -p
 	RM_FILE = rm -f
 	RM_DIR = rm -rf
@@ -185,7 +189,7 @@ main: $(MAIN_EXEC)
 
 .PHONY: __perm
 __perm: $(PERM_EXEC)
-	./$(PERM_EXEC)
+	./$(PERM_EXEC) $(NETWORK_FILE).nnue
 
 .PHONY: info
 info:
@@ -196,6 +200,10 @@ info:
 	@echo Build mode: $(MODE)
 	@echo Network file: $(NETWORK_FILE)
 	@echo NUMA support: $(NUMA)
+
+.PHONY: format
+format: $(HEADERS) $(MAIN_SRCS) $(PERM_SRCS)
+	clang-format -i $^
 
 .PHONY: clean
 clean:
@@ -209,5 +217,6 @@ help:
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"
+	@echo "  format"
 	@echo "  clean"
 	@echo "  help"

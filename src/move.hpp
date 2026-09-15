@@ -15,7 +15,7 @@ namespace Sift {
 
     class Move {
     public:
-        constexpr static UInt16 NULL_MOVE = 0;
+        static constexpr UInt16 NULL_MOVE = 0;
 
         constexpr Move() noexcept : move_(NULL_MOVE) {}
 
@@ -82,7 +82,7 @@ namespace Sift {
 
     class MoveList {
     public:
-        constexpr static USize MAX_MOVES = 256;
+        static constexpr USize MAX_MOVES = 256;
 
         constexpr Move& at(USize index) noexcept {
             assert(index < size_);

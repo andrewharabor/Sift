@@ -235,24 +235,12 @@ PackParameters:
 PenaltyReturnTypeOnItsOwnLine: 10000
 PointerAlignment: Left
 PPIndentWidth:   -1
-QualifierAlignment: Leave
+QualifierAlignment: Custom
 QualifierOrder:
-  - typedef
-  - friend
   - static
-  - extern
-  - thread_local
-  - volatile
-  - restrict
   - inline
-  - const
   - constexpr
-  - consteval
-  - constinit
-  - signed
-  - unsigned
-  - short
-  - long
+  - const
   - type
 ReferenceAlignment: Pointer
 ReflowComments:  Always
@@ -269,8 +257,6 @@ SortIncludes:
   Enabled: true
   IgnoreCase: false
   IgnoreExtension: false
-  Natural: true
-  FilesBeforeFolders: true
 SortUsingDeclarations: LexicographicNumeric
 SpaceAfterCStyleCast: true
 SpaceAfterLogicalNot: false
@@ -301,7 +287,6 @@ SpaceBeforeSquareBrackets: false
 SpaceInEmptyBraces: Never
 SpacesBeforeTrailingComments: 2
 SpacesInAngles: Never
-SpacesInBlockComments: Always
 SpacesInContainerLiterals: false
 SpacesInLineCommentPrefix:
   Minimum: 1
