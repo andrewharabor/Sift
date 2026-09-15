@@ -23,21 +23,16 @@ namespace Sift {
             assert(color != Color::NONE);
             assert(kingSquare != Square::NONE);
 
-            const USize typeIdx = static_cast<USize>(piece.type());
-
-            const USize colorIdx = [this, color]() -> USize {
-                if constexpr (FeatureSet::MERGED_KINGS) {
-                    if (piece.type() == PieceType::KING) { return 0; }
-                }
-                return (piece.color() == color) ? 0 : 1;
-            }();
-
             Square sq = (color == Color::WHITE) ? square : square.flipped();
             sq = FeatureSet::mirror(sq, kingSquare);
+            Piece pc = (color == Color::WHITE) ? piece : Piece(piece.type(), ~piece.color());
+            if constexpr (FeatureSet::MERGED_KINGS) {
+                if (pc.type() == PieceType::KING) { pc = Piece(PieceType::KING, Color::WHITE); }
+            }
 
             const USize bucketOffset = FeatureSet::bucket(color, kingSquare) * FeatureSet::PSQ_FEATURES;
 
-            return bucketOffset + (colorIdx * 384) + (typeIdx * 64) + static_cast<USize>(sq);
+            return bucketOffset + 64 * pc.index() + sq.index();
         }
     };
 
@@ -145,8 +140,8 @@ namespace Sift {
             } offsets;
 
             Int64 offset = 0;
-            for (UInt8 p = 0; p < 12; p++) {
-                const Piece piece = Piece(p);
+            for (UInt8 pc = 0; pc < 12; pc++) {
+                const Piece piece = Piece(pc);
                 Int64 pieceOffset = 0;
                 for (UInt8 sq = 0; sq < 64; sq++) {
                     const Square square = Square(sq);

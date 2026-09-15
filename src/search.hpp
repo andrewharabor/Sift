@@ -130,6 +130,7 @@ namespace Sift {
 
         SearchThread(USize id, std::thread&& thread) : id(id), thread(std::move(thread)), flag(ThreadFlag::START), history(), nnue() {
             reset();
+            nnue.load(NetLoader::get(id));
         }
 
         SearchThread(const SearchThread&) = delete;
@@ -312,7 +313,7 @@ namespace Sift {
                 thread->reset();
                 thread->sharedHistory = sharedHistory_.get(thread->id);
                 thread->position = position;
-                thread->nnue.state().set(position);
+                thread->nnue.set(position);
                 thread->limits = limits;
                 thread->initMoves();
                 thread->start();
@@ -342,7 +343,7 @@ namespace Sift {
                 thread->reset();
                 thread->sharedHistory = sharedHistory_.get(thread->id);
                 thread->position = position;
-                thread->nnue.state().set(position);
+                thread->nnue.set(position);
                 thread->limits = limits;
                 thread->initMoves();
                 thread->start();
@@ -1401,12 +1402,14 @@ namespace Sift {
             currHist.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
             currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
 
-            thread.position.makeMove(move, thread.nnue.state());
+            NNUE::BoardObserver observer = thread.nnue.makeMove();
+            thread.position.makeMove(move, observer);
             thread.incNodes();
         }
 
         void unmakeMove(SearchThread& thread, USize ply) noexcept {
-            thread.position.unmakeMove(thread.nnue.state());
+            thread.position.unmakeMove();
+            thread.nnue.unmakeMove();
 
             SearchStackEntry& curr = thread.stack[ply];
             curr.move = Move::NULL_MOVE;

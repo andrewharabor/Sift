@@ -554,7 +554,8 @@ namespace Sift {
                 std::cout << "(none)";
             } else {
                 NNUE nnue = NNUE();
-                nnue.state().set(position_);
+                nnue.load(NetLoader::get(0));
+                nnue.set(position_);
                 const Int32 normedScore = WDL::normalize(Eval::adjusted(position_, nnue, {0, 0}, {0, 0}), position_.materialScore());
                 std::cout << normedScore << " cp";
             }
@@ -565,7 +566,8 @@ namespace Sift {
             std::unique_lock<std::mutex> lock = lockStdout();
 
             NNUE nnue = NNUE();
-            nnue.state().set(position_);
+            nnue.load(NetLoader::get(0));
+            nnue.set(position_);
             std::cout << nnue.forward(position_) << std::endl;
         }
 

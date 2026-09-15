@@ -60,7 +60,7 @@ namespace Sift {
                 count_ += static_cast<USize>(std::popcount(byte));
             }
 
-            assert(count_ <= indexes_.size());
+            assert(count_ <= indices_.size());
         }
 
         constexpr USize count() const noexcept { return count_; }

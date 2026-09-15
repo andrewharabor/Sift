@@ -48,7 +48,7 @@ int main(int argc, const char* argv[]) {
     NetLoader::init();
 
     std::vector<std::string_view> args;
-    args.reserve(argc);
+    args.reserve(static_cast<USize>(argc));
     for (int i = 0; i < argc; i++) { args.emplace_back(argv[i]); }
 
     const int exitCode = run(args);

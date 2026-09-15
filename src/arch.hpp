@@ -115,7 +115,7 @@ namespace Sift {
 
         inline void activateFT(std::span<const Int16, L1_SIZE> friendlyPSQInputs, std::span<const Int16, L1_SIZE> enemyPSQInputs,
             std::span<const Int16, L1_SIZE> friendlyThreatInputs, std::span<const Int16, L1_SIZE> enemyThreatInputs,
-            std::span<UInt8, L1_SIZE> outputs, SparseIterator<L1_SIZE> sparseIter) const noexcept {
+            std::span<UInt8, L1_SIZE> outputs, SparseIterator<L1_SIZE>& sparseIter) const noexcept {
             const Vec<Int16> zero = SIMD::zero<Int16>();
             const Vec<Int16> quant = SIMD::set<Int16>((1 << FT_QUANT_BITS) - 1);
 

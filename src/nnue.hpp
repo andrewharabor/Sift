@@ -5,8 +5,10 @@
 #include <cassert>
 #include <cstddef>
 #include <cstring>
+#include <fstream>
 #include <numeric>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include "accumulator.hpp"
@@ -39,13 +41,13 @@ namespace Sift {
     template<typename FeatureSet>
     struct BoardObserver {
     public:
-        FeatureSet::Updates updates;
+        FeatureSet::Updates& updates;
 
         inline void kingMove(Color color, Square from, Square to) noexcept {
             if (FeatureSet::needsRefresh(color, from, to)) { updates.setPSQRefresh(color); }
 
             if constexpr (FeatureSet::THREAT_INPUTS) {
-                if (FeatureSet::needsMirror(from) != FeatureSet::needsMirror(to)) { updates.setThreatRefresh(color); }
+                if (FeatureSet::needsMirror(from) != FeatureSet::needsMirror(to)) { updates.setTIRefresh(color); }
             }
         }
 
@@ -262,24 +264,24 @@ namespace Sift {
     public:
         static constexpr USize L1_SIZE = 1024;
         static constexpr USize L2_SIZE = 32;
-        static constexpr USize L3_SIZE = 32;
+        static constexpr USize L3_SIZE = 64;
 
         static constexpr Int32 FT_SCALE_BITS = 7;
         static constexpr Int32 FT_QUANT_BITS = 8;
-        static constexpr Int32 L1_QUANT_BITS = 3;
+        static constexpr Int32 L1_QUANT_BITS = 7;
 
-        static constexpr Int32 SCALE = 253;
+        static constexpr Int32 SCALE = 156;
 
-        static constexpr bool DUAL_ACTIVATION = false;
-        static constexpr bool SKIP_L2 = false;
+        static constexpr bool DUAL_ACTIVATION = true;
+        static constexpr bool SKIP_L2 = true;
 
         using PSQFeatureSet = MergedMirroredKingBucketInputs<
             // clang-format off
             MirroredKingSide::ABCD,
             0, 1, 2, 3,
             4, 5, 6, 7,
-            8, 8, 9, 9,
-            10, 10, 11, 11,
+            8, 9, 10, 11,
+            8, 9, 10, 11,
             12, 12, 13, 13,
             12, 12, 13, 13,
             14, 14, 15, 15,
@@ -287,7 +289,7 @@ namespace Sift {
             // clang-format on
             >;
 
-        using InputFeatureSet = ThreatInputs<PSQFeatureSet>;
+        using InputFeatureSet = PawnPawnThreatInputs<PSQFeatureSet>;
 
         using Updates = InputFeatureSet::Updates;
         using BoardObserver = BoardObserver<InputFeatureSet>;
@@ -358,27 +360,6 @@ namespace Sift {
                 return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
             } else {
                 return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
-            }
-        }
-
-        inline Int32 forwardOnce(const Position& position) noexcept {
-            assert(network_ != nullptr);
-            assert(curr_ >= &accStack_[0] && curr_ <= &accStack_.back());
-
-            const Color color = position.sideToMove();
-
-            Accumulator psqAcc = Accumulator();
-            psqAcc.init(network_->ft());
-            resetPSQAcc(psqAcc, Color::WHITE, position);
-            resetPSQAcc(psqAcc, Color::BLACK, position);
-
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                Accumulator threatAcc = Accumulator();
-                resetThreatAcc(threatAcc, Color::WHITE, position);
-                resetThreatAcc(threatAcc, Color::BLACK, position);
-                return forwardNetwork(psqAcc, threatAcc, position, color);
-            } else {
-                return forwardNetwork(psqAcc, Accumulator(), position, color);
             }
         }
 
@@ -679,7 +660,7 @@ namespace Sift {
                 }
             }
 
-            accumulateThreatChanges<true>(acc, network_->ft(), indices, std::span<const UInt16>{});
+            accumulateThreatChanges<true>(acc, network_->ft(), std::span<const UInt16>{indices.data(), size}, std::span<const UInt16>{});
         }
 
         inline void updateThreatFeatures(UpdatableAccumulator& curr, const Updates& updates, Color color, Square kingSquare) noexcept {
@@ -690,7 +671,8 @@ namespace Sift {
             USize addSize = 0;
             USize subSize = 0;
 
-            for (const TIFeature& feature : updates.tiAdds) {
+            for (USize i = 0; i < updates.tiAddSize; i++) {
+                const TIFeature& feature = updates.tiAdds[i];
                 const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
                 if (idx >= 0) {
                     adds[addSize++] = static_cast<UInt16>(idx);
@@ -698,7 +680,8 @@ namespace Sift {
                 }
             }
 
-            for (const TIFeature& feature : updates.tiSubs) {
+            for (USize i = 0; i < updates.tiSubSize; i++) {
+                const TIFeature& feature = updates.tiSubs[i];
                 const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
                 if (idx >= 0) {
                     subs[subSize++] = static_cast<UInt16>(idx);
@@ -718,7 +701,8 @@ namespace Sift {
                 }
             }
 
-            accumulateThreatChanges<false>(curr.threatAcc.data(color), network_->ft(), adds, subs);
+            accumulateThreatChanges<false>(curr.threatAcc.data(color), network_->ft(), std::span<const UInt16>{adds.data(), addSize},
+                std::span<const UInt16>{subs.data(), subSize});
 
             curr.setThreatClean(color);
         }
