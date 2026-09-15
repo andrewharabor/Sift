@@ -11,7 +11,6 @@
 #include "tunable.hpp"
 #include "uci.hpp"
 
-
 using namespace Sift;
 
 int run(std::span<const std::string_view> args) {
@@ -30,9 +29,7 @@ int run(std::span<const std::string_view> args) {
 
         for (USize i = 1; i < args.size(); i++) {
             uci.execute(std::string(args[i]));
-            while (uci.searching()) {
-                std::this_thread::yield();
-            }
+            while (uci.searching()) { std::this_thread::yield(); }
         }
 
         return 0;
@@ -43,7 +40,7 @@ int run(std::span<const std::string_view> args) {
     return 0;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int argc, const char* argv[]) {
     Attacks::init();
     CuckooTable::init();
     TunableList::init();
@@ -52,9 +49,7 @@ int main(int argc, const char *argv[]) {
 
     std::vector<std::string_view> args;
     args.reserve(argc);
-    for (int i = 0; i < argc; i++) {
-        args.emplace_back(argv[i]);
-    }
+    for (int i = 0; i < argc; i++) { args.emplace_back(argv[i]); }
 
     const int exitCode = run(args);
 

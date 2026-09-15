@@ -25,9 +25,9 @@ endif
 
 CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
 ifneq ($(findstring clang,$(CXX_VERSION)),)
-    CXX := clang++
+	CXX := clang++
 else
-    CXX := g++
+	CXX := g++
 endif
 
 ifeq ($(DETECTED_OS),windows)

@@ -12,506 +12,508 @@
 #include "utils.hpp"
 
 #if defined(EXTERNAL_TUNE)
-#define TUNABLE_CALLBACK(name, val, min, max, callback) \
-    inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, callback); \
-    inline Int32 &name = name##_TUNABLE.value();
+    #define TUNABLE_CALLBACK(name, val, min, max, callback) \
+        inline Tunable name##_TUNABLE = Tunable(#name, val, min, max, callback); \
+        inline Int32& name = name##_TUNABLE.value();
 #else
-#define TUNABLE_CALLBACK(name, val, min, max, callback) \
-    static constexpr Int32 name = val;
+    #define TUNABLE_CALLBACK(name, val, min, max, callback) static constexpr Int32 name = val;
 #endif
 
-#define TUNABLE(name, val, min, max) \
-    TUNABLE_CALLBACK(name, val, min, max, []() {})
-
+#define TUNABLE(name, val, min, max) TUNABLE_CALLBACK(name, val, min, max, []() {})
 
 namespace Sift {
+    class Tunable {
+    public:
+        using Callback = std::function<void()>;
 
-class Tunable {
-public:
-    using Callback = std::function<void()>;
+        Tunable() : name_(), value_(), min_(), max_(), callback_() {}
 
-    Tunable() : name_(), value_(), min_(), max_(), callback_() {}
-    Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback);
+        Tunable(const std::string& name, Int32 value, Int32 min, Int32 max, Callback callback);
 
-    constexpr operator Int32() const noexcept { return value_; }
+        constexpr operator Int32() const noexcept { return value_; }
 
-    const std::string &name() const noexcept { return name_; }
-    constexpr Int32 &value() noexcept { return value_; }
-    constexpr Int32 value() const noexcept { return value_; }
-    constexpr Int32 min() const noexcept { return min_; }
-    constexpr Int32 max() const noexcept { return max_; }
-    constexpr Float64 step() const noexcept { return std::abs(max_ - min_) / 20.0; }
-    constexpr Float64 learningRate() const noexcept { return 0.002; }
-    Callback callback() const noexcept { return callback_; }
+        const std::string& name() const noexcept { return name_; }
 
-    constexpr void update(Int32 value) noexcept {
-        value_ = std::clamp(value, min_, max_);
-        callback_();
+        constexpr Int32& value() noexcept { return value_; }
+
+        constexpr Int32 value() const noexcept { return value_; }
+
+        constexpr Int32 min() const noexcept { return min_; }
+
+        constexpr Int32 max() const noexcept { return max_; }
+
+        constexpr Float64 step() const noexcept { return std::abs(max_ - min_) / 20.0; }
+
+        constexpr Float64 learningRate() const noexcept { return 0.002; }
+
+        Callback callback() const noexcept { return callback_; }
+
+        constexpr void update(Int32 value) noexcept {
+            value_ = std::clamp(value, min_, max_);
+            callback_();
+        }
+
+    private:
+        std::string name_;
+        Int32 value_;
+        Int32 min_;
+        Int32 max_;
+        Callback callback_;
+    };
+
+    class TunableList {
+    public:
+        constexpr TunableList() noexcept : tunables_() {}
+
+        static void init() noexcept;
+
+        constexpr std::vector<Tunable*>::iterator begin() noexcept { return tunables_.begin(); }
+
+        constexpr std::vector<Tunable*>::const_iterator begin() const noexcept { return tunables_.begin(); }
+
+        constexpr std::vector<Tunable*>::iterator end() noexcept { return tunables_.end(); }
+
+        constexpr std::vector<Tunable*>::const_iterator end() const noexcept { return tunables_.end(); }
+
+        void add(Tunable& tunable) { tunables_.push_back(&tunable); }
+
+        void update(const std::string& name, Int32 value) {
+            for (Tunable* tunable : tunables_) {
+                if (tunable->name() == name) {
+                    tunable->update(value);
+                    break;
+                }
+            }
+        }
+
+        void openBenchConfig() const noexcept {
+            for (const Tunable* tunable : tunables_) {
+                std::cout << tunable->name() + ", int, " + std::to_string(tunable->value()) + ", " + std::to_string(tunable->min()) + ", " +
+                                 std::to_string(tunable->max()) + ", " + std::to_string(tunable->step()) + ", " +
+                                 std::to_string(tunable->learningRate())
+                          << std::endl;
+            }
+        }
+
+        void weatherFactoryConfig() const noexcept {
+            std::cout << "{" << std::endl;
+            bool first = true;
+            for (const Tunable* tunable : tunables_) {
+                if (!first) { std::cout << "," << std::endl; }
+
+                first = false;
+
+                std::cout << "  \"" << tunable->name() << "\": {" << std::endl;
+                std::cout << "    \"value\": " << tunable->value() << "," << std::endl;
+                std::cout << "    \"min_value\": " << tunable->min() << "," << std::endl;
+                std::cout << "    \"max_value\": " << tunable->max() << "," << std::endl;
+                std::cout << "    \"step\": " << tunable->step() << std::endl;
+                std::cout << "  }";
+            }
+
+            std::cout << std::endl;
+            std::cout << "}" << std::endl;
+        }
+
+    private:
+        std::vector<Tunable*> tunables_;
+    };
+
+    inline TunableList TUNABLES;
+
+    inline Tunable::Tunable(const std::string& name, Int32 value, Int32 min, Int32 max, Callback callback) :
+        name_(name), value_(value), min_(min), max_(max), callback_(std::move(callback)) {
+        TUNABLES.add(*this);
     }
 
-private:
-    std::string name_;
-    Int32 value_;
-    Int32 min_;
-    Int32 max_;
-    Callback callback_;
-};
+    static constexpr Int32 FDEPTH_SCALE = 128;
 
-class TunableList {
-public:
-    constexpr TunableList() noexcept : tunables_() {}
+    TUNABLE(TT_REPLACE_DEPTH_OFFSET, 552, 0, 1024);
+    TUNABLE(TT_REPLACE_PV_SCALE, 229, 0, 768);
+    TUNABLE(TT_QUALITY_DEPTH_SCALE, 134, 0, 512);
+    TUNABLE(TT_QUALITY_AGE_DIFF_SCALE, 220, 0, 512);
 
-    static void init() noexcept;
+    static inline std::array<Int32, 7> SEE_PIECE_VALUES;
 
-    constexpr std::vector<Tunable *>::iterator begin() noexcept { return tunables_.begin(); }
-    constexpr std::vector<Tunable *>::const_iterator begin() const noexcept { return tunables_.begin(); }
-    constexpr std::vector<Tunable *>::iterator end() noexcept { return tunables_.end(); }
-    constexpr std::vector<Tunable *>::const_iterator end() const noexcept { return tunables_.end(); }
+    namespace SEE { static void init(); }
 
-    void add(Tunable &tunable) { tunables_.push_back(&tunable); }
+    TUNABLE_CALLBACK(SEE_PAWN_VALUE, 91, 50, 200, []() { SEE::init(); });
+    TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 456, 300, 700, []() { SEE::init(); });
+    TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 480, 300, 700, []() { SEE::init(); });
+    TUNABLE_CALLBACK(SEE_ROOK_VALUE, 702, 400, 1000, []() { SEE::init(); });
+    TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1230, 800, 1600, []() { SEE::init(); });
 
-    void update(const std::string &name, Int32 value) {
-        for (Tunable *tunable : tunables_) {
-            if (tunable->name() == name) {
-                tunable->update(value);
-                break;
+    static inline void SEE::init() {
+        SEE_PIECE_VALUES = {SEE_PAWN_VALUE, SEE_KNIGHT_VALUE, SEE_BISHOP_VALUE, SEE_ROOK_VALUE, SEE_QUEEN_VALUE, 0, 0};
+    }
+
+    TUNABLE(TIME_BASE_TIME_SCALE, 17, 10, 40);
+    TUNABLE(TIME_BASE_TIME_INCREMENT_SCALE, 88, 50, 150);
+
+    TUNABLE(TIME_SOFT_BOUND_SCALE, 66, 50, 100);
+    TUNABLE(TIME_HARD_BOUND_SCALE, 55, 20, 100);
+
+    TUNABLE(TIME_SCALE_MATE_SCORE, 19, 1, 100);
+    TUNABLE(TIME_SCALE_DECISIVE_SCORE, 50, 1, 100);
+
+    TUNABLE(TIME_SCALE_NODE_BASE, 255, 150, 300);
+    TUNABLE(TIME_SCALE_NODE_SCALE, 185, 100, 250);
+    TUNABLE(TIME_SCALE_NODE_MIN, 10, 1, 100);
+
+    TUNABLE(TIME_SCALE_STABILITY_BASE, 72, 40, 100);
+    TUNABLE(TIME_SCALE_STABILITY_MAX, 290, 120, 1000);
+    TUNABLE(TIME_SCALE_STABILITY_SCALE, 911, 200, 1500);
+    TUNABLE(TIME_SCALE_STABILITY_OFFSET, 75, 50, 200);
+    TUNABLE(TIME_SCALE_STABILITY_POWER, -254, -400, -150);
+
+    TUNABLE(TIME_SCALE_SCORE_CHANGE_DIVISOR, 362, 10, 1000);
+    TUNABLE(TIME_SCALE_POS_SCORE_SCALE, 123, 50, 200);
+    TUNABLE(TIME_SCALE_NEG_SCORE_SCALE, 119, 50, 200);
+
+    TUNABLE(TIME_SCALE_SCORE_OFFSET, 87, 10, 200);
+    TUNABLE(TIME_SCALE_SCORE_SCALE, 45, 10, 90);
+    TUNABLE(TIME_SCALE_SCORE_MIN, 67, 40, 100);
+    TUNABLE(TIME_SCALE_SCORE_MAX, 154, 120, 1000);
+
+    TUNABLE(TIME_SCALE_MIN, 13, 1, 100);
+
+    static constexpr Int32 TIME_SCALE_STABILITY_MIN_DEPTH = 6;
+
+    TUNABLE(EVAL_ADJUST_PAWN_SCALE, 43, 20, 200);
+    TUNABLE(EVAL_ADJUST_KNIGHT_SCALE, 428, 300, 700);
+    TUNABLE(EVAL_ADJUST_BISHOP_SCALE, 441, 300, 700);
+    TUNABLE(EVAL_ADJUST_ROOK_SCALE, 655, 400, 1000);
+    TUNABLE(EVAL_ADJUST_QUEEN_SCALE, 1172, 800, 1600);
+    TUNABLE(EVAL_ADJUST_MATERIAL_BASE, 26625, 10000, 40000);
+    TUNABLE(EVAL_ADJUST_OPTIMISM_SCALE_BASE, 1296, 0, 12000);
+    TUNABLE(EVAL_ADJUST_OPTIMISM_SCALE_MATERIAL_SCALE, 765, 0, 2048);
+    TUNABLE(EVAL_ADJUST_HALF_MOVE_SCALE, 155, 101, 400);
+
+    TUNABLE(THREAD_WEIGHT_SCORE_OFFSET, 12, 0, 20);
+
+    TUNABLE(MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_SCALE, 316, 0, 1024);
+    TUNABLE(MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET, 42, -384, 384);
+
+    TUNABLE(MOVE_ORDER_NOISY_SCORE_SCALE, 98, 0, 512);
+
+    TUNABLE(MOVE_ORDER_DIRECT_CHECK_BONUS, 5404, 2048, 16384);
+    TUNABLE(MOVE_ORDER_DIRECT_CHECK_MARGIN, -76, -300, 150);
+
+    TUNABLE(TT_CUTOFF_MAX_HALFMOVES, 90, 75, 99);
+
+    TUNABLE(TT_CUTOFF_BONUS_DEPTH_SCALE, 255, 128, 512);
+    TUNABLE(TT_CUTOFF_BONUS_OFFSET, 450, 0, 768);
+    TUNABLE(TT_CUTOFF_BONUS_MAX, 2891, 1024, 4096);
+
+    TUNABLE(EVAL_POLICY_BONUS_BASE, 635, 0, 2048);
+    TUNABLE(EVAL_POLICY_BONUS_GAIN_SCALE, 8, 0, 20);
+    TUNABLE(EVAL_POLICY_BONUS_MIN, -1402, -4096, 0);
+    TUNABLE(EVAL_POLICY_BONUS_MAX, 2798, 0, 4096);
+
+    TUNABLE(POST_LMR_BONUS_DEPTH_SCALE, 272, 128, 512);
+    TUNABLE(POST_LMR_BONUS_OFFSET, 632, 0, 768);
+    TUNABLE(POST_LMR_BONUS_MAX, 2913, 1024, 4096);
+
+    TUNABLE(POST_LMR_PENALTY_DEPTH_SCALE, 330, 64, 512);
+    TUNABLE(POST_LMR_PENALTY_OFFSET, 255, 0, 768);
+    TUNABLE(POST_LMR_PENALTY_MAX, 1024, 768, 4096);
+
+    TUNABLE(QUIET_BONUS_DEPTH_SCALE, 383, 128, 512);
+    TUNABLE(QUIET_BONUS_OFFSET, 275, 0, 768);
+    TUNABLE(QUIET_BONUS_MAX, 2407, 1024, 4096);
+
+    TUNABLE(QUIET_PENALTY_DEPTH_SCALE, 400, 128, 512);
+    TUNABLE(QUIET_PENALTY_OFFSET, 149, 0, 768);
+    TUNABLE(QUIET_PENALTY_MAX, 1241, 1024, 4096);
+
+    TUNABLE(NOISY_BONUS_DEPTH_SCALE, 282, 128, 512);
+    TUNABLE(NOISY_BONUS_OFFSET, 483, 0, 768);
+    TUNABLE(NOISY_BONUS_MAX, 2443, 1024, 4096);
+
+    TUNABLE(QUIET_MOVE_NOISY_PENALTY_DEPTH_SCALE, 410, 128, 512);
+    TUNABLE(QUIET_MOVE_NOISY_PENALTY_OFFSET, 93, 0, 768);
+    TUNABLE(QUIET_MOVE_NOISY_PENALTY_MAX, 1656, 1024, 4096);
+
+    TUNABLE(NOISY_MOVE_NOISY_PENALTY_DEPTH_SCALE, 323, 128, 512);
+    TUNABLE(NOISY_MOVE_NOISY_PENALTY_OFFSET, 154, 0, 768);
+    TUNABLE(NOISY_MOVE_NOISY_PENALTY_MAX, 1416, 1024, 4096);
+
+    TUNABLE(PCM_QUIET_BONUS_DEPTH_SCALE, 140, 64, 512);
+    TUNABLE(PCM_QUIET_BONUS_OFFSET, 53, 0, 768);
+    TUNABLE(PCM_QUIET_BONUS_MAX, 1394, 768, 4096);
+
+    TUNABLE(PCM_NOISY_BONUS, 124, 0, 2048);
+
+    TUNABLE(HISTORY_FDEPTH_STATIC_EVAL_SCALE, 144, 0, 512);
+
+    TUNABLE(MAIN_HIST_WEIGHT, 482, 0, 4096);
+    TUNABLE(PAWN_HIST_WEIGHT, 765, 0, 4096);
+    TUNABLE(CONT1_HIST_WEIGHT, 1111, 0, 4096);
+    TUNABLE(CONT2_HIST_WEIGHT, 1003, 0, 4096);
+    TUNABLE(CONT4_HIST_WEIGHT, 767, 0, 4096);
+    TUNABLE(CONT6_HIST_WEIGHT, 224, 0, 4096);
+    TUNABLE(CAPTURE_HIST_WEIGHT, 1096, 0, 4096);
+
+    TUNABLE(MAIN_HIST_UPDATE_WEIGHT, 976, 512, 2048);
+    TUNABLE(PAWN_HIST_UPDATE_WEIGHT, 809, 512, 2048);
+    TUNABLE(CONT1_HIST_UPDATE_WEIGHT, 1057, 512, 2048);
+    TUNABLE(CONT2_HIST_UPDATE_WEIGHT, 1173, 512, 2048);
+    TUNABLE(CONT4_HIST_UPDATE_WEIGHT, 825, 512, 2048);
+    TUNABLE(CONT6_HIST_UPDATE_WEIGHT, 965, 512, 2048);
+    TUNABLE(CAPTURE_HIST_UPDATE_WEIGHT, 1065, 512, 2048);
+
+    TUNABLE(CONT_HIST_BASE_MAIN_HIST_WEIGHT, 27, 0, 4096);
+    TUNABLE(CONT_HIST_BASE_PAWN_HIST_WEIGHT, 509, 0, 4096);
+    TUNABLE(CONT_HIST_BASE_CONT1_HIST_WEIGHT, 465, 0, 4096);
+    TUNABLE(CONT_HIST_BASE_CONT2_HIST_WEIGHT, 909, 0, 4096);
+    TUNABLE(CONT_HIST_BASE_CONT4_HIST_WEIGHT, 273, 0, 4096);
+    TUNABLE(CONT_HIST_BASE_CONT6_HIST_WEIGHT, 682, 0, 4096);
+
+    TUNABLE(CORR_HIST_BONUS_MAX, 279, 64, 2048);
+    TUNABLE(CORR_HIST_PENALTY_MAX, 328, 64, 2048);
+
+    TUNABLE(PAWN_CORR_HIST_WEIGHT, 48, 16, 128);
+    TUNABLE(FRIENDLY_NONPAWN_CORR_HIST_WEIGHT, 41, 16, 128);
+    TUNABLE(ENEMY_NONPAWN_CORR_HIST_WEIGHT, 38, 16, 128);
+    TUNABLE(MINOR_PIECE_CORR_HIST_WEIGHT, 28, 16, 128);
+    TUNABLE(MAJOR_PIECE_CORR_HIST_WEIGHT, 36, 16, 128);
+
+    TUNABLE(CONT1_CORR_HIST_WEIGHT, 68, 16, 128);
+    TUNABLE(CONT2_CORR_HIST_WEIGHT, 67, 16, 128);
+    TUNABLE(CONT4_CORR_HIST_WEIGHT, 39, 16, 128);
+    TUNABLE(CONT6_CORR_HIST_WEIGHT, 27, 16, 128);
+
+    static constexpr Int32 WINDOW_MIN_DEPTH = 3;
+
+    TUNABLE(WINDOW_INIT_DELTA, 5, 1, 50);
+    TUNABLE(WINDOW_SQUARED_SCORE_SCALE, 32, 0, 1024);
+    TUNABLE(WINDOW_FAIL_HIGH_FREDUCTION, 96, 0, 768);
+    TUNABLE(WINDOW_MAX_FREDUCTION, 428, 0, 896);
+    TUNABLE(WINDOW_WIDENING_SCALE, 141, 1, 256);
+
+    static constexpr Int32 OPTIMISM_MIN_DEPTH = 2;
+
+    TUNABLE(OPTIMISM_SCORE_SCALE, 152, 75, 300);
+    TUNABLE(OPTIMISM_DIVISOR_OFFSET, 106, 50, 200);
+
+    TUNABLE(HINDSIGHT_FEXT_MIN_FREDUCTION, 382, 0, 1024);
+    TUNABLE(HINDSIGHT_FEXTENSION, 70, 0, 512);
+    TUNABLE(HINDSIGHT_FRED_MIN_FDEPTH, 203, 128, 1024);
+    TUNABLE(HINDSIGHT_FRED_MIN_FREDUCTION, 248, 0, 1024);
+    TUNABLE(HINDSIGHT_FRED_MARGIN, 260, 0, 500);
+    TUNABLE(HINDSIGHT_FREDUCTION, 127, 0, 512);
+
+    TUNABLE(IIR_MIN_FDEPTH, 413, 128, 1024);
+    TUNABLE(IIR_TT_FDEPTH_OFFSET, 351, 0, 1024);
+    TUNABLE(IIR_FREDUCTION, 121, 0, 512);
+
+    TUNABLE(RFP_MARGIN_LINEAR_DEPTH_SCALE, 30, 0, 128);
+    TUNABLE(RFP_MARGIN_QUADRATIC_DEPTH_SCALE, 5, 0, 25);
+    TUNABLE(RFP_MARGIN_IMPROVING_SCALE, 6, 0, 150);
+    TUNABLE(RFP_MARGIN_COMPLEXITY_SCALE, 195, 0, 512);
+    TUNABLE(RFP_MAX_FDEPTH, 1384, 0, 2560);
+    TUNABLE(RFP_FAIL_FIRM_T, 800, 0, 1024);
+
+    TUNABLE(RAZORING_MARGIN_DEPTH_SCALE, 213, 0, 512);
+    TUNABLE(RAZORING_MAX_FDEPTH, 480, 0, 1280);
+    TUNABLE(RAZORING_FULL_ALWAYS_MAX_FDEPTH, 124, 0, 256);
+    TUNABLE(RAZORING_FULL_MAX_FDEPTH, 256, 0, 512);
+    TUNABLE(RAZORING_FULL_MARGIN, 181, 0, 400);
+    TUNABLE(RAZORING_FRED_MAX_FDEPTH, 361, 0, 768);
+    TUNABLE(RAZORING_FREDUCTION, 126, 0, 512);
+
+    TUNABLE(NMP_MARGIN_BASE, 198, 0, 400);
+    TUNABLE(NMP_MARGIN_DEPTH_SCALE, 1296, 0, 2560);
+    TUNABLE(NMP_MARGIN_IMPROVING_SCALE, 29, 0, 100);
+    TUNABLE(NMP_MIN_FDEPTH, 393, 0, 1280);
+    TUNABLE(NMP_FRED_BASE, 509, 0, 1024);
+    TUNABLE(NMP_FRED_FDEPTH_SCALE, 209, 0, 1024);
+    TUNABLE(NMP_FRED_STATIC_EVAL_DIFF_SCALE, 81, 0, 128);
+    TUNABLE(NMP_FRED_STATIC_EVAL_DIFF_MAX, 365, 0, 768);
+    TUNABLE(NMP_NO_VERIF_MAX_FDEPTH, 1891, 1024, 3072);
+    TUNABLE(NMP_NO_VERIF_MARGIN, 44, 0, 200);
+    TUNABLE(NMP_MIN_PLY_FDEPTH_SCALE, 112, 0, 128);
+
+    TUNABLE(PROBCUT_BETA_OFFSET, 349, 0, 500);
+    TUNABLE(PROBCUT_BETA_IMPROVING_SCALE, -32, -250, 250);
+    TUNABLE(PROBCUT_FREDUCTION, 385, 0, 768);
+    TUNABLE(PROBCUT_MIN_FDEPTH, 905, 0, 1536);
+    TUNABLE(PROBCUT_SEE_STATIC_EVAL_DIFF_SCALE, 138, 0, 256);
+
+    TUNABLE(MINI_PROBCUT_BETA_OFFSET, 438, 0, 800);
+    TUNABLE(MINI_PROBCUT_TT_FDEPTH_OFFSET, 388, 0, 1024);
+
+    TUNABLE(IIR2_MIN_FDEPTH, 356, 128, 1024);
+    TUNABLE(IIR2_FREDUCTION, 100, 0, 384);
+
+    static inline MultiArray<Int32, 2, 256, 256> LMR_TABLE;
+
+    namespace LMR { static void init(); }
+
+    TUNABLE_CALLBACK(LMR_NOISY_BASE, -3, -50, 75, []() { LMR::init(); })
+    TUNABLE_CALLBACK(LMR_NOISY_DIVISOR, 253, 150, 350, []() { LMR::init(); })
+    TUNABLE_CALLBACK(LMR_QUIET_BASE, 79, 50, 125, []() { LMR::init(); })
+    TUNABLE_CALLBACK(LMR_QUIET_DIVISOR, 242, 100, 300, []() { LMR::init(); })
+
+    static inline void LMR::init() {
+        LMR_TABLE.fill({});
+
+        const Float64 noisyBase = Utils::floatDiv100(LMR_NOISY_BASE);
+        const Float64 noisyDivisor = Utils::floatDiv100(LMR_NOISY_DIVISOR);
+        const Float64 quietBase = Utils::floatDiv100(LMR_QUIET_BASE);
+        const Float64 quietDivisor = Utils::floatDiv100(LMR_QUIET_DIVISOR);
+
+        for (Int32 depth = 1; depth < 256; depth++) {
+            for (Int32 moves = 1; moves < 256; moves++) {
+                const Float64 lnDepth = std::log(static_cast<Float64>(depth));
+                const Float64 lnMoves = std::log(static_cast<Float64>(moves));
+                LMR_TABLE[0][static_cast<USize>(depth)][static_cast<USize>(moves)] =
+                    static_cast<Int32>(1024.0 * (noisyBase + lnDepth * lnMoves / noisyDivisor));
+                LMR_TABLE[1][static_cast<USize>(depth)][static_cast<USize>(moves)] =
+                    static_cast<Int32>(1024.0 * (quietBase + lnDepth * lnMoves / quietDivisor));
             }
         }
     }
 
-    void openBenchConfig() const noexcept {
-        for (const Tunable *tunable : tunables_) {
-            std::cout << tunable->name() + ", int, " + std::to_string(tunable->value()) + ", " + std::to_string(tunable->min()) + ", " + std::to_string(tunable->max()) + ", " + std::to_string(tunable->step()) + ", " + std::to_string(tunable->learningRate()) << std::endl;
-        }
-    }
+    TUNABLE(LMR_FDEPTH_TT_PV_SCALE, 772, 0, 1536);
 
-    void weatherFactoryConfig() const noexcept {
-        std::cout << "{" << std::endl;
-        bool first = true;
-        for (const Tunable *tunable : tunables_) {
-            if (!first) {
-                std::cout << "," << std::endl;
+    static inline MultiArray<Int32, 2, 256> LMP_TABLE;
+
+    namespace LMP { static void init(); }
+
+    TUNABLE_CALLBACK(LMP_TABLE_BASE, 3, 0, 20, []() { LMP::init(); })
+
+    static inline void LMP::init() {
+        LMP_TABLE.fill({});
+
+        for (Int32 improving = 0; improving < 2; improving++) {
+            for (Int32 depth = 0; depth < 256; depth++) {
+                LMP_TABLE[static_cast<USize>(improving)][static_cast<USize>(depth)] = (LMP_TABLE_BASE + depth * depth) / (2 - improving);
             }
-
-            first = false;
-
-            std::cout << "  \"" << tunable->name() << "\": {" << std::endl;
-            std::cout << "    \"value\": " << tunable->value() << "," << std::endl;
-            std::cout << "    \"min_value\": " << tunable->min() << "," << std::endl;
-            std::cout << "    \"max_value\": " << tunable->max() << "," << std::endl;
-            std::cout << "    \"step\": " << tunable->step() << std::endl;
-            std::cout << "  }";
-        }
-
-        std::cout << std::endl;
-        std::cout << "}" << std::endl;
-    }
-
-private:
-    std::vector<Tunable *> tunables_;
-};
-
-inline TunableList TUNABLES;
-
-inline Tunable::Tunable(const std::string &name, Int32 value, Int32 min, Int32 max, Callback callback) : name_(name), value_(value), min_(min), max_(max), callback_(std::move(callback)) { TUNABLES.add(*this); }
-
-static constexpr Int32 FDEPTH_SCALE = 128;
-
-TUNABLE(TT_REPLACE_DEPTH_OFFSET, 552, 0, 1024);
-TUNABLE(TT_REPLACE_PV_SCALE, 229, 0, 768);
-TUNABLE(TT_QUALITY_DEPTH_SCALE, 134, 0, 512);
-TUNABLE(TT_QUALITY_AGE_DIFF_SCALE, 220, 0, 512);
-
-static inline std::array<Int32, 7> SEE_PIECE_VALUES;
-
-namespace SEE {
-
-static void init();
-
-}
-
-TUNABLE_CALLBACK(SEE_PAWN_VALUE, 91, 50, 200, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 456, 300, 700, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_BISHOP_VALUE, 480, 300, 700, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_ROOK_VALUE, 702, 400, 1000, []() { SEE::init(); });
-TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1230, 800, 1600, []() { SEE::init(); });
-
-static inline void SEE::init() { SEE_PIECE_VALUES = {SEE_PAWN_VALUE, SEE_KNIGHT_VALUE, SEE_BISHOP_VALUE, SEE_ROOK_VALUE, SEE_QUEEN_VALUE, 0, 0}; }
-
-TUNABLE(TIME_BASE_TIME_SCALE, 17, 10, 40);
-TUNABLE(TIME_BASE_TIME_INCREMENT_SCALE, 88, 50, 150);
-
-TUNABLE(TIME_SOFT_BOUND_SCALE, 66, 50, 100);
-TUNABLE(TIME_HARD_BOUND_SCALE, 55, 20, 100);
-
-TUNABLE(TIME_SCALE_MATE_SCORE, 19, 1, 100);
-TUNABLE(TIME_SCALE_DECISIVE_SCORE, 50, 1, 100);
-
-TUNABLE(TIME_SCALE_NODE_BASE, 255, 150, 300);
-TUNABLE(TIME_SCALE_NODE_SCALE, 185, 100, 250);
-TUNABLE(TIME_SCALE_NODE_MIN, 10, 1, 100);
-
-TUNABLE(TIME_SCALE_STABILITY_BASE, 72, 40, 100);
-TUNABLE(TIME_SCALE_STABILITY_MAX, 290, 120, 1000);
-TUNABLE(TIME_SCALE_STABILITY_SCALE, 911, 200, 1500);
-TUNABLE(TIME_SCALE_STABILITY_OFFSET, 75, 50, 200);
-TUNABLE(TIME_SCALE_STABILITY_POWER, -254, -400, -150);
-
-TUNABLE(TIME_SCALE_SCORE_CHANGE_DIVISOR, 362, 10, 1000);
-TUNABLE(TIME_SCALE_POS_SCORE_SCALE, 123, 50, 200);
-TUNABLE(TIME_SCALE_NEG_SCORE_SCALE, 119, 50, 200);
-
-TUNABLE(TIME_SCALE_SCORE_OFFSET, 87, 10, 200);
-TUNABLE(TIME_SCALE_SCORE_SCALE, 45, 10, 90);
-TUNABLE(TIME_SCALE_SCORE_MIN, 67, 40, 100);
-TUNABLE(TIME_SCALE_SCORE_MAX, 154, 120, 1000);
-
-TUNABLE(TIME_SCALE_MIN, 13, 1, 100);
-
-static constexpr Int32 TIME_SCALE_STABILITY_MIN_DEPTH = 6;
-
-TUNABLE(EVAL_ADJUST_PAWN_SCALE, 43, 20, 200);
-TUNABLE(EVAL_ADJUST_KNIGHT_SCALE, 428, 300, 700);
-TUNABLE(EVAL_ADJUST_BISHOP_SCALE, 441, 300, 700);
-TUNABLE(EVAL_ADJUST_ROOK_SCALE, 655, 400, 1000);
-TUNABLE(EVAL_ADJUST_QUEEN_SCALE, 1172, 800, 1600);
-TUNABLE(EVAL_ADJUST_MATERIAL_BASE, 26625, 10000, 40000);
-TUNABLE(EVAL_ADJUST_OPTIMISM_SCALE_BASE, 1296, 0, 12000);
-TUNABLE(EVAL_ADJUST_OPTIMISM_SCALE_MATERIAL_SCALE, 765, 0, 2048);
-TUNABLE(EVAL_ADJUST_HALF_MOVE_SCALE, 155, 101, 400);
-
-TUNABLE(THREAD_WEIGHT_SCORE_OFFSET, 12, 0, 20);
-
-TUNABLE(MOVE_ORDER_GOOD_NOISY_MARGIN_SCORE_SCALE, 316, 0, 1024);
-TUNABLE(MOVE_ORDER_GOOD_NOISY_MARGIN_OFFSET, 42, -384, 384);
-
-TUNABLE(MOVE_ORDER_NOISY_SCORE_SCALE, 98, 0, 512);
-
-TUNABLE(MOVE_ORDER_DIRECT_CHECK_BONUS, 5404, 2048, 16384);
-TUNABLE(MOVE_ORDER_DIRECT_CHECK_MARGIN, -76, -300, 150);
-
-TUNABLE(TT_CUTOFF_MAX_HALFMOVES, 90, 75, 99);
-
-TUNABLE(TT_CUTOFF_BONUS_DEPTH_SCALE, 255, 128, 512);
-TUNABLE(TT_CUTOFF_BONUS_OFFSET, 450, 0, 768);
-TUNABLE(TT_CUTOFF_BONUS_MAX, 2891, 1024, 4096);
-
-TUNABLE(EVAL_POLICY_BONUS_BASE, 635, 0, 2048);
-TUNABLE(EVAL_POLICY_BONUS_GAIN_SCALE, 8, 0, 20);
-TUNABLE(EVAL_POLICY_BONUS_MIN, -1402, -4096, 0);
-TUNABLE(EVAL_POLICY_BONUS_MAX, 2798, 0, 4096);
-
-TUNABLE(POST_LMR_BONUS_DEPTH_SCALE, 272, 128, 512);
-TUNABLE(POST_LMR_BONUS_OFFSET, 632, 0, 768);
-TUNABLE(POST_LMR_BONUS_MAX, 2913, 1024, 4096);
-
-TUNABLE(POST_LMR_PENALTY_DEPTH_SCALE, 330, 64, 512);
-TUNABLE(POST_LMR_PENALTY_OFFSET, 255, 0, 768);
-TUNABLE(POST_LMR_PENALTY_MAX, 1024, 768, 4096);
-
-TUNABLE(QUIET_BONUS_DEPTH_SCALE, 383, 128, 512);
-TUNABLE(QUIET_BONUS_OFFSET, 275, 0, 768);
-TUNABLE(QUIET_BONUS_MAX, 2407, 1024, 4096);
-
-TUNABLE(QUIET_PENALTY_DEPTH_SCALE, 400, 128, 512);
-TUNABLE(QUIET_PENALTY_OFFSET, 149, 0, 768);
-TUNABLE(QUIET_PENALTY_MAX, 1241, 1024, 4096);
-
-TUNABLE(NOISY_BONUS_DEPTH_SCALE, 282, 128, 512);
-TUNABLE(NOISY_BONUS_OFFSET, 483, 0, 768);
-TUNABLE(NOISY_BONUS_MAX, 2443, 1024, 4096);
-
-TUNABLE(QUIET_MOVE_NOISY_PENALTY_DEPTH_SCALE, 410, 128, 512);
-TUNABLE(QUIET_MOVE_NOISY_PENALTY_OFFSET, 93, 0, 768);
-TUNABLE(QUIET_MOVE_NOISY_PENALTY_MAX, 1656, 1024, 4096);
-
-TUNABLE(NOISY_MOVE_NOISY_PENALTY_DEPTH_SCALE, 323, 128, 512);
-TUNABLE(NOISY_MOVE_NOISY_PENALTY_OFFSET, 154, 0, 768);
-TUNABLE(NOISY_MOVE_NOISY_PENALTY_MAX, 1416, 1024, 4096);
-
-TUNABLE(PCM_QUIET_BONUS_DEPTH_SCALE, 140, 64, 512);
-TUNABLE(PCM_QUIET_BONUS_OFFSET, 53, 0, 768);
-TUNABLE(PCM_QUIET_BONUS_MAX, 1394, 768, 4096);
-
-TUNABLE(PCM_NOISY_BONUS, 124, 0, 2048);
-
-TUNABLE(HISTORY_FDEPTH_STATIC_EVAL_SCALE, 144, 0, 512);
-
-TUNABLE(MAIN_HIST_WEIGHT, 482, 0, 4096);
-TUNABLE(PAWN_HIST_WEIGHT, 765, 0, 4096);
-TUNABLE(CONT1_HIST_WEIGHT, 1111, 0, 4096);
-TUNABLE(CONT2_HIST_WEIGHT, 1003, 0, 4096);
-TUNABLE(CONT4_HIST_WEIGHT, 767, 0, 4096);
-TUNABLE(CONT6_HIST_WEIGHT, 224, 0, 4096);
-TUNABLE(CAPTURE_HIST_WEIGHT, 1096, 0, 4096);
-
-TUNABLE(MAIN_HIST_UPDATE_WEIGHT, 976, 512, 2048);
-TUNABLE(PAWN_HIST_UPDATE_WEIGHT, 809, 512, 2048);
-TUNABLE(CONT1_HIST_UPDATE_WEIGHT, 1057, 512, 2048);
-TUNABLE(CONT2_HIST_UPDATE_WEIGHT, 1173, 512, 2048);
-TUNABLE(CONT4_HIST_UPDATE_WEIGHT, 825, 512, 2048);
-TUNABLE(CONT6_HIST_UPDATE_WEIGHT, 965, 512, 2048);
-TUNABLE(CAPTURE_HIST_UPDATE_WEIGHT, 1065, 512, 2048);
-
-TUNABLE(CONT_HIST_BASE_MAIN_HIST_WEIGHT, 27, 0, 4096);
-TUNABLE(CONT_HIST_BASE_PAWN_HIST_WEIGHT, 509, 0, 4096);
-TUNABLE(CONT_HIST_BASE_CONT1_HIST_WEIGHT, 465, 0, 4096);
-TUNABLE(CONT_HIST_BASE_CONT2_HIST_WEIGHT, 909, 0, 4096);
-TUNABLE(CONT_HIST_BASE_CONT4_HIST_WEIGHT, 273, 0, 4096);
-TUNABLE(CONT_HIST_BASE_CONT6_HIST_WEIGHT, 682, 0, 4096);
-
-TUNABLE(CORR_HIST_BONUS_MAX, 279, 64, 2048);
-TUNABLE(CORR_HIST_PENALTY_MAX, 328, 64, 2048);
-
-TUNABLE(PAWN_CORR_HIST_WEIGHT, 48, 16, 128);
-TUNABLE(FRIENDLY_NONPAWN_CORR_HIST_WEIGHT, 41, 16, 128);
-TUNABLE(ENEMY_NONPAWN_CORR_HIST_WEIGHT, 38, 16, 128);
-TUNABLE(MINOR_PIECE_CORR_HIST_WEIGHT, 28, 16, 128);
-TUNABLE(MAJOR_PIECE_CORR_HIST_WEIGHT, 36, 16, 128);
-
-TUNABLE(CONT1_CORR_HIST_WEIGHT, 68, 16, 128);
-TUNABLE(CONT2_CORR_HIST_WEIGHT, 67, 16, 128);
-TUNABLE(CONT4_CORR_HIST_WEIGHT, 39, 16, 128);
-TUNABLE(CONT6_CORR_HIST_WEIGHT, 27, 16, 128);
-
-static constexpr Int32 WINDOW_MIN_DEPTH = 3;
-
-TUNABLE(WINDOW_INIT_DELTA, 5, 1, 50);
-TUNABLE(WINDOW_SQUARED_SCORE_SCALE, 32, 0, 1024);
-TUNABLE(WINDOW_FAIL_HIGH_FREDUCTION, 96, 0, 768);
-TUNABLE(WINDOW_MAX_FREDUCTION, 428, 0, 896);
-TUNABLE(WINDOW_WIDENING_SCALE, 141, 1, 256);
-
-static constexpr Int32 OPTIMISM_MIN_DEPTH = 2;
-
-TUNABLE(OPTIMISM_SCORE_SCALE, 152, 75, 300);
-TUNABLE(OPTIMISM_DIVISOR_OFFSET, 106, 50, 200);
-
-TUNABLE(HINDSIGHT_FEXT_MIN_FREDUCTION, 382, 0, 1024);
-TUNABLE(HINDSIGHT_FEXTENSION, 70, 0, 512);
-TUNABLE(HINDSIGHT_FRED_MIN_FDEPTH, 203, 128, 1024);
-TUNABLE(HINDSIGHT_FRED_MIN_FREDUCTION, 248, 0, 1024);
-TUNABLE(HINDSIGHT_FRED_MARGIN, 260, 0, 500);
-TUNABLE(HINDSIGHT_FREDUCTION, 127, 0, 512);
-
-TUNABLE(IIR_MIN_FDEPTH, 413, 128, 1024);
-TUNABLE(IIR_TT_FDEPTH_OFFSET, 351, 0, 1024);
-TUNABLE(IIR_FREDUCTION, 121, 0, 512);
-
-TUNABLE(RFP_MARGIN_LINEAR_DEPTH_SCALE, 30, 0, 128);
-TUNABLE(RFP_MARGIN_QUADRATIC_DEPTH_SCALE, 5, 0, 25);
-TUNABLE(RFP_MARGIN_IMPROVING_SCALE, 6, 0, 150);
-TUNABLE(RFP_MARGIN_COMPLEXITY_SCALE, 195, 0, 512);
-TUNABLE(RFP_MAX_FDEPTH, 1384, 0, 2560);
-TUNABLE(RFP_FAIL_FIRM_T, 800, 0, 1024);
-
-TUNABLE(RAZORING_MARGIN_DEPTH_SCALE, 213, 0, 512);
-TUNABLE(RAZORING_MAX_FDEPTH, 480, 0, 1280);
-TUNABLE(RAZORING_FULL_ALWAYS_MAX_FDEPTH, 124, 0, 256);
-TUNABLE(RAZORING_FULL_MAX_FDEPTH, 256, 0, 512);
-TUNABLE(RAZORING_FULL_MARGIN, 181, 0, 400);
-TUNABLE(RAZORING_FRED_MAX_FDEPTH, 361, 0, 768);
-TUNABLE(RAZORING_FREDUCTION, 126, 0, 512);
-
-TUNABLE(NMP_MARGIN_BASE, 198, 0, 400);
-TUNABLE(NMP_MARGIN_DEPTH_SCALE, 1296, 0, 2560);
-TUNABLE(NMP_MARGIN_IMPROVING_SCALE, 29, 0, 100);
-TUNABLE(NMP_MIN_FDEPTH, 393, 0, 1280);
-TUNABLE(NMP_FRED_BASE, 509, 0, 1024);
-TUNABLE(NMP_FRED_FDEPTH_SCALE, 209, 0, 1024);
-TUNABLE(NMP_FRED_STATIC_EVAL_DIFF_SCALE, 81, 0, 128);
-TUNABLE(NMP_FRED_STATIC_EVAL_DIFF_MAX, 365, 0, 768);
-TUNABLE(NMP_NO_VERIF_MAX_FDEPTH, 1891, 1024, 3072);
-TUNABLE(NMP_NO_VERIF_MARGIN, 44, 0, 200);
-TUNABLE(NMP_MIN_PLY_FDEPTH_SCALE, 112, 0, 128);
-
-TUNABLE(PROBCUT_BETA_OFFSET, 349, 0, 500);
-TUNABLE(PROBCUT_BETA_IMPROVING_SCALE, -32, -250, 250);
-TUNABLE(PROBCUT_FREDUCTION, 385, 0, 768);
-TUNABLE(PROBCUT_MIN_FDEPTH, 905, 0, 1536);
-TUNABLE(PROBCUT_SEE_STATIC_EVAL_DIFF_SCALE, 138, 0, 256);
-
-TUNABLE(MINI_PROBCUT_BETA_OFFSET, 438, 0, 800);
-TUNABLE(MINI_PROBCUT_TT_FDEPTH_OFFSET, 388, 0, 1024);
-
-TUNABLE(IIR2_MIN_FDEPTH, 356, 128, 1024);
-TUNABLE(IIR2_FREDUCTION, 100, 0, 384);
-
-static inline MultiArray<Int32, 2, 256, 256> LMR_TABLE;
-
-namespace LMR {
-
-static void init();
-
-}
-
-TUNABLE_CALLBACK(LMR_NOISY_BASE, -3, -50, 75, []() { LMR::init(); })
-TUNABLE_CALLBACK(LMR_NOISY_DIVISOR, 253, 150, 350, []() { LMR::init(); })
-TUNABLE_CALLBACK(LMR_QUIET_BASE, 79, 50, 125, []() { LMR::init(); })
-TUNABLE_CALLBACK(LMR_QUIET_DIVISOR, 242, 100, 300, []() { LMR::init(); })
-
-static inline void LMR::init() {
-    LMR_TABLE.fill({});
-
-    const Float64 noisyBase = Utils::floatDiv100(LMR_NOISY_BASE);
-    const Float64 noisyDivisor = Utils::floatDiv100(LMR_NOISY_DIVISOR);
-    const Float64 quietBase = Utils::floatDiv100(LMR_QUIET_BASE);
-    const Float64 quietDivisor = Utils::floatDiv100(LMR_QUIET_DIVISOR);
-
-    for (Int32 depth = 1; depth < 256; depth++) {
-        for (Int32 moves = 1; moves < 256; moves++) {
-            const Float64 lnDepth = std::log(static_cast<Float64>(depth));
-            const Float64 lnMoves = std::log(static_cast<Float64>(moves));
-            LMR_TABLE[0][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (noisyBase + lnDepth * lnMoves / noisyDivisor));
-            LMR_TABLE[1][static_cast<USize>(depth)][static_cast<USize>(moves)] = static_cast<Int32>(1024.0 * (quietBase + lnDepth * lnMoves / quietDivisor));
         }
     }
-}
 
-TUNABLE(LMR_FDEPTH_TT_PV_SCALE, 772, 0, 1536);
+    TUNABLE(LMP_MARGIN_HISTORY_SCALE, 769, 0, 2048);
 
-static inline MultiArray<Int32, 2, 256> LMP_TABLE;
+    TUNABLE(QUIET_HISTORY_PRUNING_MAX_FDEPTH, 565, 0, 1280);
+    TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -2490, -4096, 0);
+    TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_OFFSET, -1742, -4096, 4096);
 
-namespace LMP {
+    TUNABLE(QUIET_FP_MARGIN_BASE, 249, 0, 500);
+    TUNABLE(QUIET_FP_MARGIN_DEPTH_SCALE, 60, 0, 128);
+    TUNABLE(QUIET_FP_MARGIN_HISTORY_DIVISOR, 85, 32, 384);
+    TUNABLE(QUIET_FP_MAX_FDEPTH, 961, 0, 2048);
 
-static void init();
+    TUNABLE(NOISY_HISTORY_PRUNING_MAX_FDEPTH, 463, 0, 1280);
+    TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -810, -4096, 0);
+    TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_OFFSET, -1062, -4096, 4096);
 
-}
+    TUNABLE(BNFP_MARGIN_BASE, 297, 0, 500);
+    TUNABLE(BNFP_MARGIN_DEPTH_SCALE, 83, 0, 128);
+    TUNABLE(BNFP_MARGIN_HISTORY_DIVISOR, 96, 32, 384);
+    TUNABLE(BNFP_MAX_FDEPTH, 1033, 0, 2048);
 
-TUNABLE_CALLBACK(LMP_TABLE_BASE, 3, 0, 20, []() { LMP::init(); })
+    TUNABLE(CAPTURE_FP_MARGIN_BASE, 386, 0, 600);
+    TUNABLE(CAPTURE_FP_MARGIN_DEPTH_SCALE, 322, 0, 512);
+    TUNABLE(CAPTURE_FP_MAX_FDEPTH, 662, 0, 2048);
 
-static inline void LMP::init() {
-    LMP_TABLE.fill({});
+    TUNABLE(SEE_PRUNING_MARGIN_QUIET_DEPTH_SCALE, -16, -100, -1);
+    TUNABLE(SEE_PRUNING_MARGIN_NOISY_DEPTH_SCALE, -118, -150, -1);
+    TUNABLE(SEE_PRUNING_MARGIN_NOISY_HISTORY_DIVISOR, 80, 12, 256);
 
-    for (Int32 improving = 0; improving < 2; improving++) {
-        for (Int32 depth = 0; depth < 256; depth++) {
-            LMP_TABLE[static_cast<USize>(improving)][static_cast<USize>(depth)] = (LMP_TABLE_BASE + depth * depth) / (2 - improving);
-        }
+    TUNABLE(SE_MIN_FDEPTH_BASE, 659, 0, 1280);
+    TUNABLE(SE_MIN_FDEPTH_TT_PV_SCALE, 91, 0, 512);
+    TUNABLE(SE_TT_FDEPTH_OFFSET, 387, 0, 1024);
+    TUNABLE(SE_BETA_MARGIN_BASE, 86, 0, 256);
+    TUNABLE(SE_BETA_MARGIN_PREV_PV_SCALE, 106, 0, 256);
+
+    TUNABLE(SE_DOUBLE_FEXT_MARGIN_BASE, 0, -50, 150);
+    TUNABLE(SE_DOUBLE_FEXT_MARGIN_PV_SCALE, 126, 0, 300);
+    TUNABLE(SE_DOUBLE_FEXT_MARGIN_NEW_PV_SCALE, 45, 0, 100);
+    TUNABLE(SE_DOUBLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1276, 0, 8192);
+
+    TUNABLE(SE_TRIPLE_FEXT_MARGIN_BASE, 115, 0, 300);
+    TUNABLE(SE_TRIPLE_FEXT_MARGIN_PV_SCALE, 363, 0, 800);
+    TUNABLE(SE_TRIPLE_FEXT_MARGIN_NEW_PV_SCALE, 56, 0, 100);
+    TUNABLE(SE_TRIPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE, 176, 0, 500);
+    TUNABLE(SE_TRIPLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1265, 0, 8192);
+
+    TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_BASE, 271, 0, 500);
+    TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_PV_SCALE, 544, 0, 1200);
+    TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_NEW_PV_SCALE, 73, 0, 150);
+    TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE, 317, 0, 800);
+    TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1325, 0, 8192);
+
+    TUNABLE(SE_SINGLE_FEXTENSION, 204, 0, 384);
+    TUNABLE(SE_DOUBLE_FEXTENSION, 120, 0, 384);
+    TUNABLE(SE_TRIPLE_FEXTENSION, 87, 0, 256);
+    TUNABLE(SE_QUADRUPLE_FEXTENSION, 83, 0, 256);
+    TUNABLE(SE_FAIL_HIGH_NEG_FEXTENSION, 441, 0, 768);
+    TUNABLE(SE_CUT_NODE_NEG_FEXTENSION, 236, 0, 640);
+    TUNABLE(SE_FAIL_LOW_NEG_FEXTENSION, 74, 0, 256);
+    TUNABLE(SE_SCORE_NEG_FEXTENSION, 43, 0, 256);
+
+    TUNABLE(MULTICUT_FAIL_FIRM_T, 592, 0, 1024);
+
+    TUNABLE(MLDE_MAX_FDEPTH, 1214, 0, 2560);
+    TUNABLE(MLDE_MARGIN, 17, 0, 150);
+    TUNABLE(MLDE_FEXTENSION, 73, 0, 256);
+
+    TUNABLE(LDSE_MAX_FDEPTH, 823, 0, 2048);
+    TUNABLE(LDSE_SINGLE_FEXT_MARGIN, 32, 0, 150);
+    TUNABLE(LDSE_DOUBLE_FEXT_MARGIN, 28, 0, 300);
+    TUNABLE(LDSE_DOUBLE_FEXT_TT_FDEPTH_OFFSET, 300, 0, 1024);
+    TUNABLE(LDSE_SINGLE_FEXTENSION, 108, 0, 384);
+    TUNABLE(LDSE_DOUBLE_FEXTENSION, 146, 0, 384);
+
+    TUNABLE(CUT_NODE_FRED_MIN_FDEPTH, 811, 0, 1536);
+    TUNABLE(CUT_NODE_FREDUCTION, 27, 0, 256);
+
+    static constexpr Int32 LMR_MIN_MOVES = 2;
+
+    TUNABLE(LMR_MIN_FDEPTH, 231, 0, 1024);
+    TUNABLE(LMR_FRED_OFFSET, 550, -2048, 2048);
+    TUNABLE(LMR_FRED_QUIET_HISTORY_SCALE, 422, 0, 768);
+    TUNABLE(LMR_FRED_NOISY_HISTORY_SCALE, 464, 0, 768);
+    TUNABLE(LMR_FRED_NON_PV_SCALE, 1053, 0, 3072);
+    TUNABLE(LMR_FRED_TT_PV_SCALE, 1038, 0, 3072);
+    TUNABLE(LMR_FRED_IMPROVING_SCALE, 1129, 0, 3072);
+    TUNABLE(LMR_FRED_GIVES_CHECK_SCALE, 935, 0, 3072);
+    TUNABLE(LMR_FRED_CUT_NODE_SCALE, 1843, 0, 3072);
+    TUNABLE(LMR_FRED_TT_PV_FAIL_LOW_SCALE, 1223, 0, 3072);
+    TUNABLE(LMR_FRED_ALPHA_RAISES_SCALE, 517, 0, 3072);
+    TUNABLE(LMR_FRED_NOISY_TT_MOVE_SCALE, 1047, 0, 3072);
+    TUNABLE(LMR_FRED_MOVES_TRIED_SCALE, 52, 0, 128);
+    TUNABLE(LMR_FRED_COMPLEXITY_SCALE, 660, 0, 2048);
+
+    TUNABLE(DEEPER_SEARCH_MARGIN_BASE, 36, 0, 150);
+    TUNABLE(DEEPER_SEARCH_MARGIN_DEPTH_SCALE, 4, 0, 20);
+    TUNABLE(DEEPER_SEARCH_FEXTENSION, 167, 0, 384);
+
+    TUNABLE(SHALLOWER_SEARCH_MARGIN_BASE, 9, 0, 150);
+    TUNABLE(SHALLOWER_SEARCH_MARGIN_DEPTH_SCALE, 2, 0, 20);
+    TUNABLE(SHALLOWER_SEARCH_FREDUCTION, 105, 0, 384);
+
+    TUNABLE(PCM_WEIGHT_BASE, 100, -1024, 1024);
+    TUNABLE(PCM_WEIGHT_DEPTH_SCALE, 430, 0, 1024);
+    TUNABLE(PCM_WEIGHT_DEPTH_MAX, 3682, 0, 8192);
+    TUNABLE(PCM_WEIGHT_PREV_MOVES_TRIED_SCALE, 1168, 0, 2048);
+    TUNABLE(PCM_WEIGHT_PREV_MOVES_TRIED_MIN, 7, 1, 21);
+    TUNABLE(PCM_WEIGHT_PREV_TT_MOVE_SCALE, 993, 0, 2048);
+    TUNABLE(PCM_WEIGHT_STATIC_EVAL_SCALE, 1042, 0, 2048);
+    TUNABLE(PCM_WEIGHT_PREV_STATIC_EVAL_SCALE, 1122, 0, 2048);
+    TUNABLE(PCM_WEIGHT_MARGIN, 128, 0, 250);
+    TUNABLE(PCM_WEIGHT_PREV_MARGIN, 139, 0, 250);
+
+    TUNABLE(QSEARCH_FAIL_FIRM_T, 610, 0, 1024);
+    TUNABLE(QSEARCH_FP_MARGIN, 150, 0, 400);
+    TUNABLE(QSEARCH_SEE_PRUNING_MARGIN, -189, -2000, 200);
+
+    static constexpr Int32 QSEARCH_MAX_MOVES = 2;
+
+    inline void TunableList::init() noexcept {
+        SEE::init();
+        LMR::init();
+        LMP::init();
     }
-}
-
-TUNABLE(LMP_MARGIN_HISTORY_SCALE, 769, 0, 2048);
-
-TUNABLE(QUIET_HISTORY_PRUNING_MAX_FDEPTH, 565, 0, 1280);
-TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -2490, -4096, 0);
-TUNABLE(QUIET_HISTORY_PRUNING_MARGIN_OFFSET, -1742, -4096, 4096);
-
-TUNABLE(QUIET_FP_MARGIN_BASE, 249, 0, 500);
-TUNABLE(QUIET_FP_MARGIN_DEPTH_SCALE, 60, 0, 128);
-TUNABLE(QUIET_FP_MARGIN_HISTORY_DIVISOR, 85, 32, 384);
-TUNABLE(QUIET_FP_MAX_FDEPTH, 961, 0, 2048);
-
-TUNABLE(NOISY_HISTORY_PRUNING_MAX_FDEPTH, 463, 0, 1280);
-TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_DEPTH_SCALE, -810, -4096, 0);
-TUNABLE(NOISY_HISTORY_PRUNING_MARGIN_OFFSET, -1062, -4096, 4096);
-
-TUNABLE(BNFP_MARGIN_BASE, 297, 0, 500);
-TUNABLE(BNFP_MARGIN_DEPTH_SCALE, 83, 0, 128);
-TUNABLE(BNFP_MARGIN_HISTORY_DIVISOR, 96, 32, 384);
-TUNABLE(BNFP_MAX_FDEPTH, 1033, 0, 2048);
-
-TUNABLE(CAPTURE_FP_MARGIN_BASE, 386, 0, 600);
-TUNABLE(CAPTURE_FP_MARGIN_DEPTH_SCALE, 322, 0, 512);
-TUNABLE(CAPTURE_FP_MAX_FDEPTH, 662, 0, 2048);
-
-TUNABLE(SEE_PRUNING_MARGIN_QUIET_DEPTH_SCALE, -16, -100, -1);
-TUNABLE(SEE_PRUNING_MARGIN_NOISY_DEPTH_SCALE, -118, -150, -1);
-TUNABLE(SEE_PRUNING_MARGIN_NOISY_HISTORY_DIVISOR, 80, 12, 256);
-
-TUNABLE(SE_MIN_FDEPTH_BASE, 659, 0, 1280);
-TUNABLE(SE_MIN_FDEPTH_TT_PV_SCALE, 91, 0, 512);
-TUNABLE(SE_TT_FDEPTH_OFFSET, 387, 0, 1024);
-TUNABLE(SE_BETA_MARGIN_BASE, 86, 0, 256);
-TUNABLE(SE_BETA_MARGIN_PREV_PV_SCALE, 106, 0, 256);
-
-TUNABLE(SE_DOUBLE_FEXT_MARGIN_BASE, 0, -50, 150);
-TUNABLE(SE_DOUBLE_FEXT_MARGIN_PV_SCALE, 126, 0, 300);
-TUNABLE(SE_DOUBLE_FEXT_MARGIN_NEW_PV_SCALE, 45, 0, 100);
-TUNABLE(SE_DOUBLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1276, 0, 8192);
-
-TUNABLE(SE_TRIPLE_FEXT_MARGIN_BASE, 115, 0, 300);
-TUNABLE(SE_TRIPLE_FEXT_MARGIN_PV_SCALE, 363, 0, 800);
-TUNABLE(SE_TRIPLE_FEXT_MARGIN_NEW_PV_SCALE, 56, 0, 100);
-TUNABLE(SE_TRIPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE, 176, 0, 500);
-TUNABLE(SE_TRIPLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1265, 0, 8192);
-
-TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_BASE, 271, 0, 500);
-TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_PV_SCALE, 544, 0, 1200);
-TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_NEW_PV_SCALE, 73, 0, 150);
-TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_NOISY_TT_MOVE_SCALE, 317, 0, 800);
-TUNABLE(SE_QUADRUPLE_FEXT_MARGIN_COMPLEXITY_SCALE, 1325, 0, 8192);
-
-TUNABLE(SE_SINGLE_FEXTENSION, 204, 0, 384);
-TUNABLE(SE_DOUBLE_FEXTENSION, 120, 0, 384);
-TUNABLE(SE_TRIPLE_FEXTENSION, 87, 0, 256);
-TUNABLE(SE_QUADRUPLE_FEXTENSION, 83, 0, 256);
-TUNABLE(SE_FAIL_HIGH_NEG_FEXTENSION, 441, 0, 768);
-TUNABLE(SE_CUT_NODE_NEG_FEXTENSION, 236, 0, 640);
-TUNABLE(SE_FAIL_LOW_NEG_FEXTENSION, 74, 0, 256);
-TUNABLE(SE_SCORE_NEG_FEXTENSION, 43, 0, 256);
-
-TUNABLE(MULTICUT_FAIL_FIRM_T, 592, 0, 1024);
-
-TUNABLE(MLDE_MAX_FDEPTH, 1214, 0, 2560);
-TUNABLE(MLDE_MARGIN, 17, 0, 150);
-TUNABLE(MLDE_FEXTENSION, 73, 0, 256);
-
-TUNABLE(LDSE_MAX_FDEPTH, 823, 0, 2048);
-TUNABLE(LDSE_SINGLE_FEXT_MARGIN, 32, 0, 150);
-TUNABLE(LDSE_DOUBLE_FEXT_MARGIN, 28, 0, 300);
-TUNABLE(LDSE_DOUBLE_FEXT_TT_FDEPTH_OFFSET, 300, 0, 1024);
-TUNABLE(LDSE_SINGLE_FEXTENSION, 108, 0, 384);
-TUNABLE(LDSE_DOUBLE_FEXTENSION, 146, 0, 384);
-
-TUNABLE(CUT_NODE_FRED_MIN_FDEPTH, 811, 0, 1536);
-TUNABLE(CUT_NODE_FREDUCTION, 27, 0, 256);
-
-static constexpr Int32 LMR_MIN_MOVES = 2;
-
-TUNABLE(LMR_MIN_FDEPTH, 231, 0, 1024);
-TUNABLE(LMR_FRED_OFFSET, 550, -2048, 2048);
-TUNABLE(LMR_FRED_QUIET_HISTORY_SCALE, 422, 0, 768);
-TUNABLE(LMR_FRED_NOISY_HISTORY_SCALE, 464, 0, 768);
-TUNABLE(LMR_FRED_NON_PV_SCALE, 1053, 0, 3072);
-TUNABLE(LMR_FRED_TT_PV_SCALE, 1038, 0, 3072);
-TUNABLE(LMR_FRED_IMPROVING_SCALE, 1129, 0, 3072);
-TUNABLE(LMR_FRED_GIVES_CHECK_SCALE, 935, 0, 3072);
-TUNABLE(LMR_FRED_CUT_NODE_SCALE, 1843, 0, 3072);
-TUNABLE(LMR_FRED_TT_PV_FAIL_LOW_SCALE, 1223, 0, 3072);
-TUNABLE(LMR_FRED_ALPHA_RAISES_SCALE, 517, 0, 3072);
-TUNABLE(LMR_FRED_NOISY_TT_MOVE_SCALE, 1047, 0, 3072);
-TUNABLE(LMR_FRED_MOVES_TRIED_SCALE, 52, 0, 128);
-TUNABLE(LMR_FRED_COMPLEXITY_SCALE, 660, 0, 2048);
-
-TUNABLE(DEEPER_SEARCH_MARGIN_BASE, 36, 0, 150);
-TUNABLE(DEEPER_SEARCH_MARGIN_DEPTH_SCALE, 4, 0, 20);
-TUNABLE(DEEPER_SEARCH_FEXTENSION, 167, 0, 384);
-
-TUNABLE(SHALLOWER_SEARCH_MARGIN_BASE, 9, 0, 150);
-TUNABLE(SHALLOWER_SEARCH_MARGIN_DEPTH_SCALE, 2, 0, 20);
-TUNABLE(SHALLOWER_SEARCH_FREDUCTION, 105, 0, 384);
-
-TUNABLE(PCM_WEIGHT_BASE, 100, -1024, 1024);
-TUNABLE(PCM_WEIGHT_DEPTH_SCALE, 430, 0, 1024);
-TUNABLE(PCM_WEIGHT_DEPTH_MAX, 3682, 0, 8192);
-TUNABLE(PCM_WEIGHT_PREV_MOVES_TRIED_SCALE, 1168, 0, 2048);
-TUNABLE(PCM_WEIGHT_PREV_MOVES_TRIED_MIN, 7, 1, 21);
-TUNABLE(PCM_WEIGHT_PREV_TT_MOVE_SCALE, 993, 0, 2048);
-TUNABLE(PCM_WEIGHT_STATIC_EVAL_SCALE, 1042, 0, 2048);
-TUNABLE(PCM_WEIGHT_PREV_STATIC_EVAL_SCALE, 1122, 0, 2048);
-TUNABLE(PCM_WEIGHT_MARGIN, 128, 0, 250);
-TUNABLE(PCM_WEIGHT_PREV_MARGIN, 139, 0, 250);
-
-TUNABLE(QSEARCH_FAIL_FIRM_T, 610, 0, 1024);
-TUNABLE(QSEARCH_FP_MARGIN, 150, 0, 400);
-TUNABLE(QSEARCH_SEE_PRUNING_MARGIN, -189, -2000, 200);
-
-static constexpr Int32 QSEARCH_MAX_MOVES = 2;
-
-inline void TunableList::init() noexcept {
-    SEE::init();
-    LMR::init();
-    LMP::init();
-}
-
 }
