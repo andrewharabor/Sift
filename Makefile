@@ -3,14 +3,12 @@ BUILD ?= engine
 MODE  ?= release
 NUMA ?= off
 
-BUILD_DIR := build
-
 MAIN_SRCS := src/main.cpp
-MAIN_OBJS := $(MAIN_SRCS:%.cpp=$(BUILD_DIR)/%.o)
+MAIN_OBJS := $(MAIN_SRCS:%.cpp=build/%.o)
 MAIN_DEPS := $(MAIN_OBJS:%.o=%.d)
 
 PERM_SRCS := tools/permute.cpp
-PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
+PERM_OBJS := $(PERM_SRCS:%.cpp=build/%.o)
 PERM_DEPS := $(PERM_OBJS:%.o=%.d)
 
 recsearch = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
@@ -178,7 +176,7 @@ $(PERM_EXEC): $(NETWORK_FILE).nnue $(PERM_OBJS)
 $(NETWORK_FILE).nnue:
 	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_FILE)/$(NETWORK_FILE).nnue
 
-$(BUILD_DIR)/%.o: %.cpp
+build/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
 	$(CXX) $(CPP_FLAGS) $(CXX_FLAGS) -c $< -o $@
 
@@ -209,7 +207,7 @@ format: $(HEADERS) $(MAIN_SRCS) $(PERM_SRCS)
 clean:
 	$(RM_FILE) Sift*
 	$(RM_FILE) permute-*
-	$(RM_DIR) $(BUILD_DIR)
+	$(RM_DIR) build
 
 .PHONY: help
 help:
