@@ -1,14 +1,15 @@
 ARCH  ?= native
-BUILD ?= engine
-MODE  ?= tune
+MODE  ?= release
 NUMA ?= off
 
+BUILD_DIR := build/$(ARCH)
+
 MAIN_SRCS := src/main.cpp
-MAIN_OBJS := $(MAIN_SRCS:%.cpp=build/%.o)
+MAIN_OBJS := $(MAIN_SRCS:%.cpp=$(BUILD_DIR)/%.o)
 MAIN_DEPS := $(MAIN_OBJS:%.o=%.d)
 
 PERM_SRCS := tools/permute.cpp
-PERM_OBJS := $(PERM_SRCS:%.cpp=build/%.o)
+PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
 PERM_DEPS := $(PERM_OBJS:%.o=%.d)
 
 recsearch = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
@@ -38,7 +39,7 @@ else
 	VERSION := $(shell cat version.txt)
 endif
 
-CPP_FLAGS += -DBUILD_VERSION=$(VERSION)
+CPP_FLAGS += -DVERSION=$(VERSION)
 
 ifeq ($(DETECTED_OS),windows)
 	NETWORK_FILE := $(shell type network.txt)
@@ -49,15 +50,15 @@ endif
 CPP_FLAGS += -DNETWORK_FILE=$(NETWORK_FILE).nnue
 
 ifeq ($(DETECTED_OS),windows)
-	MAIN_EXEC := Sift$(VERSION).exe
-	PERM_EXEC := permute-$(ARCH).exe
+	MAIN_EXEC := Sift-$(VERSION)-$(ARCH).exe
+	PERM_EXEC := permute-$(NETWORK_FILE)-$(ARCH).exe
 	MKDIR = mkdir
 	RM_FILE = del /f /q
 	RM_DIR = rmdir /s /q
 	SEP = \\
 else
-	MAIN_EXEC := Sift$(VERSION)
-	PERM_EXEC := permute-$(ARCH)
+	MAIN_EXEC := Sift-$(VERSION)-$(ARCH)
+	PERM_EXEC := permute-$(NETWORK_FILE)-$(ARCH)
 	MKDIR = mkdir -p
 	RM_FILE = rm -f
 	RM_DIR = rm -rf
@@ -109,16 +110,16 @@ ifeq ($(ARCH),native)
 else ifeq ($(ARCH),avx512)
 	CXX_FLAGS += -march=icelake-client -mtune=znver4
 	CPP_FLAGS += -DUSE_AVX512 -DUSE_VNNI512 -DUSE_VBMI2 -DUSE_VBMI -DUSE_AVX2 -DUSE_BMI2 -DUSE_PEXT -DUSE_POPCNT
-else ifeq ($(ARCH),avx2-bmi2)
+else ifeq ($(ARCH),avx2_bmi2)
 	CXX_FLAGS += -march=haswell -mtune=znver3
 	CPP_FLAGS +=  -DUSE_AVX2 -DUSE_BMI2 -DUSE_PEXT -DUSE_POPCNT
 else ifeq ($(ARCH),zen2)
 	CXX_FLAGS += -march=bdver4 -mno-tbm -mno-sse4a -mtune=znver2
 	CPP_FLAGS += -DUSE_AVX2 -DUSE_POPCNT
-else ifeq ($(ARCH),armv8-4)
+else ifeq ($(ARCH),armv8_4)
 	CXX_FLAGS += -march=armv8.4-a
 	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
-else ifeq ($(ARCH),apple-m1)
+else ifeq ($(ARCH),apple_m1)
 	CXX_FLAGS += -mcpu=apple-m1 --target=arm64-apple-macos11
 	CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
 endif
@@ -176,7 +177,7 @@ $(PERM_EXEC): $(NETWORK_FILE).nnue $(PERM_OBJS)
 $(NETWORK_FILE).nnue:
 	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_FILE)/$(NETWORK_FILE).nnue
 
-build/%.o: %.cpp
+$(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
 	$(CXX) $(CPP_FLAGS) $(CXX_FLAGS) -c $< -o $@
 
@@ -211,7 +212,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2-bmi2|zen2|armv8-4|apple-m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2_bmi2|zen2|armv8_4|apple_m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  main"
 	@echo "  info"

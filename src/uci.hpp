@@ -205,7 +205,7 @@ namespace Sift {
         void uci() const {
             std::unique_lock<std::mutex> lock = lockStdout();
 
-            std::cout << "id name Sift " << TOSTRING(BUILD_VERSION) << std::endl;
+            std::cout << "id name Sift " << TOSTRING(VERSION) << std::endl;
             std::cout << "id author andrewharabor" << std::endl;
 
             for (const auto& option : OPTIONS) {
@@ -584,7 +584,7 @@ namespace Sift {
 
         void help() const {
             std::unique_lock<std::mutex> lock = lockStdout();
-            std::cout << "Sift " << TOSTRING(BUILD_VERSION) << ", a strong UCI chess engine by andrewharabor" << std::endl;
+            std::cout << "Sift " << TOSTRING(VERSION) << ", a strong UCI chess engine by andrewharabor" << std::endl;
             std::cout << "https://github.com/andrewharabor/Sift" << std::endl;
         }
 
