@@ -144,10 +144,10 @@ namespace Sift {
                     in1_1 = SIMD::clamp<Int16>(in1_1, zero, quant);
                     in1_2 = SIMD::clamp<Int16>(in1_2, zero, quant);
                     in1_3 = SIMD::clamp<Int16>(in1_3, zero, quant);
-                    in2_0 = SIMD::clamp<Int16>(in2_0, zero, quant);
-                    in2_1 = SIMD::clamp<Int16>(in2_1, zero, quant);
-                    in2_2 = SIMD::clamp<Int16>(in2_2, zero, quant);
-                    in2_3 = SIMD::clamp<Int16>(in2_3, zero, quant);
+                    in2_0 = SIMD::min<Int16>(in2_0, quant);
+                    in2_1 = SIMD::min<Int16>(in2_1, quant);
+                    in2_2 = SIMD::min<Int16>(in2_2, quant);
+                    in2_3 = SIMD::min<Int16>(in2_3, quant);
                     const Vec<Int16> prod_0 = SIMD::shiftLeftMulHi<Int16>(in1_0, in2_0, FT_SCALE_BITS);
                     const Vec<Int16> prod_1 = SIMD::shiftLeftMulHi<Int16>(in1_1, in2_1, FT_SCALE_BITS);
                     const Vec<Int16> prod_2 = SIMD::shiftLeftMulHi<Int16>(in1_2, in2_2, FT_SCALE_BITS);
