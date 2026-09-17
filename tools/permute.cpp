@@ -27,23 +27,25 @@ struct Weights {
 };
 
 int main(int argc, char* argv[]) {
-    if (argc >= 2) {
-        if constexpr (!NNUE::Arch::NEEDS_FT_PERMUTE) { return 0; }
-
-        std::unique_ptr<Weights> weights = std::make_unique<Weights>();
-
+    if (argc >= 3) {
         std::ifstream in = std::ifstream(argv[1], std::ios::binary);
         assert(in.is_open());
 
+        std::ofstream out = std::ofstream(argv[2], std::ios::binary);
+        assert(out.is_open());
+
+        if constexpr (!NNUE::Arch::NEEDS_FT_PERMUTE) {
+            std::copy(std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}, std::ostreambuf_iterator<char>{out});
+            return 0;
+        }
+
+        std::unique_ptr<Weights> weights = std::make_unique<Weights>();
         in.read(reinterpret_cast<char*>(weights.get()), sizeof(Weights));
 
         NNUE::Arch::permuteParam<Int16>(weights->ftPSQWeights);
         NNUE::Arch::permuteParam<Int16>(weights->ftBiases);
 
         if constexpr (NNUE::InputFeatureSet::THREAT_INPUTS) { NNUE::Arch::permuteParam<Int8>(weights->ftThreatWeights); }
-
-        std::ofstream out = std::ofstream(argv[1], std::ios::binary);
-        assert(out.is_open());
 
         out.write(reinterpret_cast<const char*>(weights.get()), sizeof(Weights));
 

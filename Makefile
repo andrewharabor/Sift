@@ -42,23 +42,26 @@ endif
 CPP_FLAGS += -DVERSION=$(VERSION)
 
 ifeq ($(DETECTED_OS),windows)
-	NETWORK_FILE := $(shell type network.txt)
+	NETWORK_NAME := $(shell type network.txt)
 else
-	NETWORK_FILE := $(shell cat network.txt)
+	NETWORK_NAME := $(shell cat network.txt)
 endif
 
-CPP_FLAGS += -DNETWORK_FILE=$(NETWORK_FILE).nnue
+NETWORK_FILE := $(NETWORK_NAME).nnue
+PERMED_NETWORK_FILE := $(NETWORK_NAME)-$(ARCH).nnue
+
+CPP_FLAGS += -DNETWORK_FILE=$(PERMED_NETWORK_FILE)
 
 ifeq ($(DETECTED_OS),windows)
 	MAIN_EXEC := Sift-$(VERSION)-$(ARCH).exe
-	PERM_EXEC := permute-$(NETWORK_FILE)-$(ARCH).exe
+	PERM_EXEC := permute-$(NETWORK_NAME)-$(ARCH).exe
 	MKDIR = mkdir
 	RM_FILE = del /f /q
 	RM_DIR = rmdir /s /q
 	SEP = \\
 else
 	MAIN_EXEC := Sift-$(VERSION)-$(ARCH)
-	PERM_EXEC := permute-$(NETWORK_FILE)-$(ARCH)
+	PERM_EXEC := permute-$(NETWORK_NAME)-$(ARCH)
 	MKDIR = mkdir -p
 	RM_FILE = rm -f
 	RM_DIR = rm -rf
@@ -161,21 +164,24 @@ else ifeq ($(MODE),debug)
 endif
 
 ifeq ($(NUMA),on)
-	CXX_FLAGS += -DUSE_NUMA
+	CPP_FLAGS += -DUSE_NUMA
 	LD_FLAGS  += -lnuma
 endif
 
 -include $(MAIN_DEPS)
 -include $(PERM_DEPS)
 
-$(MAIN_EXEC): info __perm $(MAIN_OBJS)
+$(MAIN_EXEC): info $(PERMED_NETWORK_FILE) $(MAIN_OBJS)
 	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
 
-$(PERM_EXEC): $(NETWORK_FILE).nnue $(PERM_OBJS)
+$(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
 	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
 
-$(NETWORK_FILE).nnue:
-	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_FILE)/$(NETWORK_FILE).nnue
+$(PERMED_NETWORK_FILE): $(PERM_EXEC)
+	./$(PERM_EXEC) $(NETWORK_FILE) $(PERMED_NETWORK_FILE)
+
+$(NETWORK_FILE):
+	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_NAME)/$(NETWORK_FILE)
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
@@ -186,10 +192,6 @@ $(BUILD_DIR)/%.o: %.cpp
 .PHONY: main
 main: $(MAIN_EXEC)
 
-.PHONY: __perm
-__perm: $(PERM_EXEC)
-	./$(PERM_EXEC) $(NETWORK_FILE).nnue
-
 .PHONY: info
 info:
 	@echo Detected OS: $(DETECTED_OS)
@@ -197,7 +199,7 @@ info:
 	@echo Build version: $(VERSION)
 	@echo Build architecture: $(ARCH)
 	@echo Build mode: $(MODE)
-	@echo Network file: $(NETWORK_FILE)
+	@echo Network: $(NETWORK_NAME)
 	@echo NUMA support: $(NUMA)
 
 .PHONY: format

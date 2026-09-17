@@ -14,6 +14,7 @@
 
 #include "eval.hpp"
 #include "history.hpp"
+#include "loader.hpp"
 #include "move-gen.hpp"
 #include "move-order.hpp"
 #include "move.hpp"

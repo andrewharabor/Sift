@@ -6,7 +6,7 @@
 
 #include "attacks.hpp"
 #include "cuckoo.hpp"
-#include "nnue.hpp"
+#include "loader.hpp"
 #include "numa.hpp"
 #include "tunable.hpp"
 #include "uci.hpp"
