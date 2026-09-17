@@ -363,6 +363,8 @@ namespace Sift {
 
         constexpr Bitboard threats() const noexcept { return state().threats; }
 
+        constexpr Bitboard winningThreats() const noexcept { return state().winningThreats; }
+
         constexpr const std::array<Piece, 64>& mailbox() const noexcept { return mailbox_; }
 
         constexpr Bitboard castlingPath(CastlingRights::Side castlingSide) const noexcept {
@@ -1205,6 +1207,7 @@ namespace Sift {
             std::array<Bitboard, 2> pinners;
 
             Bitboard threats;
+            Bitboard winningThreats;
 
             std::array<Bitboard, 4> checkZones;
         };
@@ -1384,6 +1387,8 @@ namespace Sift {
 
         void updateThreats() noexcept {
             Bitboard threats = Bitboard();
+            Bitboard winningThreats = Bitboard();
+
             Bitboard targets = Bitboard();
 
             Bitboard occ = occupied() ^ Bitboard(kingSquare(sideToMove_));
@@ -1400,17 +1405,20 @@ namespace Sift {
             while (rooks) {
                 const Bitboard attacks = Attacks::rook(rooks.pop(), occ);
                 threats |= attacks;
+                winningThreats |= attacks & targets;
             }
             targets |= pieces(PieceType::ROOK, sideToMove_);
 
             while (bishops) {
                 const Bitboard attacks = Attacks::bishop(bishops.pop(), occ);
                 threats |= attacks;
+                winningThreats |= attacks & targets;
             }
 
             while (knights) {
                 const Bitboard attacks = Attacks::knight(knights.pop());
                 threats |= attacks;
+                winningThreats |= attacks & targets;
             }
 
             targets |= pieces(PieceType::BISHOP, sideToMove_) | pieces(PieceType::KNIGHT, sideToMove_);
@@ -1418,10 +1426,12 @@ namespace Sift {
             const Bitboard pawnAttacks =
                 (sideToMove_ == Color::WHITE) ? Attacks::allPawns<Color::BLACK>(pawns) : Attacks::allPawns<Color::WHITE>(pawns);
             threats |= pawnAttacks;
+            winningThreats |= pawnAttacks & targets;
 
             threats |= Attacks::king(kingSquare(~sideToMove_));
 
             state().threats = threats;
+            state().winningThreats = winningThreats;
         }
 
         void updateCheckZones() noexcept {

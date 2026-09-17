@@ -99,6 +99,7 @@ namespace Sift {
     using NonPawnCorrHistTable = std::array<SharedCorrHistTable, 2>;
     using MinorPieceCorrHistTable = SharedCorrHistTable;
     using MajorPieceCorrHistTable = SharedCorrHistTable;
+    using WinningThreatsCorrHistTable = SharedCorrHistTable;
 
     struct HistoryStackEntry {
         Move move;
@@ -287,6 +288,7 @@ namespace Sift {
             std::memset(&nonPawnCorrHistTable_, 0, sizeof(nonPawnCorrHistTable_));
             std::memset(&minorPieceCorrHistTable_, 0, sizeof(minorPieceCorrHistTable_));
             std::memset(&majorPieceCorrHistTable_, 0, sizeof(majorPieceCorrHistTable_));
+            std::memset(&winningThreatsCorrHistTable_, 0, sizeof(winningThreatsCorrHistTable_));
         }
 
         Int32 correction(const Position& position, std::span<const HistoryStackEntry> stack, USize ply) const noexcept {
@@ -298,6 +300,7 @@ namespace Sift {
             correction += ENEMY_NONPAWN_CORR_HIST_WEIGHT * enemyNonPawnCorrHistScore(position, color);
             correction += MINOR_PIECE_CORR_HIST_WEIGHT * minorPieceCorrHistScore(position, color);
             correction += MAJOR_PIECE_CORR_HIST_WEIGHT * majorPieceCorrHistScore(position, color);
+            correction += WINNING_THREATS_CORR_HIST_WEIGHT * winningThreatsCorrHistScore(position, color);
 
             const Move prevMove = (ply > 0) ? stack[ply - 1].move : Move::NULL_MOVE;
             Piece prevPiece = (ply > 0) ? stack[ply - 1].movedPiece : Piece::NONE;
@@ -322,6 +325,7 @@ namespace Sift {
             updateEnemyNonPawnCorrHist(position, color, bonus);
             updateMinorPieceCorrHist(position, color, bonus);
             updateMajorPieceCorrHist(position, color, bonus);
+            updateWinningThreatsCorrHist(position, color, bonus);
 
             const Move prevMove = (ply > 0) ? stack[ply - 1].move : Move::NULL_MOVE;
             Piece prevPiece = (ply > 0) ? stack[ply - 1].movedPiece : Piece::NONE;
@@ -338,6 +342,7 @@ namespace Sift {
         NonPawnCorrHistTable nonPawnCorrHistTable_;
         MinorPieceCorrHistTable minorPieceCorrHistTable_;
         MajorPieceCorrHistTable majorPieceCorrHistTable_;
+        WinningThreatsCorrHistTable winningThreatsCorrHistTable_;
 
         constexpr Int32 pawnCorrHistScore(const Position& position, Color color) const noexcept {
             return pawnCorrHistTable_[color.index()][position.pawnHash() % CORR_HIST_SIZE].value();
@@ -357,6 +362,11 @@ namespace Sift {
 
         constexpr Int32 majorPieceCorrHistScore(const Position& position, Color color) const noexcept {
             return majorPieceCorrHistTable_[color.index()][position.majorPieceHash() % CORR_HIST_SIZE].value();
+        }
+
+        constexpr Int32 winningThreatsCorrHistScore(const Position& position, Color color) const noexcept {
+            const UInt64 threatHash = Utils::murmurHash3((position.winningThreats()).bits());
+            return winningThreatsCorrHistTable_[color.index()][threatHash % CORR_HIST_SIZE].value();
         }
 
         constexpr Int32 contCorrHistScore(std::span<const HistoryStackEntry> stack, USize ply, USize offset, Move move,
@@ -385,6 +395,11 @@ namespace Sift {
 
         void updateMajorPieceCorrHist(const Position& position, Color color, Int32 bonus) noexcept {
             majorPieceCorrHistTable_[color.index()][position.majorPieceHash() % CORR_HIST_SIZE].update(bonus);
+        }
+
+        void updateWinningThreatsCorrHist(const Position& position, Color color, Int32 bonus) noexcept {
+            const UInt64 threatHash = Utils::murmurHash3((position.winningThreats()).bits());
+            winningThreatsCorrHistTable_[color.index()][threatHash % CORR_HIST_SIZE].update(bonus);
         }
 
         void updateContCorrHist(std::span<const HistoryStackEntry> stack, USize ply, USize offset, Move move, Piece movedPiece,
