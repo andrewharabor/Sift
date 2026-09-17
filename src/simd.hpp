@@ -429,7 +429,7 @@ namespace Sift {
 
         static inline UInt32 nonzeroMaskUInt8(VecUInt8 v) {
             const auto nz = _mm256_cmpgt_epi32(v, _mm256_setzero_si256());
-            return _mm256_movemask_ps(_mm256_castsi256_ps(nz));
+            return static_cast<UInt32>(_mm256_movemask_ps(_mm256_castsi256_ps(nz)));
         }
 
         static inline VecInt32 dotProdUInt8Int8(VecInt32 sum, VecUInt8 u, VecInt8 i) noexcept {
