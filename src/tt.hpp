@@ -188,7 +188,7 @@ namespace Sift {
             assert(size_ == 0);
             assert(capacity_ == 0);
 
-#if defined(__linux__)
+#if defined(MADV_HUGEPAGE)
             static constexpr USize PAGE_SIZE = 2 * 1024 * 1024;
 #else
             static constexpr USize PAGE_SIZE = 4096;
@@ -198,7 +198,7 @@ namespace Sift {
 
             table_ = static_cast<Cluster*>(Utils::alignedAlloc(trueNewSize, PAGE_SIZE));
 
-#if defined(__linux__)
+#if defined(MADV_HUGEPAGE)
             madvise(table_, trueNewSize, MADV_HUGEPAGE);
 #endif
 

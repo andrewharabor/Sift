@@ -131,10 +131,6 @@ else
 	LD_FLAGS  += -pthread
 endif
 
-ifeq ($(DETECTED_OS),linux)
-	CPP_FLAGS += -D_DEFAULT_SOURCE
-endif
-
 ifeq ($(DETECTED_OS),darwin)
 	LDFLAGS += -fuse-ld=lld
 endif
