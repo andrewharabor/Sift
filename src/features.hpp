@@ -93,12 +93,12 @@ namespace Sift {
         template<typename FeatureSet>
         static constexpr std::array<Int64, 6> PIECE_TARGET_COUNT = [] {
             std::array<Int64, 6> counts = {};
-            for (USize attacker = 0; attacker < 6; attacker++) {
+            for (USize atk = 0; atk < 6; atk++) {
                 Int64 count = 0;
-                for (USize victim = 0; victim < 6; victim++) {
-                    if (PIECE_TARGET_MAP<FeatureSet>[attacker][victim] >= 0) { count++; }
+                for (USize vic = 0; vic < 6; vic++) {
+                    if (PIECE_TARGET_MAP<FeatureSet>[atk][vic] >= 0) { count++; }
                 }
-                counts[attacker] = 2 * count;
+                counts[atk] = 2 * count;
             }
             return counts;
         }();
