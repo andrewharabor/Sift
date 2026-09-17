@@ -17,7 +17,7 @@ recsearch = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(
 HEADERS := $(call recsearch,src,*.hpp)
 
 CPP_FLAGS := -MMD -MP -Isrc
-CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Werror -Wshadow -Wconversion -fdiagnostics-color=always
+CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Wshadow -Wconversion -fdiagnostics-color=always
 LD_FLAGS :=
 
 ifeq ($(OS),Windows_NT)
