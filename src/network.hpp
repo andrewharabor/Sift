@@ -20,12 +20,7 @@ namespace Sift {
             return arch_.forward(Output::bucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs);
         }
 
-        inline bool load(ByteReader& reader) noexcept {
-            if (!ft_.load(reader) || !arch_.load(reader)) { return false; }
-
-            if (Arch::NEEDS_FT_PERMUTE) { Arch::permuteFTParams(ft_.psqWeights, ft_.threatWeights, ft_.biases); }
-            return true;
-        }
+        inline bool load(ByteReader& reader) noexcept { return ft_.load(reader) && arch_.load(reader); }
 
         static constexpr USize byteSize() noexcept { return FeatureTransformer::byteSize() + Arch::byteSize(); }
 

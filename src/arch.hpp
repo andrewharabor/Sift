@@ -426,17 +426,5 @@ namespace Sift {
                 }
             }
         }
-
-        static inline void permuteFTParams(std::span<const Int16> psqWeights, std::span<const Int8> threatWeights,
-            std::span<const Int16> biases) {
-            if constexpr (!SIMD::PACK_REORDER) { return; }
-
-            const auto unconst = []<typename Type>(
-                                     std::span<const Type> x) { return std::span<Type>{const_cast<Type*>(x.data()), x.size()}; };
-
-            permuteParam(unconst(psqWeights));
-            permuteParam(unconst(threatWeights));
-            permuteParam(unconst(biases));
-        }
     };
 }
