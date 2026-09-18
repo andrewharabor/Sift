@@ -20,18 +20,19 @@ CPP_FLAGS := -MMD -MP -Isrc
 CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Wshadow -Wconversion -fdiagnostics-color=always
 LD_FLAGS :=
 
+CXX ?= clang++
+CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
+ifeq ($(findstring clang,$(CXX_VERSION)),)
+	$(info WARNING: unsupported compiler, use clang++ instead!)
+endif
+
 ifeq ($(OS),Windows_NT)
 	DETECTED_OS := windows
 else
 	DETECTED_OS := $(shell uname)
 endif
 
-CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
-ifneq ($(findstring clang,$(CXX_VERSION)),)
-	CXX := clang++
-else
-	CXX := g++
-endif
+$(info Detected OS: $(DETECTED_OS))
 
 ifeq ($(DETECTED_OS),windows)
 	VERSION := $(shell type version.txt)
@@ -41,6 +42,11 @@ endif
 
 CPP_FLAGS += -DVERSION=$(VERSION)
 
+$(info Build version: $(VERSION))
+$(info Build architecture: $(ARCH))
+$(info Build mode: $(MODE))
+$(info NUMA support: $(NUMA))
+
 ifeq ($(DETECTED_OS),windows)
 	NETWORK_NAME := $(shell type network.txt)
 else
@@ -49,6 +55,8 @@ endif
 
 NETWORK_FILE := $(NETWORK_NAME).nnue
 PERMED_NETWORK_FILE := $(NETWORK_NAME)-$(ARCH).nnue
+
+$(info Network: $(NETWORK_NAME))
 
 CPP_FLAGS += -DNETWORK_FILE=$(PERMED_NETWORK_FILE)
 
@@ -135,7 +143,7 @@ else
 endif
 
 ifeq ($(DETECTED_OS),darwin)
-	LDFLAGS += -fuse-ld=lld
+	LD_FLAGS += -fuse-ld=lld
 endif
 
 ifeq ($(MODE),release)
@@ -171,16 +179,20 @@ endif
 -include $(MAIN_DEPS)
 -include $(PERM_DEPS)
 
-$(MAIN_EXEC): info $(PERMED_NETWORK_FILE) $(MAIN_OBJS)
+$(MAIN_EXEC): $(PERMED_NETWORK_FILE) $(MAIN_OBJS)
+	$(info Building engine...)
 	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
 
 $(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
+	$(info Building tools...)
 	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
 
 $(PERMED_NETWORK_FILE): $(PERM_EXEC)
+	$(info Permuting network...)
 	./$(PERM_EXEC) $(NETWORK_FILE) $(PERMED_NETWORK_FILE)
 
 $(NETWORK_FILE):
+	$(info Downloading default network...)
 	curl -sOL https://github.com/andrewharabor/Sift-Nets/releases/download/$(NETWORK_NAME)/$(NETWORK_FILE)
 
 $(BUILD_DIR)/%.o: %.cpp
@@ -191,16 +203,6 @@ $(BUILD_DIR)/%.o: %.cpp
 
 .PHONY: main
 main: $(MAIN_EXEC)
-
-.PHONY: info
-info:
-	@echo Detected OS: $(DETECTED_OS)
-	@echo Detected compiler: $(CXX)
-	@echo Build version: $(VERSION)
-	@echo Build architecture: $(ARCH)
-	@echo Build mode: $(MODE)
-	@echo Network: $(NETWORK_NAME)
-	@echo NUMA support: $(NUMA)
 
 .PHONY: format
 format: $(HEADERS) $(MAIN_SRCS) $(PERM_SRCS)
@@ -217,7 +219,6 @@ help:
 	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2_bmi2|zen2|armv8_4|apple_m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  main"
-	@echo "  info"
 	@echo "  format"
 	@echo "  clean"
 	@echo "  help"
