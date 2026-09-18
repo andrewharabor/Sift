@@ -341,14 +341,35 @@ namespace Sift {
 
             const Color color = position.sideToMove();
 
-            update(position);
+            Accumulator psqAcc = Accumulator();
+            psqAcc.init(network_->ft());
+            resetPSQAcc(psqAcc, Color::WHITE, position);
+            resetPSQAcc(psqAcc, Color::BLACK, position);
 
             if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
+                Accumulator threatAcc = Accumulator();
+                resetThreatAcc(threatAcc, Color::WHITE, position);
+                resetThreatAcc(threatAcc, Color::BLACK, position);
+                return forwardNetwork(psqAcc, threatAcc, position, color);
             } else {
-                return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
+                return forwardNetwork(psqAcc, Accumulator(), position, color);
             }
         }
+
+        // inline Int32 forward(const Position& position) noexcept {
+        //     assert(network_ != nullptr);
+        //     assert(curr_ >= &accStack_[0] && curr_ <= &accStack_.back());
+
+        //     const Color color = position.sideToMove();
+
+        //     update(position);
+
+        //     if constexpr (InputFeatureSet::THREAT_INPUTS) {
+        //         return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
+        //     } else {
+        //         return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
+        //     }
+        // }
 
     private:
         static constexpr USize RESERVED_STATES = 256;
