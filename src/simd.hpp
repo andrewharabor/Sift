@@ -254,12 +254,14 @@ namespace Sift {
 
         static inline VecInt16 mulLoInt16(VecInt16 a, VecInt16 b) noexcept { return _mm512_mullo_epi16(a, b); }
 
-        static inline VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept { return _mm512_slli_epi16(v, shift); }
+        static inline VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept { return _mm512_slli_epi16(v, static_cast<UInt32>(shift)); }
 
-        static inline VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept { return _mm512_srai_epi16(v, shift); }
+        static inline VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept {
+            return _mm512_srai_epi16(v, static_cast<UInt32>(shift));
+        }
 
         static inline VecInt16 shiftLeftMulHiInt16(VecInt16 a, VecInt16 b, Int32 shift) noexcept {
-            return _mm512_mulhi_epi16(_mm512_slli_epi16(a, shift), b);
+            return _mm512_mulhi_epi16(_mm512_slli_epi16(a, static_cast<UInt32>(shift)), b);
         }
 
         static inline VecInt32 mulAddAdjInt16(VecInt16 a, VecInt16 b) noexcept { return _mm512_madd_epi16(a, b); }
@@ -286,9 +288,11 @@ namespace Sift {
 
         static inline VecInt32 mulLoInt32(VecInt32 a, VecInt32 b) noexcept { return _mm512_mullo_epi32(a, b); }
 
-        static inline VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept { return _mm512_slli_epi32(v, shift); }
+        static inline VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept { return _mm512_slli_epi32(v, static_cast<UInt32>(shift)); }
 
-        static inline VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept { return _mm512_srai_epi32(v, shift); }
+        static inline VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept {
+            return _mm512_srai_epi32(v, static_cast<UInt32>(shift));
+        }
 
         static inline VecUInt16 packUsInt32(VecInt32 a, VecInt32 b) noexcept { return _mm512_packus_epi32(a, b); }
 
@@ -378,12 +382,14 @@ namespace Sift {
 
         static inline VecInt16 mulLoInt16(VecInt16 a, VecInt16 b) noexcept { return _mm256_mullo_epi16(a, b); }
 
-        static inline VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept { return _mm256_slli_epi16(v, shift); }
+        static inline VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept { return _mm256_slli_epi16(v, static_cast<UInt32>(shift)); }
 
-        static inline VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept { return _mm256_srai_epi16(v, shift); }
+        static inline VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept {
+            return _mm256_srai_epi16(v, static_cast<UInt32>(shift));
+        }
 
         static inline VecInt16 shiftLeftMulHiInt16(VecInt16 a, VecInt16 b, Int32 shift) noexcept {
-            return _mm256_mulhi_epi16(_mm256_slli_epi16(a, shift), b);
+            return _mm256_mulhi_epi16(_mm256_slli_epi16(a, static_cast<UInt32>(shift)), b);
         }
 
         static inline VecInt32 mulAddAdjInt16(VecInt16 a, VecInt16 b) noexcept { return _mm256_madd_epi16(a, b); }
@@ -410,9 +416,11 @@ namespace Sift {
 
         static inline VecInt32 mulLoInt32(VecInt32 a, VecInt32 b) noexcept { return _mm256_mullo_epi32(a, b); }
 
-        static inline VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept { return _mm256_slli_epi32(v, shift); }
+        static inline VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept { return _mm256_slli_epi32(v, static_cast<UInt32>(shift)); }
 
-        static inline VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept { return _mm256_srai_epi32(v, shift); }
+        static inline VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept {
+            return _mm256_srai_epi32(v, static_cast<UInt32>(shift));
+        }
 
         static inline VecUInt16 packUsInt32(VecInt32 a, VecInt32 b) noexcept { return _mm256_packus_epi32(a, b); }
 

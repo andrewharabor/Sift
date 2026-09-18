@@ -466,7 +466,7 @@ namespace Sift {
 
             const auto iota = _mm512_loadu_si512(IOTA.data());
             const auto adjusted = _mm512_sub_epi8(_mm512_xor_si512(iota, _mm512_set1_epi8(squareMask)), _mm512_set1_epi8(8));
-            const auto ids = _mm512_mask_blend_epi8(friendlyAfter, _mm512_add_epi8(adjusted, _mm512_set1_epi8(48)), adjusted);
+            const auto ids = _mm512_mask_blend_epi8(friendlyAfter.bits(), _mm512_add_epi8(adjusted, _mm512_set1_epi8(48)), adjusted);
             const auto compressed = _mm512_maskz_compress_epi8(same, ids);
             const auto ids16 = _mm256_cvtepu8_epi16(_mm512_castsi512_si128(compressed));
             const auto sameDoubled = _mm512_broadcast_i64x4(ids16);
@@ -477,7 +477,7 @@ namespace Sift {
 
     #if defined(USE_PEXT)
             const auto bandMask = [&](Square square) -> UInt16 {
-                return static_cast<UInt16>(_pext_u64(PPFeature::MASKS[square.index()] & same, same));
+                return static_cast<UInt16>(_pext_u64((PPFeature::MASKS[square.index()] & same).bits(), same));
             };
     #else
             const auto slowPEXT = [](UInt64 val, UInt64 mask) -> UInt64 {
