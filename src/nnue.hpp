@@ -68,6 +68,12 @@ namespace Sift {
     private:
 #if defined(USE_VBMI2)
 
+        static_assert(sizeof(TIFeature) == sizeof(UInt32));
+        static_assert(offsetof(TIFeature, attacker) == 0);
+        static_assert(offsetof(TIFeature, attackerSq) == 1);
+        static_assert(offsetof(TIFeature, victim) == 2);
+        static_assert(offsetof(TIFeature, victimSq) == 3);
+
         template<bool ADD, bool OUTGOING>
         FORCE_INLINE void pushDirectTIFeatures(const Vector& indices, const Vector& rays, BitRays bits, Piece piece,
             Square square) noexcept {
