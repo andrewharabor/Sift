@@ -530,7 +530,7 @@ namespace Sift {
                 const Square sq = Square(added.lsb());
                 const UInt16 id = pawnID(sq, !(friendlyAfter & Bitboard(sq)));
                 const UInt16 mask = sameMask & bandMask(sq);
-                const auto idx = ppIdxEpi16(_mm256_set1_epi16(id), ids16);
+                const auto idx = ppIdxEpi16(_mm256_set1_epi16(static_cast<Int16>(id)), ids16);
                 _mm256_storeu_epi16(&adds[addOffset], _mm256_maskz_compress_epi16(mask, idx));
                 addOffset += static_cast<USize>(std::popcount(mask));
             }
