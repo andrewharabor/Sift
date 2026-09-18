@@ -465,19 +465,20 @@ namespace Sift {
             }();
 
             const auto iota = _mm512_loadu_si512(IOTA.data());
-            const auto adjusted = _mm512_sub_epi8(_mm512_xor_si512(iota, _mm512_set1_epi8(squareMask)), _mm512_set1_epi8(8));
+            const auto adjusted =
+                _mm512_sub_epi8(_mm512_xor_si512(iota, _mm512_set1_epi8(static_cast<Int8>(squareMask))), _mm512_set1_epi8(8));
             const auto ids = _mm512_mask_blend_epi8(friendlyAfter.bits(), _mm512_add_epi8(adjusted, _mm512_set1_epi8(48)), adjusted);
-            const auto compressed = _mm512_maskz_compress_epi8(same, ids);
+            const auto compressed = _mm512_maskz_compress_epi8(same.bits(), ids);
             const auto ids16 = _mm256_cvtepu8_epi16(_mm512_castsi512_si128(compressed));
             const auto sameDoubled = _mm512_broadcast_i64x4(ids16);
             const UInt16 sameCount = same.count();
-            const UInt16 sameMask = (1 << sameCount) - 1;
+            const UInt16 sameMask = static_cast<UInt16>((1 << sameCount) - 1);
 
             const auto pawnID = [&](Square square, bool enemy) -> UInt16 { return (square.index() ^ squareMask) - 8 + (enemy ? 48 : 0); };
 
     #if defined(USE_PEXT)
             const auto bandMask = [&](Square square) -> UInt16 {
-                return static_cast<UInt16>(_pext_u64((PPFeature::MASKS[square.index()] & same).bits(), same));
+                return static_cast<UInt16>(_pext_u64((PPFeature::MASKS[square.index()] & same).bits(), same.bits()));
             };
     #else
             const auto slowPEXT = [](UInt64 val, UInt64 mask) -> UInt64 {
@@ -513,9 +514,10 @@ namespace Sift {
             const UInt16 remID2 = (removedSize >= 2) ? pawnID(remSq2, !(friendlyBefore & Bitboard(remSq2))) : 0;
             const UInt16 remMask1 = sameMask & bandMask(remSq1);
             const UInt16 remMask2 = (removedSize >= 2) ? sameMask & bandMask(remSq2) : 0;
-            const UInt32 remMask = remMask1 | (remMask2 << 16);
+            const UInt32 remMask = static_cast<UInt32>(remMask1 | (remMask2 << 16));
 
-            const auto remVec = _mm512_insertf64x4(_mm512_castsi256_si512(_mm256_set1_epi16(remID1)), _mm256_set1_epi16(remID2), 1);
+            const auto remVec = _mm512_insertf64x4(_mm512_castsi256_si512(_mm256_set1_epi16(static_cast<Int16>(remID1))),
+                _mm256_set1_epi16(static_cast<Int16>(remID2)), 1);
             _mm512_storeu_epi16(&subs[subOffset], _mm512_maskz_compress_epi16(remMask, ppIdxEpi16(remVec, sameDoubled)));
             subOffset += static_cast<USize>(std::popcount(remMask));
 
