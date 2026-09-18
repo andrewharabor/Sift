@@ -4,9 +4,9 @@ NUMA ?= off
 
 BUILD_DIR := build/$(ARCH)
 
-MAIN_SRCS := src/main.cpp
-MAIN_OBJS := $(MAIN_SRCS:%.cpp=$(BUILD_DIR)/%.o)
-MAIN_DEPS := $(MAIN_OBJS:%.o=%.d)
+ENGINE_SRCS := src/main.cpp
+ENGINE_OBJS := $(ENGINE_SRCS:%.cpp=$(BUILD_DIR)/%.o)
+ENGINE_DEPS := $(ENGINE_OBJS:%.o=%.d)
 
 PERM_SRCS := tools/permute.cpp
 PERM_OBJS := $(PERM_SRCS:%.cpp=$(BUILD_DIR)/%.o)
@@ -61,14 +61,14 @@ $(info Network: $(NETWORK_NAME))
 CPP_FLAGS += -DNETWORK_FILE=$(PERMED_NETWORK_FILE)
 
 ifeq ($(DETECTED_OS),windows)
-    MAIN_EXEC := Sift-$(VERSION)-$(ARCH).exe
+    ENGINE_EXEC := Sift-$(VERSION)-$(ARCH).exe
     PERM_EXEC := permute-$(NETWORK_NAME)-$(ARCH).exe
     MKDIR = mkdir
     RM_FILE = del /f /q
     RM_DIR = rmdir /s /q
     SEP = \\
 else
-    MAIN_EXEC := Sift-$(VERSION)-$(ARCH)
+    ENGINE_EXEC := Sift-$(VERSION)-$(ARCH)
     PERM_EXEC := permute-$(NETWORK_NAME)-$(ARCH)
     MKDIR = mkdir -p
     RM_FILE = rm -f
@@ -77,58 +77,58 @@ else
 endif
 
 ifneq ($(strip $(EXE)),)
-    MAIN_EXEC := $(EXE)
+    ENGINE_EXEC := $(EXE)
 endif
 
 PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
 ifeq ($(ARCH),native)
-    $(info Detecting properties for native build...)
+    $(info Detecting architecture properties...)
     CXX_FLAGS += -march=native
     ifneq ($(findstring __AVX512F__, $(PROPERTIES)),)
         ifneq ($(findstring __AVX512BW__, $(PROPERTIES)),)
-            $(info Using AVX-512)
+            $(info Found AVX-512)
             CPP_FLAGS += -DUSE_AVX512
         else ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
-        $(info Using AVX-512)
+        $(info Found AVX-512)
         CPP_FLAGS += -DUSE_AVX512
         endif
     endif
     ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
-        $(info Using AVX-512 VNNI)
+        $(info Found AVX-512 VNNI)
         CPP_FLAGS += -DUSE_VNNI512
     endif
     ifneq ($(findstring __AVX512VBMI2__, $(PROPERTIES)),)
-        $(info Using AVX-512 VBMI2)
+        $(info Found AVX-512 VBMI2)
         CPP_FLAGS += -DUSE_VBMI2
     endif
     ifneq ($(findstring __AVX512VBMI__, $(PROPERTIES)),)
-        $(info Using AVX-512 VBMI)
+        $(info Found AVX-512 VBMI)
         CPP_FLAGS += -DUSE_VBMI
     endif
     ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
-        $(info Using AVX2)
+        $(info Found AVX2)
         CPP_FLAGS += -DUSE_AVX2
-    endif
-    ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
-        $(info Using ARM NEON)
-        CPP_FLAGS += -DUSE_NEON
-    endif
-    ifneq ($(findstring __ARM_FEATURE_DOTPROD, $(PROPERTIES)),)
-        $(info Using ARM NEON DOTPROD)
-        CPP_FLAGS += -DUSE_NEON_DOTPROD
     endif
     ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
         ifeq ($(findstring __znver1, $(PROPERTIES)),)
             ifeq ($(findstring __znver2, $(PROPERTIES)),)
-                $(info Using BMI2)
-                $(info Using PEXT)
+                $(info Found BMI2)
+                $(info Found PEXT)
                 CPP_FLAGS += -DUSE_BMI2 -DUSE_PEXT
             endif
         endif
     endif
     ifneq ($(findstring __POPCNT__, $(PROPERTIES)),)
-        $(info Using POPCNT)
+        $(info Found POPCNT)
         CPP_FLAGS += -DUSE_POPCNT
+    endif
+    ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
+        $(info Found ARM NEON)
+        CPP_FLAGS += -DUSE_NEON
+    endif
+    ifneq ($(findstring __ARM_FEATURE_DOTPROD, $(PROPERTIES)),)
+        $(info Found ARM NEON DOTPROD)
+        CPP_FLAGS += -DUSE_NEON_DOTPROD
     endif
 else ifeq ($(ARCH),avx512)
     CXX_FLAGS += -march=icelake-client -mtune=znver4
@@ -188,12 +188,12 @@ ifeq ($(NUMA),on)
     LD_FLAGS  += -lnuma
 endif
 
--include $(MAIN_DEPS)
+-include $(ENGINE_DEPS)
 -include $(PERM_DEPS)
 
-$(MAIN_EXEC): $(PERMED_NETWORK_FILE) $(MAIN_OBJS)
+$(ENGINE_EXEC): $(PERMED_NETWORK_FILE) $(ENGINE_OBJS)
 	$(info Building engine...)
-	$(CXX) $(CXX_FLAGS) $(MAIN_OBJS) -o $@ $(LD_FLAGS)
+	$(CXX) $(CXX_FLAGS) $(ENGINE_OBJS) -o $@ $(LD_FLAGS)
 
 $(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
 	$(info Building tools...)
@@ -211,18 +211,20 @@ $(BUILD_DIR)/%.o: %.cpp
 	$(MKDIR) "$(subst /,$(SEP),$(dir $@))"
 	$(CXX) $(CPP_FLAGS) $(CXX_FLAGS) -c $< -o $@
 
-.DEFAULT_GOAL := main
+.DEFAULT_GOAL := engine
 
-.PHONY: main
-main: $(MAIN_EXEC)
+.PHONY: engine
+engine: $(ENGINE_EXEC)
 
 .PHONY: format
-format: $(HEADERS) $(MAIN_SRCS) $(PERM_SRCS)
-	clang-format -i $^
+format: $(HEADERS) $(ENGINE_SRCS) $(PERM_SRCS)
+	$(info Formatting source files...)
+	clang-format -i --verbose $^
 
 .PHONY: clean
 clean:
-	$(RM_FILE) Sift*
+	$(info Cleaning build artifacts...)
+	$(RM_FILE) Sift-*
 	$(RM_FILE) permute-*
 	$(RM_DIR) build
 
@@ -230,7 +232,7 @@ clean:
 help:
 	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2_bmi2|zen2|armv8_4|apple_m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
-	@echo "  main"
+	@echo "  engine"
 	@echo "  format"
 	@echo "  clean"
 	@echo "  help"

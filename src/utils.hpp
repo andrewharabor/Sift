@@ -7,14 +7,16 @@
 #include <string_view>
 #include <vector>
 
-#if defined(_MSC_VER) && !defined(__clang__)
-    #include <mmintrin.h>
-#endif
-
 #include "types.hpp"
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
+
+#ifdef NDEBUG
+    #define FORCE_INLINE __attribute__((always_inline))
+#else
+    #define FORCE_INLINE inline
+#endif
 
 namespace Sift {
     class Utils {
@@ -51,17 +53,11 @@ namespace Sift {
             return (a * (K - t) + b * t) / K;
         }
 
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__clang__)
 
         static void prefetchPtr(const void* ptr) { __builtin_prefetch(ptr); }
 
         static constexpr UInt64 mulHi64(UInt64 a, UInt64 b) { return __uint128_t(a) * __uint128_t(b) >> 64; }
-
-#elif defined(_MSC_VER) && !defined(__clang__)
-
-        static void prefetchPtr(const void* ptr) { _mm_prefetch(static_cast<const char*>(ptr), _MM_HINT_T0); }
-
-        static constexpr U64 mulHi64(U64 a, U64 b) { return __umulh(a, b); }
 
 #else
 

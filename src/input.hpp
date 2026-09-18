@@ -305,11 +305,13 @@ namespace Sift {
             template<typename Function>
             inline void writeAddTIFeatures(Function func) noexcept {
                 tiAddSize += func(&tiAdds[tiAddSize]);
+                assert(tiAddSize <= 128);
             };
 
             template<typename Function>
             inline void writeSubTIFeatures(Function func) noexcept {
                 tiSubSize += func(&tiSubs[tiSubSize]);
+                assert(tiSubSize <= 128);
             };
         };
     };

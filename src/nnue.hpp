@@ -23,6 +23,7 @@
 #include "piece.hpp"
 #include "simd.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 
 namespace Sift {
     template<typename FeatureSet>
@@ -68,7 +69,8 @@ namespace Sift {
 #if defined(USE_VBMI2)
 
         template<bool ADD, bool OUTGOING>
-        inline void pushDirectTIFeatures(const Vector& indices, const Vector& rays, BitRays bits, Piece piece, Square square) noexcept {
+        FORCE_INLINE void pushDirectTIFeatures(const Vector& indices, const Vector& rays, BitRays bits, Piece piece,
+            Square square) noexcept {
             const auto pair2Shuffle = _mm512_set_epi8(
                 // clang-format off
                 79, 15, 79, 15, 78, 14, 78, 14, 77, 13, 77, 13, 76, 12, 76, 12, 75, 11, 75, 11,
@@ -100,7 +102,7 @@ namespace Sift {
         }
 
         template<bool ADD>
-        inline void pushXRayTIFeatures(const Vector& indices, const Vector& rays, BitRays sliders, BitRays victims) noexcept {
+        FORCE_INLINE void pushXRayTIFeatures(const Vector& indices, const Vector& rays, BitRays sliders, BitRays victims) noexcept {
             assert(std::popcount(sliders) == std::popcount(victims));
 
             const USize count = static_cast<USize>(std::popcount(victims));
@@ -389,7 +391,7 @@ namespace Sift {
         }
 
         template<bool ZERO_INIT>
-        inline void accumulateThreatChanges(std::span<Int16, L1_SIZE> acc, const FeatureTransformer& ft, std::span<const UInt16> adds,
+        FORCE_INLINE void accumulateThreatChanges(std::span<Int16, L1_SIZE> acc, const FeatureTransformer& ft, std::span<const UInt16> adds,
             std::span<const UInt16> subs) noexcept {
             static constexpr USize CHUNK_SIZE = SIMD::CHUNK_SIZE<Int16>;
             static constexpr USize CHUNKS = L1_SIZE / CHUNK_SIZE;
@@ -431,14 +433,14 @@ namespace Sift {
         }
 
 #if defined(USE_VBMI2)
-        static inline __m512i ppIdxEpi16(__m512i a, __m512i b) {
+        static FORCE_INLINE __m512i ppIdxEpi16(__m512i a, __m512i b) {
             const auto hi = _mm512_max_epu16(a, b);
             const auto lo = _mm512_min_epu16(a, b);
             const auto prod = _mm512_mullo_epi16(hi, _mm512_sub_epi16(hi, _mm512_set1_epi16(1)));
             return _mm512_add_epi16(_mm512_srli_epi16(prod, 1), lo);
         }
 
-        static inline __m256i ppIdxEpi16(__m256i a, __m256i b) {
+        static FORCE_INLINE __m256i ppIdxEpi16(__m256i a, __m256i b) {
             const auto hi = _mm256_max_epu16(a, b);
             const auto lo = _mm256_min_epu16(a, b);
             const auto prod = _mm256_mullo_epi16(hi, _mm256_sub_epi16(hi, _mm256_set1_epi16(1)));
@@ -446,7 +448,7 @@ namespace Sift {
         }
 #endif
 
-        inline void writePPChanges(Color color, Square kingSquare, Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter,
+        FORCE_INLINE void writePPChanges(Color color, Square kingSquare, Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter,
             Bitboard blackAfter, std::span<UInt16> adds, std::span<UInt16> subs, USize& addOffset, USize& subOffset) noexcept {
 #if defined(USE_VBMI2)
 

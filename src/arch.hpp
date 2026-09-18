@@ -31,7 +31,7 @@ namespace Sift {
         NET_PARAM(Int16, BIAS_SIZE, biases);
 
     public:
-        inline Int32 forward(USize bucket, std::span<const Int16, L1_SIZE> friendlyPSQInputs,
+        FORCE_INLINE Int32 forward(USize bucket, std::span<const Int16, L1_SIZE> friendlyPSQInputs,
             std::span<const Int16, L1_SIZE> enemyPSQInputs, std::span<const Int16, L1_SIZE> friendlyThreatInputs,
             std::span<const Int16, L1_SIZE> enemyThreatInputs) const noexcept {
             const USize weightOffset = bucket * L1_SIZE * 2;
@@ -113,7 +113,7 @@ namespace Sift {
         static constexpr Int64 SCALE64 = static_cast<Int64>(SCALE);
         static constexpr Int64 QUANT64 = static_cast<Int64>(QUANT);
 
-        inline void activateFT(std::span<const Int16, L1_SIZE> friendlyPSQInputs, std::span<const Int16, L1_SIZE> enemyPSQInputs,
+        FORCE_INLINE void activateFT(std::span<const Int16, L1_SIZE> friendlyPSQInputs, std::span<const Int16, L1_SIZE> enemyPSQInputs,
             std::span<const Int16, L1_SIZE> friendlyThreatInputs, std::span<const Int16, L1_SIZE> enemyThreatInputs,
             std::span<UInt8, L1_SIZE> outputs, SparseIterator<L1_SIZE>& sparseIter) const noexcept {
             const Vec<Int16> zero = SIMD::zero<Int16>();
@@ -172,7 +172,7 @@ namespace Sift {
             }
         }
 
-        inline void forwardL1(USize bucket, std::span<const UInt8, L1_SIZE> inputs, std::span<Int32, L2_FULL_SIZE> outputs,
+        FORCE_INLINE void forwardL1(USize bucket, std::span<const UInt8, L1_SIZE> inputs, std::span<Int32, L2_FULL_SIZE> outputs,
             const SparseIterator<L1_SIZE>& sparseIter) const noexcept {
             const USize weightOffset = bucket * L1_SIZE * L2_SIZE;
             const USize biasOffset = bucket * L2_SIZE;
@@ -241,7 +241,7 @@ namespace Sift {
             }
         }
 
-        inline void propagateL2(USize bucket, std::span<const Int32, L2_FULL_SIZE> inputs,
+        FORCE_INLINE void propagateL2(USize bucket, std::span<const Int32, L2_FULL_SIZE> inputs,
             std::span<Int32, L3_SIZE> outputs) const noexcept {
             const USize weightOffset = bucket * L2_FULL_SIZE * L3_SIZE;
             const USize biasOffset = bucket * L3_SIZE;
@@ -297,7 +297,7 @@ namespace Sift {
             }
         }
 
-        inline void activateForwardL3(USize bucket, [[maybe_unused]] std::span<const Int32, L2_FULL_SIZE> skipped,
+        FORCE_INLINE void activateForwardL3(USize bucket, [[maybe_unused]] std::span<const Int32, L2_FULL_SIZE> skipped,
             std::span<const Int32, L3_SIZE> inputs, Int32& output) const noexcept {
             const USize weightOffset = bucket * L3_SIZE;
             const USize biasOffset = bucket;
@@ -377,7 +377,7 @@ namespace Sift {
         }
 
     public:
-        inline Int32 forward(USize bucket, std::span<const Int16, L1_SIZE> friendlyPSQInputs,
+        FORCE_INLINE Int32 forward(USize bucket, std::span<const Int16, L1_SIZE> friendlyPSQInputs,
             std::span<const Int16, L1_SIZE> enemyPSQInputs, std::span<const Int16, L1_SIZE> friendlyThreatInputs,
             std::span<const Int16, L1_SIZE> enemyThreatInputs) const noexcept {
             SparseIterator<L1_SIZE> sparseIter;

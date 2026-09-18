@@ -16,7 +16,7 @@ namespace Sift {
 #if defined(USE_VBMI2)
 
     public:
-        inline void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
+        FORCE_INLINE void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
             const UInt32 mask = _mm512_kunpackw(SIMD::nonzeroMask<UInt8>(vec2), SIMD::nonzeroMask<UInt8>(vec1));
             const auto indices = _mm512_maskz_compress_epi16(mask, base_);
             _mm512_storeu_si512(&indices_[count_], indices);
@@ -49,7 +49,7 @@ namespace Sift {
 #else
 
     public:
-        inline void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
+        FORCE_INLINE void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
             const UInt32 mask = (SIMD::nonzeroMask<UInt8>(vec2) << SIMD::CHUNK_SIZE<Int32>) | (SIMD::nonzeroMask<UInt8>(vec1));
             for (UInt32 output = 0; output < OUTPUTS_PER_CHUNK; output++) {
                 const UInt32 byte = (mask >> (output * 8)) & 0xFF;

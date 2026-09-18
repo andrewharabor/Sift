@@ -12,6 +12,7 @@
 #include "piece.hpp"
 #include "simd.hpp"
 #include "types.hpp"
+#include "utils.hpp"
 
 namespace Sift {
     using Bit = UInt8;
@@ -22,7 +23,7 @@ namespace Sift {
     struct Vector {
         __m512i raw;
 
-        inline Vector flipped() const noexcept { return Vector{_mm512_shuffle_i64x2(raw, raw, 0b01001110)}; }
+        FORCE_INLINE Vector flipped() const noexcept { return Vector{_mm512_shuffle_i64x2(raw, raw, 0b01001110)}; }
     };
 
     struct Permutation {
@@ -35,18 +36,18 @@ namespace Sift {
     struct Vector {
         std::array<__m256i, 2> raw;
 
-        inline Vector flipped() const noexcept { return Vector{{raw[1], raw[0]}}; }
+        FORCE_INLINE Vector flipped() const noexcept { return Vector{{raw[1], raw[0]}}; }
 
-        inline BitRays mask() const noexcept {
+        FORCE_INLINE BitRays mask() const noexcept {
             return static_cast<BitRays>(_mm256_movemask_epi8(raw[0])) | (static_cast<BitRays>(_mm256_movemask_epi8(raw[1])) << 32);
         }
 
-        static inline Vector load(const void* ptr) noexcept {
+        static FORCE_INLINE Vector load(const void* ptr) noexcept {
             return Vector{{_mm256_loadu_si256(static_cast<const __m256i*>(ptr)), _mm256_loadu_si256(static_cast<const __m256i*>(ptr) + 1)}};
         }
 
         template<typename Type>
-        static inline Vector cast(const Type& value) noexcept
+        static FORCE_INLINE Vector cast(const Type& value) noexcept
         requires(sizeof(Type) == sizeof(__m256i) * 2)
         {
             return load(&value);
@@ -63,24 +64,24 @@ namespace Sift {
     struct Vector {
         uint8x16x4_t raw;
 
-        explicit inline Vector(uint8x16x4_t raw) noexcept : raw(raw) {}
+        explicit FORCE_INLINE Vector(uint8x16x4_t raw) noexcept : raw(raw) {}
 
-        explicit inline Vector(uint8x16_t value0, uint8x16_t value1, uint8x16_t value2, uint8x16_t value3) noexcept :
+        explicit FORCE_INLINE Vector(uint8x16_t value0, uint8x16_t value1, uint8x16_t value2, uint8x16_t value3) noexcept :
             raw({value0, value1, value2, value3}) {}
 
-        inline Vector flipped() const noexcept { return Vector{raw.val[2], raw.val[3], raw.val[0], raw.val[1]}; }
+        FORCE_INLINE Vector flipped() const noexcept { return Vector{raw.val[2], raw.val[3], raw.val[0], raw.val[1]}; }
 
-        inline BitRays mask() const noexcept {
+        FORCE_INLINE BitRays mask() const noexcept {
             const uint8x16_t mask{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
             const auto vec = vpaddq_u8(vpaddq_u8(vandq_u8(raw.val[0], mask), vandq_u8(raw.val[1], mask)),
                 vpaddq_u8(vandq_u8(raw.val[2], mask), vandq_u8(raw.val[3], mask)));
             return vgetq_lane_u64(vreinterpretq_u64_u8(vpaddq_u8(vec, vec)), 0);
         }
 
-        static inline Vector load(const void* ptr) { return Vector(vld1q_u8_x4(static_cast<const UInt8*>(ptr))); }
+        static FORCE_INLINE Vector load(const void* ptr) { return Vector(vld1q_u8_x4(static_cast<const UInt8*>(ptr))); }
 
         template<typename Type>
-        static inline Vector cast(const Type& value)
+        static FORCE_INLINE Vector cast(const Type& value)
         requires(sizeof(Type) == sizeof(uint8x16x4_t))
         {
             return load(&value);
@@ -216,13 +217,14 @@ namespace Sift {
 
 #if defined(USE_VBMI)
 
-        static inline Permutation permutation(Square square) noexcept {
+        static FORCE_INLINE Permutation permutation(Square square) noexcept {
             const auto indices = _mm512_loadu_si512(PERMUTATIONS[square.index()].data());
             const auto valid = _mm512_testn_epi8_mask(indices, _mm512_set1_epi8(0x80));
             return Permutation{Vector{indices}, valid};
         };
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox) noexcept {
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm,
+            const std::span<const Piece, 64> mailbox) noexcept {
             const auto pieceBits = _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i*>(PIECE_BITS.data())));
             const auto maskedMailbox = _mm512_loadu_si512(mailbox.data());
             const auto permuted = _mm512_permutexvar_epi8(perm.indices.raw, maskedMailbox);
@@ -230,7 +232,7 @@ namespace Sift {
             return {Vector{permuted}, Vector{bits}};
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
             Square ignore) noexcept {
             const auto pieceBits = _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i*>(PIECE_BITS.data())));
             const auto maskedMailbox = _mm512_mask_blend_epi8(static_cast<UInt64>(ignore.index()), _mm512_loadu_si512(mailbox.data()),
@@ -240,39 +242,41 @@ namespace Sift {
             return {Vector{permuted}, Vector{bits}};
         }
 
-        static inline BitRays closestOccupied(Vector bits) noexcept {
+        static FORCE_INLINE BitRays closestOccupied(Vector bits) noexcept {
             const BitRays occupied = _mm512_test_epi8_mask(bits.raw, bits.raw);
             const BitRays o = occupied | 0x8181818181818181;
             return (o ^ (o - 0x0303030303030303)) & occupied;
         }
 
-        static inline BitRays rayFill(BitRays bitRays) noexcept {
+        static FORCE_INLINE BitRays rayFill(BitRays bitRays) noexcept {
             bitRays = (bitRays + 0x7E7E7E7E7E7E7E7E) & 0x8080808080808080;
             return bitRays - (bitRays >> 7);
         }
 
-        static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[piece.index()] & closest; }
+        static FORCE_INLINE BitRays outgoingThreats(Piece piece, BitRays closest) noexcept {
+            return OUTGOING_THREATS[piece.index()] & closest;
+        }
 
-        static inline BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
+        static FORCE_INLINE BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
             const auto mask = _mm512_loadu_si512(INCOMING_THREAT_MASK.data());
             return _mm512_test_epi8_mask(bits.raw, mask) & closest;
         }
 
-        static inline BitRays incomingSliders(Vector bits, BitRays closest) noexcept {
+        static FORCE_INLINE BitRays incomingSliders(Vector bits, BitRays closest) noexcept {
             const auto mask = _mm512_loadu_si512(INCOMING_SLIDER_MASK.data());
             return _mm512_test_epi8_mask(bits.raw, mask) & closest & 0xFEFEFEFEFEFEFEFE;
         }
 
 #elif defined(USE_AVX2)
 
-        static inline Permutation permutation(Square square) noexcept {
+        static FORCE_INLINE Permutation permutation(Square square) noexcept {
             const auto indices = Vector::cast(PERMUTATIONS[square.index()]);
             const Vector valid{
                 {_mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80)), _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80))}};
             return Permutation{indices, valid};
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, Vector maskedMailbox) noexcept {
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, Vector maskedMailbox) noexcept {
             const auto pieceBits = _mm256_broadcastsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(PIECE_BITS.data())));
 
             const auto halfSwizzler = [](__m256i bytes0, __m256i bytes1, __m256i indices) {
@@ -294,11 +298,12 @@ namespace Sift {
             return {permuted, bits};
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox) noexcept {
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm,
+            const std::span<const Piece, 64> mailbox) noexcept {
             return permuteMailbox(perm, Vector::load(mailbox.data()));
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
             Square ignore) noexcept {
             const auto iota = Vector::cast(std::array<UInt8, 64>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
                 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
@@ -311,7 +316,7 @@ namespace Sift {
             return permuteMailbox(perm, maskedMailbox);
         }
 
-        static inline BitRays closestOccupied(Vector bits) noexcept {
+        static FORCE_INLINE BitRays closestOccupied(Vector bits) noexcept {
             const Vector unoccupied{
                 {_mm256_cmpeq_epi8(bits.raw[0], _mm256_setzero_si256()), _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256())}};
             const BitRays occupied = ~unoccupied.mask();
@@ -319,21 +324,23 @@ namespace Sift {
             return (o ^ (o - 0x0303030303030303)) & occupied;
         }
 
-        static inline BitRays rayFill(BitRays bitRays) noexcept {
+        static FORCE_INLINE BitRays rayFill(BitRays bitRays) noexcept {
             bitRays = (bitRays + 0x7E7E7E7E7E7E7E7E) & 0x8080808080808080;
             return bitRays - (bitRays >> 7);
         }
 
-        static inline BitRays outgoingThreats(Piece piece, BitRays closest) noexcept { return OUTGOING_THREATS[piece.index()] & closest; }
+        static FORCE_INLINE BitRays outgoingThreats(Piece piece, BitRays closest) noexcept {
+            return OUTGOING_THREATS[piece.index()] & closest;
+        }
 
-        static inline BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
+        static FORCE_INLINE BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
             const auto mask = Vector::cast(INCOMING_THREAT_MASK);
             const Vector vec{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
                 _mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[1], mask.raw[1]), _mm256_setzero_si256())}};
             return ~vec.mask() & closest;
         }
 
-        static inline BitRays incomingSliders(Vector bits, BitRays closest) noexcept {
+        static FORCE_INLINE BitRays incomingSliders(Vector bits, BitRays closest) noexcept {
             const auto mask = Vector::cast(INCOMING_SLIDER_MASK);
             const Vector vec{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
                 _mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[1], mask.raw[1]), _mm256_setzero_si256())}};
@@ -342,14 +349,14 @@ namespace Sift {
 
 #elif defined(USE_NEON)
 
-        static inline Permutation permutation(Square square) {
+        static FORCE_INLINE Permutation permutation(Square square) {
             const auto indices = Vector::load(PERMUTATIONS[square.index()].data());
             const auto valid = Vector{vmvnq_u8(vshrq_n_s8(indices[0], 7)), vmvnq_u8(vshrq_n_s8(indices[1], 7)),
                 vmvnq_u8(vshrq_n_s8(indices[2], 7)), vmvnq_u8(vshrq_n_s8(indices[3], 7))};
             return Permutation{indices, valid};
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, Vector mailbox) {
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, Vector mailbox) {
             const auto pieceBits = vld1q_u8(reinterpret_cast<const UInt8*>(PIECE_BITS.data()));
             const Vector permuted = Vector{vqtbl4q_u8(mailbox.raw, perm.indices[0]), vqtbl4q_u8(mailbox.raw, perm.indices[1]),
                 vqtbl4q_u8(mailbox.raw, perm.indices[2]), vqtbl4q_u8(mailbox.raw, perm.indices[3])};
@@ -359,11 +366,11 @@ namespace Sift {
             return {permuted, bits};
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox) {
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox) {
             return permuteMailbox(perm, Vector::load(mailbox.data()));
         }
 
-        static inline std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
+        static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
             Square ignore) {
             const auto iota = Vector::cast(std::array<UInt8, 64>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
                 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
@@ -378,7 +385,7 @@ namespace Sift {
             return permuteMailbox(perm, maskedMailbox);
         }
 
-        static inline BitRays closestOccupied(Vector bits) {
+        static FORCE_INLINE BitRays closestOccupied(Vector bits) {
             const Vector occupiedVec{vtstq_u8(bits[0], bits[0]), vtstq_u8(bits[1], bits[1]), vtstq_u8(bits[2], bits[2]),
                 vtstq_u8(bits[3], bits[3])};
             const auto occupied = occupiedVec.mask();
@@ -386,21 +393,21 @@ namespace Sift {
             return (o ^ (o - 0x0303030303030303)) & occupied;
         }
 
-        static inline BitRays rayFill(BitRays bitRays) {
+        static FORCE_INLINE BitRays rayFill(BitRays bitRays) {
             bitRays = (bitRays + 0x7E7E7E7E7E7E7E7E) & 0x8080808080808080;
             return bitRays - (bitRays >> 7);
         }
 
-        static inline BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[piece.index()] & closest; }
+        static FORCE_INLINE BitRays outgoingThreats(Piece piece, BitRays closest) { return OUTGOING_THREATS[piece.index()] & closest; }
 
-        static inline BitRays incomingAttackers(Vector bits, BitRays closest) {
+        static FORCE_INLINE BitRays incomingAttackers(Vector bits, BitRays closest) {
             const auto mask = Vector::load(INCOMING_THREAT_MASK.data());
             const Vector vec{vtstq_u8(bits[0], mask[0]), vtstq_u8(bits[1], mask[1]), vtstq_u8(bits[2], mask[2]),
                 vtstq_u8(bits[3], mask[3])};
             return vec.mask() & closest;
         }
 
-        static inline BitRays incomingSliders(Vector bits, BitRays closest) {
+        static FORCE_INLINE BitRays incomingSliders(Vector bits, BitRays closest) {
             const auto mask = Vector::load(INCOMING_SLIDER_MASK.data());
             const Vector vec{vtstq_u8(bits[0], mask[0]), vtstq_u8(bits[1], mask[1]), vtstq_u8(bits[2], mask[2]),
                 vtstq_u8(bits[3], mask[3])};
