@@ -432,45 +432,56 @@ namespace Sift {
 
         void bench(std::istringstream& stream) {
             std::unique_lock<std::mutex> lock = lockStdout();
-
-            Int32 depth = Bench::DEFAULT_DEPTH;
-            stream >> depth;
-
-            UInt64 nodes = 0;
-            UInt64 time = 0;
+            NNUE nnue = NNUE();
+            nnue.load(NetLoader::get(0));
             for (USize i = 0; i < Bench::TEST_COUNT; i++) {
                 Position position = Position(Bench::TEST_CASES[i]);
-
-                SearchLimits limits = SearchLimits();
-                limits.depth = depth;
-
-                search_.newGame();
-
-                const auto start = std::chrono::high_resolution_clock::now();
-                const UInt64 testNodes = search_.bench(position, limits);
-                const auto end = std::chrono::high_resolution_clock::now();
-                const UInt64 testTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
-
-                std::cout << "fen " << Bench::TEST_CASES[i];
-                std::cout << " depth " << depth;
-                std::cout << " nodes " << testNodes;
-                std::cout << " time " << testTime;
-                std::cout << " nps " << (testNodes * 1000ULL) / (testTime + 1);
-                std::cout << std::endl;
-
-                nodes += testNodes;
-                time += testTime;
+                nnue.set(position);
+                std::cout << nnue.forward(position) << std::endl;
             }
-
-            std::cout << "nodes " << nodes;
-            std::cout << " time " << time;
-            std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
-            std::cout << std::endl;
-
-#if defined(MEASURE_SPARSITY)
-            SparseIterator<NNUE::L1_SIZE>::writeFtActCounts();
-#endif
         }
+
+        //         void bench(std::istringstream& stream) {
+        //             std::unique_lock<std::mutex> lock = lockStdout();
+
+        //             Int32 depth = Bench::DEFAULT_DEPTH;
+        //             stream >> depth;
+
+        //             UInt64 nodes = 0;
+        //             UInt64 time = 0;
+        //             for (USize i = 0; i < Bench::TEST_COUNT; i++) {
+        //                 Position position = Position(Bench::TEST_CASES[i]);
+
+        //                 SearchLimits limits = SearchLimits();
+        //                 limits.depth = depth;
+
+        //                 search_.newGame();
+
+        //                 const auto start = std::chrono::high_resolution_clock::now();
+        //                 const UInt64 testNodes = search_.bench(position, limits);
+        //                 const auto end = std::chrono::high_resolution_clock::now();
+        //                 const UInt64 testTime = static_cast<UInt64>(std::chrono::duration_cast<MS>(end - start).count());
+
+        //                 std::cout << "fen " << Bench::TEST_CASES[i];
+        //                 std::cout << " depth " << depth;
+        //                 std::cout << " nodes " << testNodes;
+        //                 std::cout << " time " << testTime;
+        //                 std::cout << " nps " << (testNodes * 1000ULL) / (testTime + 1);
+        //                 std::cout << std::endl;
+
+        //                 nodes += testNodes;
+        //                 time += testTime;
+        //             }
+
+        //             std::cout << "nodes " << nodes;
+        //             std::cout << " time " << time;
+        //             std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
+        //             std::cout << std::endl;
+
+        // #if defined(MEASURE_SPARSITY)
+        //             SparseIterator<NNUE::L1_SIZE>::writeFtActCounts();
+        // #endif
+        //         }
 
         void perft(std::istringstream& stream) {
             std::unique_lock<std::mutex> lock = lockStdout();
