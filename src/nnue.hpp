@@ -79,7 +79,8 @@ namespace Sift {
                 // clang-format on
             );
 
-            const auto pair1 = _mm512_set1_epi16(static_cast<Int16>(piece.index() | (square.index() << 8)));
+            const auto pair1 =
+                _mm512_set1_epi16(static_cast<Int16>((2 * piece.type().index() + (~piece.color()).index()) | (square.index() << 8)));
             const auto pair2Square = _mm512_maskz_compress_epi8(bits, indices.raw);
             const auto pair2Piece = _mm512_maskz_compress_epi8(bits, rays.raw);
             const auto pair2 = _mm512_permutex2var_epi8(pair2Piece, pair2Shuffle, pair2Square);
