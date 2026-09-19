@@ -8,6 +8,7 @@
 #include <span>
 #include <utility>
 
+#include "bitboard.hpp"
 #include "coords.hpp"
 #include "piece.hpp"
 #include "simd.hpp"
