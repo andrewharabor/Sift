@@ -349,18 +349,12 @@ namespace Sift {
 
             const Color color = position.sideToMove();
 
-            Accumulator psqAcc = Accumulator();
-            psqAcc.init(network_->ft());
-            resetPSQAcc(psqAcc, Color::WHITE, position);
-            resetPSQAcc(psqAcc, Color::BLACK, position);
+            update(position);
 
             if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                Accumulator threatAcc = Accumulator();
-                resetThreatAcc(threatAcc, Color::WHITE, position);
-                resetThreatAcc(threatAcc, Color::BLACK, position);
-                return forwardNetwork(psqAcc, threatAcc, position, color);
+                return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
             } else {
-                return forwardNetwork(psqAcc, Accumulator(), position, color);
+                return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
             }
         }
 
