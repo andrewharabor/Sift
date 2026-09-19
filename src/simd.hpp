@@ -387,16 +387,12 @@ namespace Sift {
 
         static FORCE_INLINE VecInt16 mulLoInt16(VecInt16 a, VecInt16 b) noexcept { return _mm256_mullo_epi16(a, b); }
 
-        static FORCE_INLINE VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept {
-            return _mm256_slli_epi16(v, static_cast<UInt32>(shift));
-        }
+        static FORCE_INLINE VecInt16 shiftLeftInt16(VecInt16 v, Int32 shift) noexcept { return _mm256_slli_epi16(v, shift); }
 
-        static FORCE_INLINE VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept {
-            return _mm256_srai_epi16(v, static_cast<UInt32>(shift));
-        }
+        static FORCE_INLINE VecInt16 shiftRightInt16(VecInt16 v, Int32 shift) noexcept { return _mm256_srai_epi16(v, shift); }
 
         static FORCE_INLINE VecInt16 shiftLeftMulHiInt16(VecInt16 a, VecInt16 b, Int32 shift) noexcept {
-            return _mm256_mulhi_epi16(_mm256_slli_epi16(a, static_cast<UInt32>(shift)), b);
+            return _mm256_mulhi_epi16(_mm256_slli_epi16(a, shift), b);
         }
 
         static FORCE_INLINE VecInt32 mulAddAdjInt16(VecInt16 a, VecInt16 b) noexcept { return _mm256_madd_epi16(a, b); }
@@ -423,13 +419,9 @@ namespace Sift {
 
         static FORCE_INLINE VecInt32 mulLoInt32(VecInt32 a, VecInt32 b) noexcept { return _mm256_mullo_epi32(a, b); }
 
-        static FORCE_INLINE VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept {
-            return _mm256_slli_epi32(v, static_cast<UInt32>(shift));
-        }
+        static FORCE_INLINE VecInt32 shiftLeftInt32(VecInt32 v, Int32 shift) noexcept { return _mm256_slli_epi32(v, shift); }
 
-        static FORCE_INLINE VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept {
-            return _mm256_srai_epi32(v, static_cast<UInt32>(shift));
-        }
+        static FORCE_INLINE VecInt32 shiftRightInt32(VecInt32 v, Int32 shift) noexcept { return _mm256_srai_epi32(v, shift); }
 
         static FORCE_INLINE VecUInt16 packUsInt32(VecInt32 a, VecInt32 b) noexcept { return _mm256_packus_epi32(a, b); }
 
