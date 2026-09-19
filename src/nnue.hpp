@@ -350,7 +350,59 @@ namespace Sift {
 
             const Color color = position.sideToMove();
 
+            const auto accChecksum = [&](Accumulator& acc, Color color) {
+                Int32 sum = 0;
+                for (USize i = 0; i < L1_SIZE; i++) { sum += acc.data(color)[i]; }
+                return sum;
+            };
+
             update(position);
+
+            Accumulator psqAcc = Accumulator();
+            psqAcc.init(network_->ft());
+            resetPSQAcc(psqAcc, Color::WHITE, position);
+            resetPSQAcc(psqAcc, Color::BLACK, position);
+
+            Int32 whitePSQActual = accChecksum(curr_->psqAcc, Color::WHITE);
+            Int32 blackPSQActual = accChecksum(curr_->psqAcc, Color::BLACK);
+            Int32 whitePSQExpected = accChecksum(psqAcc, Color::WHITE);
+            Int32 blackPSQExpected = accChecksum(psqAcc, Color::BLACK);
+
+            if (whitePSQActual != whitePSQExpected) {
+                std::cout << position.fen() << std::endl;
+                std::cout << "white psq mismatch: expected " << whitePSQExpected << ", got " << whitePSQActual << std::endl;
+                std::terminate();
+            }
+
+            if (blackPSQActual != blackPSQExpected) {
+                std::cout << position.fen() << std::endl;
+                std::cout << "black psq mismatch: expected " << blackPSQExpected << ", got " << blackPSQActual << std::endl;
+                std::terminate();
+            }
+
+            if constexpr (InputFeatureSet::THREAT_INPUTS) {
+                Accumulator threatAcc = Accumulator();
+                threatAcc.init(network_->ft());
+                resetThreatAcc(threatAcc, Color::WHITE, position);
+                resetThreatAcc(threatAcc, Color::BLACK, position);
+
+                Int32 whiteThreatActual = accChecksum(curr_->threatAcc, Color::WHITE);
+                Int32 blackThreatActual = accChecksum(curr_->threatAcc, Color::BLACK);
+                Int32 whiteThreatExpected = accChecksum(threatAcc, Color::WHITE);
+                Int32 blackThreatExpected = accChecksum(threatAcc, Color::BLACK);
+
+                if (whiteThreatActual != whiteThreatExpected) {
+                    std::cout << position.fen() << std::endl;
+                    std::cout << "white threat mismatch: expected " << whiteThreatExpected << ", got " << whiteThreatActual << std::endl;
+                    std::terminate();
+                }
+
+                if (blackThreatActual != blackThreatExpected) {
+                    std::cout << position.fen() << std::endl;
+                    std::cout << "black threat mismatch: expected " << blackThreatExpected << ", got " << blackThreatActual << std::endl;
+                    std::terminate();
+                }
+            }
 
             if constexpr (InputFeatureSet::THREAT_INPUTS) {
                 return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
@@ -358,6 +410,27 @@ namespace Sift {
                 return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
             }
         }
+
+        //        inline Int32 forwardOnce(const Position &position) noexcept {
+        //     assert(network_ != nullptr);
+        //     assert(curr_ >= &accStack_[0] && curr_ <= &accStack_.back());
+
+        //     const Color color = position.sideToMove();
+
+        //     Accumulator psqAcc = Accumulator();
+        //     psqAcc.init(network_->ft());
+        //     resetPSQAcc(psqAcc, Color::WHITE, position);
+        //     resetPSQAcc(psqAcc, Color::BLACK, position);
+
+        //     if constexpr (InputFeatureSet::THREAT_INPUTS) {
+        //         Accumulator threatAcc = Accumulator();
+        //         resetThreatAcc(threatAcc, Color::WHITE, position);
+        //         resetThreatAcc(threatAcc, Color::BLACK, position);
+        //         return forwardNetwork(psqAcc, threatAcc, position, color);
+        //     } else {
+        //         return forwardNetwork(psqAcc, Accumulator(), position, color);
+        //     }
+        // }
 
     private:
         static constexpr USize RESERVED_STATES = 256;
