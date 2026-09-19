@@ -4,6 +4,7 @@
 #include <bit>
 #include <cassert>
 #include <fstream>
+#include <iostream>
 #include <numeric>
 #include <span>
 #include <string_view>
@@ -561,6 +562,7 @@ namespace Sift {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
                         adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        std::cout << "\t+ " << std::string(feature) << std::endl;
                     }
 
                     Bitboard blackMasked = blackAfter & mask;
@@ -568,6 +570,7 @@ namespace Sift {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
                         adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        std::cout << "\t+ " << std::string(feature) << std::endl;
                     }
                 }
 
@@ -582,6 +585,7 @@ namespace Sift {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
                         subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        std::cout << "\t- " << std::string(feature) << std::endl;
                     }
 
                     Bitboard blackMasked = blackBefore & mask;
@@ -589,6 +593,7 @@ namespace Sift {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
                         subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        std::cout << "\t- " << std::string(feature) << std::endl;
                     }
                 }
             }
@@ -668,12 +673,15 @@ namespace Sift {
             USize addSize = 0;
             USize subSize = 0;
 
+            std::cout << "updating threat features:" << std::endl;
+
             for (USize i = 0; i < updates.tiAddSize; i++) {
                 const TIFeature& feature = updates.tiAdds[i];
                 const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
                 if (idx >= 0) {
                     adds[addSize++] = static_cast<UInt16>(idx);
                     assert(addSize <= adds.size());
+                    std::cout << "\t+ " << std::string(feature) << std::endl;
                 }
             }
 
@@ -683,6 +691,7 @@ namespace Sift {
                 if (idx >= 0) {
                     subs[subSize++] = static_cast<UInt16>(idx);
                     assert(subSize <= subs.size());
+                    std::cout << "\t- " << std::string(feature) << std::endl;
                 }
             }
 
