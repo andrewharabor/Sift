@@ -235,7 +235,7 @@ namespace Sift {
         static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, const std::span<const Piece, 64> mailbox,
             Square ignore) noexcept {
             const auto pieceBits = _mm512_broadcast_i32x4(_mm_loadu_si128(reinterpret_cast<const __m128i*>(PIECE_BITS.data())));
-            const auto maskedMailbox = _mm512_mask_blend_epi8(static_cast<UInt64>(ignore.index()), _mm512_loadu_si512(mailbox.data()),
+            const auto maskedMailbox = _mm512_mask_blend_epi8(Bitboard(ignore).bits(), _mm512_loadu_si512(mailbox.data()),
                 _mm512_set1_epi8(static_cast<UInt8>(Piece::NONE)));
             const auto permuted = _mm512_permutexvar_epi8(perm.indices.raw, maskedMailbox);
             const auto bits = _mm512_maskz_shuffle_epi8(perm.valid, pieceBits, permuted);
