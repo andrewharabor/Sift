@@ -272,9 +272,9 @@ namespace Sift {
 
         static FORCE_INLINE Permutation permutation(Square square) noexcept {
             const auto indices = Vector::cast(PERMUTATIONS[square.index()]);
-            const Vector valid{
+            const Vector invalid{
                 {_mm256_cmpeq_epi8(indices.raw[0], _mm256_set1_epi8(0x80)), _mm256_cmpeq_epi8(indices.raw[1], _mm256_set1_epi8(0x80))}};
-            return Permutation{indices, valid};
+            return Permutation{indices, invalid};
         }
 
         static FORCE_INLINE std::pair<Vector, Vector> permuteMailbox(const Permutation& perm, Vector maskedMailbox) noexcept {
