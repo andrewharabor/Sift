@@ -586,7 +586,8 @@ namespace Sift {
 
         void help() const {
             std::unique_lock<std::mutex> lock = lockStdout();
-            std::cout << "Sift " << TOSTRING(VERSION) << ", a strong UCI chess engine by andrewharabor" << std::endl;
+            std::cout << "Sift " << TOSTRING(VERSION) << " by andrewharabor, a superhuman chess engine with neural network based evaluation"
+                      << std::endl;
             std::cout << "https://github.com/andrewharabor/Sift" << std::endl;
         }
 
