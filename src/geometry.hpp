@@ -42,7 +42,7 @@ namespace Sift {
         FORCE_INLINE Vector flipped() const noexcept { return Vector{{raw[1], raw[0]}}; }
 
         FORCE_INLINE BitRays mask() const noexcept {
-            return static_cast<BitRays>(_mm256_movemask_epi8(raw[0])) | (static_cast<BitRays>(_mm256_movemask_epi8(raw[1])) << 32);
+            return static_cast<UInt32>(_mm256_movemask_epi8(raw[0])) | (static_cast<BitRays>(_mm256_movemask_epi8(raw[1])) << 32);
         }
 
         static FORCE_INLINE Vector load(const void* ptr) noexcept {
@@ -345,9 +345,9 @@ namespace Sift {
         }
 
         static FORCE_INLINE BitRays closestOccupied(Vector bits) noexcept {
-            const Vector occupiedVec{
-                {_mm256_cmpgt_epi8(bits.raw[0], _mm256_setzero_si256()), _mm256_cmpgt_epi8(bits.raw[1], _mm256_setzero_si256())}};
-            const BitRays occupied = occupiedVec.mask();
+            const Vector unoccupied{_mm256_cmpeq_epi8(bits.raw[0], _mm256_setzero_si256()),
+                _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256())};
+            const BitRays occupied = ~unoccupied.mask();
             const BitRays o = occupied | 0x8181818181818181;
             return (o ^ (o - 0x0303030303030303)) & occupied;
         }
