@@ -2,7 +2,6 @@
 
 #include <array>
 #include <limits>
-#include <string>
 #include <utility>
 
 #include "attacks.hpp"
@@ -35,8 +34,6 @@ namespace Sift {
 
             return bucketOffset + 64 * pc.index() + sq.index();
         }
-
-        operator std::string() const noexcept { return std::string(piece) + "@" + std::string(square); }
     };
 
     struct TIFeature {
@@ -68,10 +65,6 @@ namespace Sift {
             const Int64 pieceIdx = PIECE_INDICES[atk.index()][atkSq.index()][vicSq.index()];
 
             return FeatureSet::THREAT_OFFSET + attackIdx + offset + pieceIdx;
-        }
-
-        operator std::string() const noexcept {
-            return std::string(attacker) + "@" + std::string(attackerSq) + "->" + std::string(victim) + "@" + std::string(victimSq);
         }
 
     private:
@@ -220,11 +213,6 @@ namespace Sift {
             const UInt16 hi = std::max(aID, bID);
             const UInt16 lo = std::min(aID, bID);
             return hi * (hi - 1) / 2 + lo;
-        }
-
-        operator std::string() const noexcept {
-            return std::string(Piece(PieceType::PAWN, colorA)) + "@" + std::string(squareA) + " <-> " +
-                   std::string(Piece(PieceType::PAWN, colorB)) + "@" + std::string(squareB);
         }
 
     private:

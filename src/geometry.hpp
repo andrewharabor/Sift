@@ -5,8 +5,6 @@
 #endif
 
 #include <array>
-#include <iomanip>
-#include <iostream>
 #include <span>
 #include <utility>
 
@@ -42,7 +40,7 @@ namespace Sift {
         FORCE_INLINE Vector flipped() const noexcept { return Vector{{raw[1], raw[0]}}; }
 
         FORCE_INLINE BitRays mask() const noexcept {
-            return static_cast<UInt32>(_mm256_movemask_epi8(raw[0])) | (static_cast<BitRays>(_mm256_movemask_epi8(raw[1])) << 32);
+            return static_cast<BitRays>(_mm256_movemask_epi8(raw[0])) | (static_cast<BitRays>(_mm256_movemask_epi8(raw[1])) << 32);
         }
 
         static FORCE_INLINE Vector load(const void* ptr) noexcept {
@@ -272,31 +270,6 @@ namespace Sift {
 
 #elif defined(USE_AVX2)
 
-        static void dumpRays(const char* label, const Vector& rays, const Vector& bits, const Permutation& perm, BitRays closest) {
-            alignas(32) std::array<UInt8, 64> rayBytes{};
-            alignas(32) std::array<UInt8, 64> bitBytes{};
-            alignas(32) std::array<UInt8, 64> indexBytes{};
-
-            _mm256_store_si256(reinterpret_cast<__m256i*>(rayBytes.data()), rays.raw[0]);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(rayBytes.data()) + 1, rays.raw[1]);
-
-            _mm256_store_si256(reinterpret_cast<__m256i*>(bitBytes.data()), bits.raw[0]);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(bitBytes.data()) + 1, bits.raw[1]);
-
-            _mm256_store_si256(reinterpret_cast<__m256i*>(indexBytes.data()), perm.indices.raw[0]);
-            _mm256_store_si256(reinterpret_cast<__m256i*>(indexBytes.data()) + 1, perm.indices.raw[1]);
-
-            std::cout << label << '\n';
-
-            for (BitRays remaining = closest; remaining; remaining &= remaining - 1) {
-                const UInt8 lane = static_cast<UInt8>(std::countr_zero(remaining));
-                std::cout << "  lane=" << static_cast<int>(lane) << " perm=" << static_cast<int>(indexBytes[lane])
-                          << " rayPiece=" << static_cast<int>(rayBytes[lane]) << " bits=0x" << std::hex << static_cast<int>(bitBytes[lane])
-                          << " incomingMask=0x" << static_cast<int>(INCOMING_THREAT_MASK[lane]) << " sliderMask=0x"
-                          << static_cast<int>(INCOMING_SLIDER_MASK[lane]) << std::dec << '\n';
-            }
-        }
-
         static FORCE_INLINE Permutation permutation(Square square) noexcept {
             const auto indices = Vector::cast(PERMUTATIONS[square.index()]);
             const Vector invalid{
@@ -345,8 +318,8 @@ namespace Sift {
         }
 
         static FORCE_INLINE BitRays closestOccupied(Vector bits) noexcept {
-            const Vector unoccupied{_mm256_cmpeq_epi8(bits.raw[0], _mm256_setzero_si256()),
-                _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256())};
+            const Vector unoccupied{
+                {_mm256_cmpeq_epi8(bits.raw[0], _mm256_setzero_si256()), _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256())}};
             const BitRays occupied = ~unoccupied.mask();
             const BitRays o = occupied | 0x8181818181818181;
             return (o ^ (o - 0x0303030303030303)) & occupied;
@@ -363,19 +336,9 @@ namespace Sift {
 
         static FORCE_INLINE BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
             const auto mask = Vector::cast(INCOMING_THREAT_MASK);
-
-            const Vector zero{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
+            const Vector vec{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
                 _mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[1], mask.raw[1]), _mm256_setzero_si256())}};
-
-            const BitRays zeroMask = zero.mask();
-            const BitRays matchMask = ~zeroMask;
-            const BitRays result = matchMask & closest;
-
-            std::cout << std::hex << "incomingAttackers"
-                      << " closest=0x" << closest << " zeroMask=0x" << zeroMask << " matchMask=0x" << matchMask << " result=0x" << result
-                      << std::dec << '\n';
-
-            return result;
+            return ~vec.mask() & closest;
         }
 
         static FORCE_INLINE BitRays incomingSliders(Vector bits, BitRays closest) noexcept {

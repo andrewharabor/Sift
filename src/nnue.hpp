@@ -4,8 +4,6 @@
 #include <bit>
 #include <cassert>
 #include <fstream>
-#include <iomanip>
-#include <iostream>
 #include <numeric>
 #include <span>
 #include <string_view>
@@ -28,16 +26,6 @@
 #include "utils.hpp"
 
 namespace Sift {
-    auto dumpMask = [](std::string_view name, BitRays mask) {
-        std::cout << name << ": 0x" << std::hex << std::setw(16) << std::setfill('0') << mask << std::dec << " [";
-
-        for (USize i = 0; i < 64; ++i) {
-            if (mask & (UINT64_C(1) << i)) { std::cout << i << ' '; }
-        }
-
-        std::cout << "]\n";
-    };
-
     template<typename FeatureSet>
     struct BoardObserver {
     public:
@@ -220,19 +208,6 @@ namespace Sift {
             const BitRays victimMask = std::rotr(closest & 0xFEFEFEFEFEFEFEFE, 32);
             const BitRays valid = Geometry::rayFill(victimMask) & Geometry::rayFill(incomingSliders);
 
-            if constexpr (ADD) {
-                std::cout << "updateTIFeaturesOnChange<true>:" << std::endl;
-            } else {
-                std::cout << "updateTIFeaturesOnChange<false>:" << std::endl;
-            }
-
-            dumpMask("\tclosest", closest);
-            dumpMask("\toutgoing", outgoing);
-            dumpMask("\tincomingAttackers", incomingAttackers);
-            dumpMask("\tincomingSliders", incomingSliders);
-            dumpMask("\tvictimMask", victimMask);
-            dumpMask("\tvalid", valid);
-
             pushDirectTIFeatures<ADD, true>(perm.indices, rays, outgoing, piece, square);
             pushDirectTIFeatures<ADD, false>(perm.indices, rays, incomingAttackers, piece, square);
             pushXRayTIFeatures<ADD>(perm.indices, rays, incomingSliders & valid, victimMask & valid);
@@ -245,12 +220,6 @@ namespace Sift {
             const BitRays oldOutgoing = Geometry::outgoingThreats(oldPiece, closest);
             const BitRays newOutgoing = Geometry::outgoingThreats(newPiece, closest);
             const BitRays incomingAttackers = Geometry::incomingAttackers(bits, closest);
-
-            std::cout << "updateTIFeaturesOnTransmute:" << std::endl;
-            dumpMask("\tclosest", closest);
-            dumpMask("\toldOutgoing", oldOutgoing);
-            dumpMask("\tnewOutgoing", newOutgoing);
-            dumpMask("\tincomingAttackers", incomingAttackers);
 
             pushDirectTIFeatures<false, true>(perm.indices, rays, oldOutgoing, oldPiece, square);
             pushDirectTIFeatures<false, false>(perm.indices, rays, incomingAttackers, oldPiece, square);
@@ -276,26 +245,6 @@ namespace Sift {
             const BitRays toVictimMask = std::rotr(toClosest & 0xFEFEFEFEFEFEFEFE, 32);
             const BitRays fromValid = Geometry::rayFill(fromVictimMask) & Geometry::rayFill(fromIncomingSliders);
             const BitRays toValid = Geometry::rayFill(toVictimMask) & Geometry::rayFill(toIncomingSliders);
-
-            std::cout << "updateTIFeaturesOnMove:" << std::endl;
-
-#if defined(USE_AVX2)
-            Geometry::dumpRays("from AVX2", fromRays, fromBits, fromPerm, fromClosest);
-            Geometry::dumpRays("to AVX2", toRays, toBits, toPerm, toClosest);
-#endif
-
-            dumpMask("\tfromClosest", fromClosest);
-            dumpMask("\ttoClosest", toClosest);
-            dumpMask("\tfromOutgoing", fromOutgoing);
-            dumpMask("\ttoOutgoing", toOutgoing);
-            dumpMask("\tfromIncomingAttackers", fromIncomingAttackers);
-            dumpMask("\ttoIncomingAttackers", toIncomingAttackers);
-            dumpMask("\tfromIncomingSliders", fromIncomingSliders);
-            dumpMask("\ttoIncomingSliders", toIncomingSliders);
-            dumpMask("\tfromVictimMask", fromVictimMask);
-            dumpMask("\ttoVictimMask", toVictimMask);
-            dumpMask("\tfromValid", fromValid);
-            dumpMask("\ttoValid", toValid);
 
             pushDirectTIFeatures<false, true>(fromPerm.indices, fromRays, fromOutgoing, fromPiece, fromSquare);
             pushDirectTIFeatures<false, false>(fromPerm.indices, fromRays, fromIncomingAttackers, fromPiece, fromSquare);
@@ -400,59 +349,7 @@ namespace Sift {
 
             const Color color = position.sideToMove();
 
-            const auto accChecksum = [&](Accumulator& acc, Color color) {
-                Int32 sum = 0;
-                for (USize i = 0; i < L1_SIZE; i++) { sum += acc.data(color)[i]; }
-                return sum;
-            };
-
             update(position);
-
-            Accumulator psqAcc = Accumulator();
-            psqAcc.init(network_->ft());
-            resetPSQAcc(psqAcc, Color::WHITE, position);
-            resetPSQAcc(psqAcc, Color::BLACK, position);
-
-            Int32 whitePSQActual = accChecksum(curr_->psqAcc, Color::WHITE);
-            Int32 blackPSQActual = accChecksum(curr_->psqAcc, Color::BLACK);
-            Int32 whitePSQExpected = accChecksum(psqAcc, Color::WHITE);
-            Int32 blackPSQExpected = accChecksum(psqAcc, Color::BLACK);
-
-            if (whitePSQActual != whitePSQExpected) {
-                std::cout << position.fen() << std::endl;
-                std::cout << "white psq mismatch: expected " << whitePSQExpected << ", got " << whitePSQActual << std::endl;
-                std::terminate();
-            }
-
-            if (blackPSQActual != blackPSQExpected) {
-                std::cout << position.fen() << std::endl;
-                std::cout << "black psq mismatch: expected " << blackPSQExpected << ", got " << blackPSQActual << std::endl;
-                std::terminate();
-            }
-
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                Accumulator threatAcc = Accumulator();
-                threatAcc.init(network_->ft());
-                resetThreatAcc(threatAcc, Color::WHITE, position);
-                resetThreatAcc(threatAcc, Color::BLACK, position);
-
-                Int32 whiteThreatActual = accChecksum(curr_->threatAcc, Color::WHITE);
-                Int32 blackThreatActual = accChecksum(curr_->threatAcc, Color::BLACK);
-                Int32 whiteThreatExpected = accChecksum(threatAcc, Color::WHITE);
-                Int32 blackThreatExpected = accChecksum(threatAcc, Color::BLACK);
-
-                if (whiteThreatActual != whiteThreatExpected) {
-                    std::cout << position.fen() << std::endl;
-                    std::cout << "white threat mismatch: expected " << whiteThreatExpected << ", got " << whiteThreatActual << std::endl;
-                    std::terminate();
-                }
-
-                if (blackThreatActual != blackThreatExpected) {
-                    std::cout << position.fen() << std::endl;
-                    std::cout << "black threat mismatch: expected " << blackThreatExpected << ", got " << blackThreatActual << std::endl;
-                    std::terminate();
-                }
-            }
 
             if constexpr (InputFeatureSet::THREAT_INPUTS) {
                 return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
@@ -460,27 +357,6 @@ namespace Sift {
                 return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
             }
         }
-
-        //        inline Int32 forwardOnce(const Position &position) noexcept {
-        //     assert(network_ != nullptr);
-        //     assert(curr_ >= &accStack_[0] && curr_ <= &accStack_.back());
-
-        //     const Color color = position.sideToMove();
-
-        //     Accumulator psqAcc = Accumulator();
-        //     psqAcc.init(network_->ft());
-        //     resetPSQAcc(psqAcc, Color::WHITE, position);
-        //     resetPSQAcc(psqAcc, Color::BLACK, position);
-
-        //     if constexpr (InputFeatureSet::THREAT_INPUTS) {
-        //         Accumulator threatAcc = Accumulator();
-        //         resetThreatAcc(threatAcc, Color::WHITE, position);
-        //         resetThreatAcc(threatAcc, Color::BLACK, position);
-        //         return forwardNetwork(psqAcc, threatAcc, position, color);
-        //     } else {
-        //         return forwardNetwork(psqAcc, Accumulator(), position, color);
-        //     }
-        // }
 
     private:
         static constexpr USize RESERVED_STATES = 256;
@@ -685,7 +561,6 @@ namespace Sift {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
                         adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        std::cout << "\t+ " << std::string(feature) << std::endl;
                     }
 
                     Bitboard blackMasked = blackAfter & mask;
@@ -693,7 +568,6 @@ namespace Sift {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
                         adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        std::cout << "\t+ " << std::string(feature) << std::endl;
                     }
                 }
 
@@ -708,7 +582,6 @@ namespace Sift {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
                         subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        std::cout << "\t- " << std::string(feature) << std::endl;
                     }
 
                     Bitboard blackMasked = blackBefore & mask;
@@ -716,7 +589,6 @@ namespace Sift {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
                         subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        std::cout << "\t- " << std::string(feature) << std::endl;
                     }
                 }
             }
@@ -796,17 +668,12 @@ namespace Sift {
             USize addSize = 0;
             USize subSize = 0;
 
-            std::cout << "updating threat features:" << std::endl;
-            std::cout << "addSize: " << updates.tiAddSize << std::endl;
-            std::cout << "subSize: " << updates.tiSubSize << std::endl;
-
             for (USize i = 0; i < updates.tiAddSize; i++) {
                 const TIFeature& feature = updates.tiAdds[i];
                 const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
                 if (idx >= 0) {
                     adds[addSize++] = static_cast<UInt16>(idx);
                     assert(addSize <= adds.size());
-                    std::cout << "\t+ " << std::string(feature) << std::endl;
                 }
             }
 
@@ -816,7 +683,6 @@ namespace Sift {
                 if (idx >= 0) {
                     subs[subSize++] = static_cast<UInt16>(idx);
                     assert(subSize <= subs.size());
-                    std::cout << "\t- " << std::string(feature) << std::endl;
                 }
             }
 

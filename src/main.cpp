@@ -13,64 +13,47 @@
 
 using namespace Sift;
 
-int main(void) {
+int run(std::span<const std::string_view> args) {
+    UCI uci = UCI();
+
+    if (args.size() > 1) {
+#if defined(EXTERNAL_TUNE)
+        if (std::string_view(args[1]) == "obconfig") {
+            TUNABLES.openBenchConfig();
+            return 0;
+        } else if (std::string_view(args[1]) == "wfconfig") {
+            TUNABLES.weatherFactoryConfig();
+            return 0;
+        }
+#endif
+
+        for (USize i = 1; i < args.size(); i++) {
+            uci.execute(std::string(args[i]));
+            while (uci.searching()) { std::this_thread::yield(); }
+        }
+
+        return 0;
+    }
+
+    uci.run();
+
+    return 0;
+}
+
+int main(int argc, const char* argv[]) {
     Attacks::init();
     CuckooTable::init();
     TunableList::init();
     NUMA::init();
     NetLoader::init();
 
-    NNUE nnue = NNUE();
-    nnue.load(NetLoader::get(0));
-    Position pos = Position();
-    nnue.set(pos);
-    Move mv = Move(Square::A2, Square::A3);
-    auto obs = nnue.makeMove();
-    pos.makeMove(mv, obs);
-    nnue.forward(pos);
+    std::vector<std::string_view> args;
+    args.reserve(static_cast<USize>(argc));
+    for (int i = 0; i < argc; i++) { args.emplace_back(argv[i]); }
+
+    const int exitCode = run(args);
+
+    NetLoader::cleanup();
+
+    return exitCode;
 }
-
-// int run(std::span<const std::string_view> args) {
-//     UCI uci = UCI();
-
-//     if (args.size() > 1) {
-// #if defined(EXTERNAL_TUNE)
-//         if (std::string_view(args[1]) == "obconfig") {
-//             TUNABLES.openBenchConfig();
-//             return 0;
-//         } else if (std::string_view(args[1]) == "wfconfig") {
-//             TUNABLES.weatherFactoryConfig();
-//             return 0;
-//         }
-// #endif
-
-//         for (USize i = 1; i < args.size(); i++) {
-//             uci.execute(std::string(args[i]));
-//             while (uci.searching()) { std::this_thread::yield(); }
-//         }
-
-//         return 0;
-//     }
-
-//     uci.run();
-
-//     return 0;
-// }
-
-// int main(int argc, const char* argv[]) {
-//     Attacks::init();
-//     CuckooTable::init();
-//     TunableList::init();
-//     NUMA::init();
-//     NetLoader::init();
-
-//     std::vector<std::string_view> args;
-//     args.reserve(static_cast<USize>(argc));
-//     for (int i = 0; i < argc; i++) { args.emplace_back(argv[i]); }
-
-//     const int exitCode = run(args);
-
-//     NetLoader::cleanup();
-
-//     return exitCode;
-// }
