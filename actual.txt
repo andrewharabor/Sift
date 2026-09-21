@@ -1,16 +1,16 @@
 updateTIFeaturesOnMove:
-    fromClosest: 8640405536
-    toClosest: 21525172240
-    fromOutgoing: 0
-    toOutgoing: 0
-    fromIncomingAttackers: 0
-    toIncomingAttackers: 33554432
-    fromIncomingSliders: 0
-    toIncomingSliders: 0
-    fromVictimMask: 144713459840319490
-    toVictimMask: 144132848981377028
-    fromValid: 0
-    toValid: 0
+    fromClosest: 0x0000000203022020 [5 13 17 24 25 33 ]
+    toClosest: 0x0000000503001010 [4 12 24 25 32 34 ]
+    fromOutgoing: 0x0000000000000000 []
+    toOutgoing: 0x0000000000000000 []
+    fromIncomingAttackers: 0x0000000000000000 []
+    toIncomingAttackers: 0x0000000002000000 [25 ]
+    fromIncomingSliders: 0x0000000000000000 []
+    toIncomingSliders: 0x0000000000000000 []
+    fromVictimMask: 0x0202202000000002 [1 37 45 49 57 ]
+    toVictimMask: 0x0200101000000004 [2 36 44 57 ]
+    fromValid: 0x0000000000000000 []
+    toValid: 0x0000000000000000 []
 updating threat features:
 addSize: 1
 subSize: 0

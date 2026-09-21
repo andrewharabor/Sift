@@ -5,6 +5,8 @@
 #endif
 
 #include <array>
+#include <iomanip>
+#include <iostream>
 #include <span>
 #include <utility>
 
@@ -269,6 +271,31 @@ namespace Sift {
         }
 
 #elif defined(USE_AVX2)
+
+        static void dumpRays(const char* label, const Vector& rays, const Vector& bits, const Permutation& perm, BitRays closest) {
+            alignas(32) std::array<UInt8, 64> rayBytes{};
+            alignas(32) std::array<UInt8, 64> bitBytes{};
+            alignas(32) std::array<UInt8, 64> indexBytes{};
+
+            _mm256_store_si256(reinterpret_cast<__m256i*>(rayBytes.data()), rays.raw[0]);
+            _mm256_store_si256(reinterpret_cast<__m256i*>(rayBytes.data()) + 1, rays.raw[1]);
+
+            _mm256_store_si256(reinterpret_cast<__m256i*>(bitBytes.data()), bits.raw[0]);
+            _mm256_store_si256(reinterpret_cast<__m256i*>(bitBytes.data()) + 1, bits.raw[1]);
+
+            _mm256_store_si256(reinterpret_cast<__m256i*>(indexBytes.data()), perm.indices.raw[0]);
+            _mm256_store_si256(reinterpret_cast<__m256i*>(indexBytes.data()) + 1, perm.indices.raw[1]);
+
+            std::cout << label << '\n';
+
+            for (BitRays remaining = closest; remaining; remaining &= remaining - 1) {
+                const UInt8 lane = static_cast<UInt8>(std::countr_zero(remaining));
+                std::cout << "  lane=" << static_cast<int>(lane) << " perm=" << static_cast<int>(indexBytes[lane])
+                          << " rayPiece=" << static_cast<int>(rayBytes[lane]) << " bits=0x" << std::hex << static_cast<int>(bitBytes[lane])
+                          << " incomingMask=0x" << static_cast<int>(INCOMING_THREAT_MASK[lane]) << " sliderMask=0x"
+                          << static_cast<int>(INCOMING_SLIDER_MASK[lane]) << std::dec << '\n';
+            }
+        }
 
         static FORCE_INLINE Permutation permutation(Square square) noexcept {
             const auto indices = Vector::cast(PERMUTATIONS[square.index()]);
