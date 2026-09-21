@@ -209,6 +209,19 @@ namespace Sift {
             const BitRays victimMask = std::rotr(closest & 0xFEFEFEFEFEFEFEFE, 32);
             const BitRays valid = Geometry::rayFill(victimMask) & Geometry::rayFill(incomingSliders);
 
+            if constexpr (ADD) {
+                std::cout << "updateTIFeaturesOnChange<true>:" << std::endl;
+            } else {
+                std::cout << "updateTIFeaturesOnChange<false>:" << std::endl;
+            }
+
+            std::cout << "\tclosest: " << closest << std::endl;
+            std::cout << "\toutgoing: " << outgoing << std::endl;
+            std::cout << "\tincomingAttackers: " << incomingAttackers << std::endl;
+            std::cout << "\tincomingSliders: " << incomingSliders << std::endl;
+            std::cout << "\tvictimMask: " << victimMask << std::endl;
+            std::cout << "\tvalid: " << valid << std::endl;
+
             pushDirectTIFeatures<ADD, true>(perm.indices, rays, outgoing, piece, square);
             pushDirectTIFeatures<ADD, false>(perm.indices, rays, incomingAttackers, piece, square);
             pushXRayTIFeatures<ADD>(perm.indices, rays, incomingSliders & valid, victimMask & valid);
@@ -221,6 +234,12 @@ namespace Sift {
             const BitRays oldOutgoing = Geometry::outgoingThreats(oldPiece, closest);
             const BitRays newOutgoing = Geometry::outgoingThreats(newPiece, closest);
             const BitRays incomingAttackers = Geometry::incomingAttackers(bits, closest);
+
+            std::cout << "updateTIFeaturesOnTransmute:" << std::endl;
+            std::cout << "\tclosest: " << closest << std::endl;
+            std::cout << "\toldOutgoing: " << oldOutgoing << std::endl;
+            std::cout << "\tnewOutgoing: " << newOutgoing << std::endl;
+            std::cout << "\tincomingAttackers: " << incomingAttackers << std::endl;
 
             pushDirectTIFeatures<false, true>(perm.indices, rays, oldOutgoing, oldPiece, square);
             pushDirectTIFeatures<false, false>(perm.indices, rays, incomingAttackers, oldPiece, square);
@@ -246,6 +265,20 @@ namespace Sift {
             const BitRays toVictimMask = std::rotr(toClosest & 0xFEFEFEFEFEFEFEFE, 32);
             const BitRays fromValid = Geometry::rayFill(fromVictimMask) & Geometry::rayFill(fromIncomingSliders);
             const BitRays toValid = Geometry::rayFill(toVictimMask) & Geometry::rayFill(toIncomingSliders);
+
+            std::cout << "updateTIFeaturesOnMove:" << std::endl;
+            std::cout << "\tfromClosest: " << fromClosest << std::endl;
+            std::cout << "\ttoClosest: " << toClosest << std::endl;
+            std::cout << "\tfromOutgoing: " << fromOutgoing << std::endl;
+            std::cout << "\ttoOutgoing: " << toOutgoing << std::endl;
+            std::cout << "\tfromIncomingAttackers: " << fromIncomingAttackers << std::endl;
+            std::cout << "\ttoIncomingAttackers: " << toIncomingAttackers << std::endl;
+            std::cout << "\tfromIncomingSliders: " << fromIncomingSliders << std::endl;
+            std::cout << "\ttoIncomingSliders: " << toIncomingSliders << std::endl;
+            std::cout << "\tfromVictimMask: " << fromVictimMask << std::endl;
+            std::cout << "\ttoVictimMask: " << toVictimMask << std::endl;
+            std::cout << "\tfromValid: " << fromValid << std::endl;
+            std::cout << "\ttoValid: " << toValid << std::endl;
 
             pushDirectTIFeatures<false, true>(fromPerm.indices, fromRays, fromOutgoing, fromPiece, fromSquare);
             pushDirectTIFeatures<false, false>(fromPerm.indices, fromRays, fromIncomingAttackers, fromPiece, fromSquare);
