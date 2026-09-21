@@ -27,6 +27,16 @@
 #include "utils.hpp"
 
 namespace Sift {
+    auto dumpMask = [](std::string_view name, BitRays mask) {
+        std::cout << name << ": 0x" << std::hex << std::setw(16) << std::setfill('0') << mask << std::dec << " [";
+
+        for (USize i = 0; i < 64; ++i) {
+            if (mask & (UINT64_C(1) << i)) { std::cout << i << ' '; }
+        }
+
+        std::cout << "]\n";
+    };
+
     template<typename FeatureSet>
     struct BoardObserver {
     public:
@@ -215,12 +225,12 @@ namespace Sift {
                 std::cout << "updateTIFeaturesOnChange<false>:" << std::endl;
             }
 
-            std::cout << "\tclosest: " << closest << std::endl;
-            std::cout << "\toutgoing: " << outgoing << std::endl;
-            std::cout << "\tincomingAttackers: " << incomingAttackers << std::endl;
-            std::cout << "\tincomingSliders: " << incomingSliders << std::endl;
-            std::cout << "\tvictimMask: " << victimMask << std::endl;
-            std::cout << "\tvalid: " << valid << std::endl;
+            dumpMask("\tclosest", closest);
+            dumpMask("\toutgoing", outgoing);
+            dumpMask("\tincomingAttackers", incomingAttackers);
+            dumpMask("\tincomingSliders", incomingSliders);
+            dumpMask("\tvictimMask", victimMask);
+            dumpMask("\tvalid", valid);
 
             pushDirectTIFeatures<ADD, true>(perm.indices, rays, outgoing, piece, square);
             pushDirectTIFeatures<ADD, false>(perm.indices, rays, incomingAttackers, piece, square);
@@ -236,10 +246,10 @@ namespace Sift {
             const BitRays incomingAttackers = Geometry::incomingAttackers(bits, closest);
 
             std::cout << "updateTIFeaturesOnTransmute:" << std::endl;
-            std::cout << "\tclosest: " << closest << std::endl;
-            std::cout << "\toldOutgoing: " << oldOutgoing << std::endl;
-            std::cout << "\tnewOutgoing: " << newOutgoing << std::endl;
-            std::cout << "\tincomingAttackers: " << incomingAttackers << std::endl;
+            dumpMask("\tclosest", closest);
+            dumpMask("\toldOutgoing", oldOutgoing);
+            dumpMask("\tnewOutgoing", newOutgoing);
+            dumpMask("\tincomingAttackers", incomingAttackers);
 
             pushDirectTIFeatures<false, true>(perm.indices, rays, oldOutgoing, oldPiece, square);
             pushDirectTIFeatures<false, false>(perm.indices, rays, incomingAttackers, oldPiece, square);
@@ -267,18 +277,18 @@ namespace Sift {
             const BitRays toValid = Geometry::rayFill(toVictimMask) & Geometry::rayFill(toIncomingSliders);
 
             std::cout << "updateTIFeaturesOnMove:" << std::endl;
-            std::cout << "\tfromClosest: " << fromClosest << std::endl;
-            std::cout << "\ttoClosest: " << toClosest << std::endl;
-            std::cout << "\tfromOutgoing: " << fromOutgoing << std::endl;
-            std::cout << "\ttoOutgoing: " << toOutgoing << std::endl;
-            std::cout << "\tfromIncomingAttackers: " << fromIncomingAttackers << std::endl;
-            std::cout << "\ttoIncomingAttackers: " << toIncomingAttackers << std::endl;
-            std::cout << "\tfromIncomingSliders: " << fromIncomingSliders << std::endl;
-            std::cout << "\ttoIncomingSliders: " << toIncomingSliders << std::endl;
-            std::cout << "\tfromVictimMask: " << fromVictimMask << std::endl;
-            std::cout << "\ttoVictimMask: " << toVictimMask << std::endl;
-            std::cout << "\tfromValid: " << fromValid << std::endl;
-            std::cout << "\ttoValid: " << toValid << std::endl;
+            dumpMask("\tfromClosest", fromClosest);
+            dumpMask("\ttoClosest", toClosest);
+            dumpMask("\tfromOutgoing", fromOutgoing);
+            dumpMask("\ttoOutgoing", toOutgoing);
+            dumpMask("\tfromIncomingAttackers", fromIncomingAttackers);
+            dumpMask("\ttoIncomingAttackers", toIncomingAttackers);
+            dumpMask("\tfromIncomingSliders", fromIncomingSliders);
+            dumpMask("\ttoIncomingSliders", toIncomingSliders);
+            dumpMask("\tfromVictimMask", fromVictimMask);
+            dumpMask("\ttoVictimMask", toVictimMask);
+            dumpMask("\tfromValid", fromValid);
+            dumpMask("\ttoValid", toValid);
 
             pushDirectTIFeatures<false, true>(fromPerm.indices, fromRays, fromOutgoing, fromPiece, fromSquare);
             pushDirectTIFeatures<false, false>(fromPerm.indices, fromRays, fromIncomingAttackers, fromPiece, fromSquare);

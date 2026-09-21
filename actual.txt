@@ -1,14 +1,14 @@
 updateTIFeaturesOnMove:
-    fromClosest: 50470944
-    toClosest: 50335760
+    fromClosest: 8640405536
+    toClosest: 21525172240
     fromOutgoing: 0
     toOutgoing: 0
     fromIncomingAttackers: 0
     toIncomingAttackers: 33554432
     fromIncomingSliders: 0
     toIncomingSliders: 0
-    fromVictimMask: 144713459840319488
-    toVictimMask: 144132848981377024
+    fromVictimMask: 144713459840319490
+    toVictimMask: 144132848981377028
     fromValid: 0
     toValid: 0
 updating threat features:
