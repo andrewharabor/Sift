@@ -4,6 +4,7 @@
 #include <bit>
 #include <cassert>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
 #include <span>
