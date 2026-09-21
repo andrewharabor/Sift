@@ -1,0 +1,41 @@
+updateTIFeaturesOnMove:
+    fromClosest: 8640405536
+    toClosest: 21525172240
+    fromOutgoing: 0
+    toOutgoing: 0
+    fromIncomingAttackers: 8589934592
+    toIncomingAttackers: 21508390912
+    fromIncomingSliders: 8589934592
+    toIncomingSliders: 17179869184
+    fromVictimMask: 144713459840319490
+    toVictimMask: 144132848981377028
+    fromValid: 545460846592
+    toValid: 545460846592
+updating threat features:
+addSize: 4
+subSize: 2
+    + N@b1->P@a3
+    + R@a1->P@a3
+    + R@a1->p@a7
+    - R@a1->P@a2
+    - R@a1->p@a7
+    + P@a3 <-> P@b2
+    + P@a3 <-> p@a7
+    + P@a3 <-> p@b7
+    - P@a2 <-> P@b2
+    - P@a2 <-> p@a7
+    - P@a2 <-> p@b7
+updating threat features:
+addSize: 4
+subSize: 2
+    + N@b1->P@a3
+    + R@a1->P@a3
+    + R@a1->p@a7
+    - R@a1->P@a2
+    - R@a1->p@a7
+    + P@a3 <-> P@b2
+    + P@a3 <-> p@a7
+    + P@a3 <-> p@b7
+    - P@a2 <-> P@b2
+    - P@a2 <-> p@a7
+    - P@a2 <-> p@b7

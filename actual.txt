@@ -1,0 +1,35 @@
+updateTIFeaturesOnMove:
+    fromClosest: 50470944
+    toClosest: 50335760
+    fromOutgoing: 0
+    toOutgoing: 0
+    fromIncomingAttackers: 0
+    toIncomingAttackers: 33554432
+    fromIncomingSliders: 0
+    toIncomingSliders: 0
+    fromVictimMask: 144713459840319488
+    toVictimMask: 144132848981377024
+    fromValid: 0
+    toValid: 0
+updating threat features:
+addSize: 1
+subSize: 0
+    + P@a3 <-> P@b2
+    + P@a3 <-> p@a7
+    + P@a3 <-> p@b7
+    - P@a2 <-> P@b2
+    - P@a2 <-> p@a7
+    - P@a2 <-> p@b7
+updating threat features:
+addSize: 1
+subSize: 0
+    + P@a3 <-> P@b2
+    + P@a3 <-> p@a7
+    + P@a3 <-> p@b7
+    - P@a2 <-> P@b2
+    - P@a2 <-> p@a7
+    - P@a2 <-> p@b7
+rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1
+white threat mismatch: expected -52734, got -52366
+terminate called without an active exception
+Aborted
