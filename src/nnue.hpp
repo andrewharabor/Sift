@@ -280,8 +280,8 @@ namespace Sift {
             std::cout << "updateTIFeaturesOnMove:" << std::endl;
 
 #if defined(USE_AVX2)
-            debugRays("from AVX2", fromRays, fromBits, fromPerm, fromClosest);
-            debugRays("to AVX2", toRays, toBits, toPerm, toClosest);
+            dumpRays("from AVX2", fromRays, fromBits, fromPerm, fromClosest);
+            dumpRays("to AVX2", toRays, toBits, toPerm, toClosest);
 #endif
 
             dumpMask("\tfromClosest", fromClosest);
