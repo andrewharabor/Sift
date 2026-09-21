@@ -345,9 +345,9 @@ namespace Sift {
         }
 
         static FORCE_INLINE BitRays closestOccupied(Vector bits) noexcept {
-            const Vector occupiedVec{
-                {_mm256_cmpgt_epi8(bits.raw[0], _mm256_setzero_si256()), _mm256_cmpgt_epi8(bits.raw[1], _mm256_setzero_si256())}};
-            const BitRays occupied = occupiedVec.mask();
+            const Vector unoccupied{_mm256_cmpeq_epi8(bits.raw[0], _mm256_setzero_si256()),
+                _mm256_cmpeq_epi8(bits.raw[1], _mm256_setzero_si256())};
+            const BitRays occupied = ~unoccupied.mask();
             const BitRays o = occupied | 0x8181818181818181;
             return (o ^ (o - 0x0303030303030303)) & occupied;
         }
@@ -363,9 +363,19 @@ namespace Sift {
 
         static FORCE_INLINE BitRays incomingAttackers(Vector bits, BitRays closest) noexcept {
             const auto mask = Vector::cast(INCOMING_THREAT_MASK);
-            const Vector vec{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
+
+            const Vector zero{{_mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[0], mask.raw[0]), _mm256_setzero_si256()),
                 _mm256_cmpeq_epi8(_mm256_and_si256(bits.raw[1], mask.raw[1]), _mm256_setzero_si256())}};
-            return ~vec.mask() & closest;
+
+            const BitRays zeroMask = zero.mask();
+            const BitRays matchMask = ~zeroMask;
+            const BitRays result = matchMask & closest;
+
+            std::cout << std::hex << "incomingAttackers"
+                      << " closest=0x" << closest << " zeroMask=0x" << zeroMask << " matchMask=0x" << matchMask << " result=0x" << result
+                      << std::dec << '\n';
+
+            return result;
         }
 
         static FORCE_INLINE BitRays incomingSliders(Vector bits, BitRays closest) noexcept {

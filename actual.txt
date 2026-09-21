@@ -1,4 +1,18 @@
 updateTIFeaturesOnMove:
+from AVX2
+  lane=5 perm=48 rayPiece=6 bits=0x2 incomingMask=0x30 sliderMask=0x30
+  lane=13 perm=53 rayPiece=6 bits=0x2 incomingMask=0x28 sliderMask=0x28
+  lane=17 perm=9 rayPiece=0 bits=0x1 incomingMask=0x30 sliderMask=0x30
+  lane=24 perm=2 rayPiece=2 bits=0x8 incomingMask=0x4 sliderMask=0x80
+  lane=25 perm=1 rayPiece=1 bits=0x4 incomingMask=0x29 sliderMask=0x28
+  lane=33 perm=0 rayPiece=3 bits=0x10 incomingMask=0x30 sliderMask=0x30
+to AVX2
+  lane=4 perm=48 rayPiece=6 bits=0x2 incomingMask=0x30 sliderMask=0x30
+  lane=12 perm=52 rayPiece=6 bits=0x2 incomingMask=0x28 sliderMask=0x28
+  lane=24 perm=10 rayPiece=0 bits=0x1 incomingMask=0x4 sliderMask=0x80
+  lane=25 perm=9 rayPiece=0 bits=0x1 incomingMask=0x29 sliderMask=0x28
+  lane=32 perm=1 rayPiece=1 bits=0x4 incomingMask=0x4 sliderMask=0x80
+  lane=34 perm=0 rayPiece=3 bits=0x10 incomingMask=0x30 sliderMask=0x30
     fromClosest: 0x0000000203022020 [5 13 17 24 25 33 ]
     toClosest: 0x0000000503001010 [4 12 24 25 32 34 ]
     fromOutgoing: 0x0000000000000000 []
