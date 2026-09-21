@@ -747,6 +747,8 @@ namespace Sift {
             USize subSize = 0;
 
             std::cout << "updating threat features:" << std::endl;
+            std::cout << "addSize: " << updates.tiAddSize << std::endl;
+            std::cout << "subSize: " << updates.tiSubSize << std::endl;
 
             for (USize i = 0; i < updates.tiAddSize; i++) {
                 const TIFeature& feature = updates.tiAdds[i];
