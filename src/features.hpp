@@ -16,8 +16,6 @@ namespace Sift {
         Piece piece;
         Square square;
 
-        constexpr PSQFeature(Piece pc, Square sq) : piece(pc), square(sq) {}
-
         template<typename FeatureSet>
         constexpr USize index(Color color, Square kingSquare) const noexcept {
             assert(piece != Piece::NONE);
@@ -43,9 +41,6 @@ namespace Sift {
         Square attackerSq;
         Piece victim;
         Square victimSq;
-
-        constexpr TIFeature(Piece atk, Square atkSq, Piece vic, Square vicSq) :
-            attacker(atk), attackerSq(atkSq), victim(vic), victimSq(vicSq) {}
 
         template<typename FeatureSet>
         constexpr Int64 index(Color color, Square kingSquare) const noexcept {
@@ -190,8 +185,6 @@ namespace Sift {
         Color colorA;
         Square squareB;
         Color colorB;
-
-        constexpr PPFeature(Square sqA, Color colA, Square sqB, Color colB) : squareA(sqA), colorA(colA), squareB(sqB), colorB(colB) {}
 
         static constexpr std::array<Bitboard, 64> MASKS = [] {
             std::array<Bitboard, 64> masks = {};
