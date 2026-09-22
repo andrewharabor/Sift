@@ -16,6 +16,8 @@ namespace Sift {
         Piece piece;
         Square square;
 
+        constexpr PSQFeature(Piece pc, Square sq) : piece(pc), square(sq) {}
+
         template<typename FeatureSet>
         constexpr USize index(Color color, Square kingSquare) const noexcept {
             assert(piece != Piece::NONE);
@@ -41,6 +43,9 @@ namespace Sift {
         Square attackerSq;
         Piece victim;
         Square victimSq;
+
+        constexpr TIFeature(Piece atk, Square atkSq, Piece vic, Square vicSq) :
+            attacker(atk), attackerSq(atkSq), victim(vic), victimSq(vicSq) {}
 
         template<typename FeatureSet>
         constexpr Int64 index(Color color, Square kingSquare) const noexcept {
@@ -161,18 +166,17 @@ namespace Sift {
         static inline MultiArray<Int64, 12, 12, 2> ATTACK_INDICES = [] {
             MultiArray<Int64, 12, 12, 2> indices = {};
             for (UInt8 i = 0; i < 12; i++) {
-                const Piece attacker = Piece(i);
+                const Piece atk = Piece(i);
                 for (UInt8 j = 0; j < 12; j++) {
-                    const Piece victim = Piece(j);
-                    const bool enemies = attacker.color() != victim.color();
-                    const Int64 map = PIECE_TARGET_MAP<FeatureSet>[attacker.type().index()][victim.type().index()];
-                    const bool semiExcluded = ((attacker.type() == victim.type()) && (enemies || attacker.type() != PieceType::PAWN));
+                    const Piece vic = Piece(j);
+                    const bool enemies = atk.color() != vic.color();
+                    const Int64 map = PIECE_TARGET_MAP<FeatureSet>[atk.type().index()][vic.type().index()];
+                    const bool semiExcluded = ((atk.type() == vic.type()) && (enemies || atk.type() != PieceType::PAWN));
                     const bool excluded = map < 0;
                     const auto [pieceOffset, offset] = OFFSETS<FeatureSet>.indices[i];
                     const Int64 featureIdx =
                         offset +
-                        (static_cast<Int64>(victim.color()) * (PIECE_TARGET_COUNT<FeatureSet>[attacker.type().index()] / 2) + map) *
-                            pieceOffset;
+                        (static_cast<Int64>(vic.color()) * (PIECE_TARGET_COUNT<FeatureSet>[atk.type().index()] / 2) + map) * pieceOffset;
                     indices[i][j][0] = (excluded) ? std::numeric_limits<Int64>::min() : featureIdx;
                     indices[i][j][1] = (excluded || semiExcluded) ? std::numeric_limits<Int64>::min() : featureIdx;
                 }
@@ -186,6 +190,8 @@ namespace Sift {
         Color colorA;
         Square squareB;
         Color colorB;
+
+        constexpr PPFeature(Square sqA, Color colA, Square sqB, Color colB) : squareA(sqA), colorA(colA), squareB(sqB), colorB(colB) {}
 
         static constexpr std::array<Bitboard, 64> MASKS = [] {
             std::array<Bitboard, 64> masks = {};

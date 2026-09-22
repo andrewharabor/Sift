@@ -29,7 +29,7 @@ namespace Sift {
     template<typename FeatureSet>
     struct BoardObserver {
     public:
-        FeatureSet::Updates& updates;
+        typename FeatureSet::Updates& updates;
 
         inline void kingMove(Color color, Square from, Square to) noexcept {
             if (FeatureSet::needsRefresh(color, from, to)) { updates.setPSQRefresh(color); }

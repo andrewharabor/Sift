@@ -195,7 +195,7 @@ namespace Sift {
         Accumulator<FeatureTransformer> threatAcc;
         std::array<bool, 2> psqDirty;
         std::array<bool, 2> threatDirty;
-        FeatureSet::Updates updates;
+        typename FeatureSet::Updates updates;
 
         constexpr void setPSQDirty() noexcept { psqDirty[0] = psqDirty[1] = true; }
 
