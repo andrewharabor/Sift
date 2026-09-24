@@ -1,5 +1,5 @@
 ARCH  ?= native
-MODE  ?= tune
+MODE  ?= release
 NUMA ?= off
 
 BUILD_DIR := build/$(ARCH)
