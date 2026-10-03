@@ -11,12 +11,12 @@
 #include "color.hpp"
 #include "coords.hpp"
 #include "cuckoo.hpp"
+#include "hash.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
 #include "utils.hpp"
-#include "zobrist.hpp"
 
 namespace Sift {
     class CastlingRights {
@@ -185,7 +185,7 @@ namespace Sift {
 
             if (side != "w" && side != "b") { return false; }
             sideToMove_ = (side == "w") ? Color::WHITE : Color::BLACK;
-            if (sideToMove_ == Color::WHITE) { state().hash ^= Zobrist::sideToMove(); }
+            if (sideToMove_ == Color::WHITE) { state().hash ^= Hash::sideToMove(); }
 
             if (castling != "-" && !castling.empty()) {
                 for (char c : castling) {
@@ -201,7 +201,7 @@ namespace Sift {
                         return false;
                     }
                 }
-                state().hash ^= Zobrist::castling(state().castlingRights.hash());
+                state().hash ^= Hash::castling(state().castlingRights.hash());
             } else if (castling != "-") {
                 return false;
             }
@@ -213,13 +213,13 @@ namespace Sift {
                 if (fileChar < 'a' || fileChar > 'h' || rankChar < '1' || rankChar > '8') { return false; }
 
                 state().enPassantSquare = Square(enPassant);
-                state().hash ^= Zobrist::enPassant(state().enPassantSquare.file());
+                state().hash ^= Hash::enPassant(state().enPassantSquare.file());
             }
 
             state().halfmoveClock = static_cast<UInt16>(std::stoi(std::string(halfmoves)));
             ply_ = static_cast<UInt16>((std::stoi(std::string(fullmoves)) - 1) * 2 + (sideToMove_ == Color::BLACK ? 1 : 0));
 
-            assert(state().hash == zobristHash());
+            assert(state().hash == calcHash());
 
             updateRepetitions();
             updateChecks();
@@ -395,7 +395,7 @@ namespace Sift {
             ply_++;
 
             if (state().enPassantSquare != Square::NONE) {
-                state().hash ^= Zobrist::enPassant(state().enPassantSquare.file());
+                state().hash ^= Hash::enPassant(state().enPassantSquare.file());
                 state().enPassantSquare = Square::NONE;
             }
 
@@ -408,22 +408,22 @@ namespace Sift {
                         const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                         if (state().castlingRights.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
                             state().castlingRights.clear(castlingSide);
-                            state().hash ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                            state().hash ^= Hash::castlingIndex(CastlingRights::hashIndex(castlingSide));
                         }
                     }
                 }
             }
 
             if (pieceType == PieceType::KING && state().castlingRights.get(sideToMove_)) {
-                state().hash ^= Zobrist::castling(state().castlingRights.hash());
+                state().hash ^= Hash::castling(state().castlingRights.hash());
                 state().castlingRights.clear(sideToMove_);
-                state().hash ^= Zobrist::castling(state().castlingRights.hash());
+                state().hash ^= Hash::castling(state().castlingRights.hash());
             } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
                 const Square kingSq = kingSquare(sideToMove_);
                 const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
                 if (state().castlingRights.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
                     state().castlingRights.clear(castlingSide);
-                    state().hash ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                    state().hash ^= Hash::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
             } else if (pieceType == PieceType::PAWN) {
                 state().halfmoveClock = 0;
@@ -433,7 +433,7 @@ namespace Sift {
                     if (enPassantMask & pieces(PieceType::PAWN, ~sideToMove_)) {
                         assert(pieceAt(move.to().enPassant()) == Piece::NONE);
                         state().enPassantSquare = move.to().enPassant();
-                        state().hash ^= Zobrist::enPassant(state().enPassantSquare.file());
+                        state().hash ^= Hash::enPassant(state().enPassantSquare.file());
                     }
                 }
             }
@@ -474,7 +474,7 @@ namespace Sift {
             observer.pawnChanges(whitePawnsBefore, blackPawnsBefore, whitePawnsAfter, blackPawnsAfter);
 
             sideToMove_ = ~sideToMove_;
-            state().hash ^= Zobrist::sideToMove();
+            state().hash ^= Hash::sideToMove();
 
             updateRepetitions();
             updateChecks();
@@ -499,11 +499,11 @@ namespace Sift {
 
             ply_++;
 
-            if (state().enPassantSquare != Square::NONE) { state().hash ^= Zobrist::enPassant(state().enPassantSquare.file()); }
+            if (state().enPassantSquare != Square::NONE) { state().hash ^= Hash::enPassant(state().enPassantSquare.file()); }
             state().enPassantSquare = Square::NONE;
 
             sideToMove_ = ~sideToMove_;
-            state().hash ^= Zobrist::sideToMove();
+            state().hash ^= Hash::sideToMove();
 
             updateChecks();
             updatePins();
@@ -578,20 +578,20 @@ namespace Sift {
             }
         }
 
-        constexpr UInt64 zobristHash() const noexcept {
+        constexpr UInt64 calcHash() const noexcept {
             UInt64 key = 0ULL;
 
             Bitboard pieces = occupied();
             while (pieces) {
                 const Square square = pieces.pop();
-                key ^= Zobrist::piece(pieceAt(square), square);
+                key ^= Hash::piece(pieceAt(square), square);
             }
 
-            if (state().enPassantSquare != Square::NONE) { key ^= Zobrist::enPassant(state().enPassantSquare.file()); }
+            if (state().enPassantSquare != Square::NONE) { key ^= Hash::enPassant(state().enPassantSquare.file()); }
 
-            key ^= Zobrist::castling(state().castlingRights.hash());
+            key ^= Hash::castling(state().castlingRights.hash());
 
-            if (sideToMove_ == Color::WHITE) { key ^= Zobrist::sideToMove(); }
+            if (sideToMove_ == Color::WHITE) { key ^= Hash::sideToMove(); }
 
             return key;
         }
@@ -599,9 +599,9 @@ namespace Sift {
         UInt64 hashAfter(Move move) const noexcept {
             UInt64 key = state().hash;
 
-            key ^= Zobrist::sideToMove();
+            key ^= Hash::sideToMove();
 
-            if (state().enPassantSquare != Square::NONE) { key ^= Zobrist::enPassant(state().enPassantSquare.file()); }
+            if (state().enPassantSquare != Square::NONE) { key ^= Hash::enPassant(state().enPassantSquare.file()); }
 
             if (move == Move::NULL_MOVE) { return key; }
 
@@ -610,13 +610,13 @@ namespace Sift {
             const PieceType pieceType = pieceAt(move.from()).type();
 
             if (captureMove) {
-                key ^= Zobrist::piece(capturedPiece, move.to());
+                key ^= Hash::piece(capturedPiece, move.to());
 
                 if (capturedPiece.type() == PieceType::ROOK && move.to().rank().backRank(~sideToMove_)) {
                     const Square kingSq = kingSquare(~sideToMove_);
                     const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.to(), kingSq, ~sideToMove_);
                     if (state().castlingRights.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.to()) {
-                        key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                        key ^= Hash::castlingIndex(CastlingRights::hashIndex(castlingSide));
                     }
                 }
             }
@@ -625,19 +625,19 @@ namespace Sift {
                 const CastlingRights oldRights = state().castlingRights;
                 CastlingRights newRights = oldRights;
                 newRights.clear(sideToMove_);
-                key ^= Zobrist::castling(oldRights.hash());
-                key ^= Zobrist::castling(newRights.hash());
+                key ^= Hash::castling(oldRights.hash());
+                key ^= Hash::castling(newRights.hash());
             } else if (pieceType == PieceType::ROOK && move.from().rank().backRank(sideToMove_)) {
                 const Square kingSq = kingSquare(sideToMove_);
                 const CastlingRights::Side castlingSide = CastlingRights::closestSide(move.from(), kingSq, sideToMove_);
                 if (state().castlingRights.get(castlingSide) && CastlingRights::rookFrom(castlingSide) == move.from()) {
-                    key ^= Zobrist::castlingIndex(CastlingRights::hashIndex(castlingSide));
+                    key ^= Hash::castlingIndex(CastlingRights::hashIndex(castlingSide));
                 }
             } else if (pieceType == PieceType::PAWN && Square::indexDistance(move.from(), move.to()) == 16) {
                 Bitboard enPassantMask = Attacks::pawn(move.to().enPassant(), sideToMove_);
                 if (enPassantMask & pieces(PieceType::PAWN, ~sideToMove_)) {
                     assert(pieceAt(move.to().enPassant()) == Piece::NONE);
-                    key ^= Zobrist::enPassant(move.to().enPassant().file());
+                    key ^= Hash::enPassant(move.to().enPassant().file());
                 }
             }
 
@@ -652,27 +652,27 @@ namespace Sift {
                 const Piece rook = pieceAt(move.to());
                 assert(king == Piece(PieceType::KING, sideToMove_) && rook == Piece(PieceType::ROOK, sideToMove_));
 
-                key ^= Zobrist::piece(king, move.from());
-                key ^= Zobrist::piece(king, kingTo);
-                key ^= Zobrist::piece(rook, move.to());
-                key ^= Zobrist::piece(rook, rookTo);
+                key ^= Hash::piece(king, move.from());
+                key ^= Hash::piece(king, kingTo);
+                key ^= Hash::piece(rook, move.to());
+                key ^= Hash::piece(rook, rookTo);
             } else if (move.type() == MoveType::PROMOTION) {
                 const Piece pawn = Piece(PieceType::PAWN, sideToMove_);
                 const Piece promotionPiece = Piece(move.promotion(), sideToMove_);
                 assert(promotionPiece != Piece::NONE);
-                key ^= Zobrist::piece(pawn, move.from());
-                key ^= Zobrist::piece(promotionPiece, move.to());
+                key ^= Hash::piece(pawn, move.from());
+                key ^= Hash::piece(promotionPiece, move.to());
             } else {
                 assert(pieceAt(move.from()) != Piece::NONE);
                 const Piece movedPiece = pieceAt(move.from());
-                key ^= Zobrist::piece(movedPiece, move.from());
-                key ^= Zobrist::piece(movedPiece, move.to());
+                key ^= Hash::piece(movedPiece, move.from());
+                key ^= Hash::piece(movedPiece, move.to());
             }
 
             if (move.type() == MoveType::EN_PASSANT) {
                 assert(pieceAt(move.to().enPassant()) == PieceType::PAWN);
                 Piece pawn = Piece(PieceType::PAWN, ~sideToMove_);
-                key ^= Zobrist::piece(pawn, move.to().enPassant());
+                key ^= Hash::piece(pawn, move.to().enPassant());
             }
 
             return key;
@@ -1023,12 +1023,12 @@ namespace Sift {
             if (states_.size() <= 3) { return false; }
 
             UInt64 currHash = state().hash;
-            UInt64 diff = currHash ^ states_[states_.size() - 2].hash ^ Zobrist::sideToMove();
+            UInt64 diff = currHash ^ states_[states_.size() - 2].hash ^ Hash::sideToMove();
 
             USize reversible = std::min(state().halfmoveClock, state().nullPly);
             for (USize i = 3; i <= reversible; i += 2) {
                 const State& pastState = states_[states_.size() - i - 1];
-                diff ^= states_[states_.size() - i].hash ^ pastState.hash ^ Zobrist::sideToMove();
+                diff ^= states_[states_.size() - i].hash ^ pastState.hash ^ Hash::sideToMove();
                 if (diff != 0) { continue; }
 
                 UInt64 moveHash = currHash ^ pastState.hash;
@@ -1249,15 +1249,15 @@ namespace Sift {
             const UInt8 index = square.index();
 
             if constexpr (UPDATE_HASH) {
-                state().hash ^= Zobrist::piece(piece, square);
+                state().hash ^= Hash::piece(piece, square);
                 if (pieceType == PieceType::PAWN) {
-                    state().pawnHash ^= Zobrist::piece(piece, square);
+                    state().pawnHash ^= Hash::piece(piece, square);
                 } else {
-                    state().nonPawnHashes[color.index()] ^= Zobrist::piece(piece, square);
+                    state().nonPawnHashes[color.index()] ^= Hash::piece(piece, square);
                     if (pieceType == PieceType::KNIGHT || pieceType == PieceType::BISHOP || pieceType == PieceType::KING) {
-                        state().minorPieceHash ^= Zobrist::piece(piece, square);
+                        state().minorPieceHash ^= Hash::piece(piece, square);
                     } else if (pieceType == PieceType::ROOK || pieceType == PieceType::QUEEN || pieceType == PieceType::KING) {
-                        state().majorPieceHash ^= Zobrist::piece(piece, square);
+                        state().majorPieceHash ^= Hash::piece(piece, square);
                     }
                 }
             }
@@ -1279,15 +1279,15 @@ namespace Sift {
             const UInt8 index = square.index();
 
             if constexpr (UPDATE_HASH) {
-                state().hash ^= Zobrist::piece(piece, square);
+                state().hash ^= Hash::piece(piece, square);
                 if (pieceType == PieceType::PAWN) {
-                    state().pawnHash ^= Zobrist::piece(piece, square);
+                    state().pawnHash ^= Hash::piece(piece, square);
                 } else {
-                    state().nonPawnHashes[color.index()] ^= Zobrist::piece(piece, square);
+                    state().nonPawnHashes[color.index()] ^= Hash::piece(piece, square);
                     if (pieceType == PieceType::KNIGHT || pieceType == PieceType::BISHOP || pieceType == PieceType::KING) {
-                        state().minorPieceHash ^= Zobrist::piece(piece, square);
+                        state().minorPieceHash ^= Hash::piece(piece, square);
                     } else if (pieceType == PieceType::ROOK || pieceType == PieceType::QUEEN || pieceType == PieceType::KING) {
-                        state().majorPieceHash ^= Zobrist::piece(piece, square);
+                        state().majorPieceHash ^= Hash::piece(piece, square);
                     }
                 }
             }

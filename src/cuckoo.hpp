@@ -6,10 +6,10 @@
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
+#include "hash.hpp"
 #include "move.hpp"
 #include "piece.hpp"
 #include "types.hpp"
-#include "zobrist.hpp"
 
 namespace Sift {
     class CuckooTable {
@@ -41,8 +41,8 @@ namespace Sift {
                             if (!(attacks & Bitboard(to))) { continue; }
 
                             Move move = Move(from, to, MoveType::NORMAL);
-                            UInt64 hash = Zobrist::piece(Piece(pieceType, color), from) ^ Zobrist::piece(Piece(pieceType, color), to) ^
-                                          Zobrist::sideToMove();
+                            UInt64 hash =
+                                Hash::piece(Piece(pieceType, color), from) ^ Hash::piece(Piece(pieceType, color), to) ^ Hash::sideToMove();
 
                             UInt64 index = hash1(hash);
                             while (true) {
