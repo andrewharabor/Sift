@@ -60,7 +60,7 @@ Sift is compliant with the [UCI protocol]((https://gist.github.com/DOBRO/2592c6d
 
 - `bench <x>`: run searches of depth `x` (with the current options) on a fixed set of internal positions
 - `perft <x>`: run a bulk-perft search of depth `x` on the current position
-- `perfttests`: run bulk-pert searches on a fixed set of internal positions
+- `perfttests`: run bulk-perft searches on a fixed set of internal positions
 - `board`, `d`: display the current position
 - `moves`: display the legal moves for the current position
 - `fen`: display the fen-string for the current position
