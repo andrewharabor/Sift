@@ -114,14 +114,14 @@ namespace Sift {
                 board();
             } else if (cmd == Command::MOVES) {
                 moves();
-            } else if (cmd == Command::EVAL) {
-                eval();
-            } else if (cmd == Command::RAW_EVAL) {
-                rawEval();
             } else if (cmd == Command::FEN) {
                 fen();
             } else if (cmd == Command::HASH) {
                 hash();
+            } else if (cmd == Command::EVAL) {
+                eval();
+            } else if (cmd == Command::RAW_EVAL) {
+                rawEval();
             } else if (cmd == Command::HELP) {
                 help();
             }
@@ -146,10 +146,10 @@ namespace Sift {
             PERFT_TESTS,
             BOARD,
             MOVES,
-            EVAL,
-            RAW_EVAL,
             FEN,
             HASH,
+            EVAL,
+            RAW_EVAL,
             HELP,
             NONE
         };
@@ -189,14 +189,14 @@ namespace Sift {
                 return Command::BOARD;
             } else if (token == "moves") {
                 return Command::MOVES;
-            } else if (token == "eval") {
-                return Command::EVAL;
-            } else if (token == "raweval") {
-                return Command::RAW_EVAL;
             } else if (token == "fen") {
                 return Command::FEN;
             } else if (token == "hash") {
                 return Command::HASH;
+            } else if (token == "eval") {
+                return Command::EVAL;
+            } else if (token == "raweval") {
+                return Command::RAW_EVAL;
             } else if (token == "help" || token == "about") {
                 return Command::HELP;
             }
@@ -549,6 +549,17 @@ namespace Sift {
             std::cout << std::endl;
         }
 
+        void fen() const {
+            std::unique_lock<std::mutex> lock = lockStdout();
+            std::cout << position_.fen() << std::endl;
+        }
+
+        void hash() const {
+            std::unique_lock<std::mutex> lock = lockStdout();
+            std::cout << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase
+                      << std::endl;
+        }
+
         void eval() const {
             std::unique_lock<std::mutex> lock = lockStdout();
 
@@ -571,17 +582,6 @@ namespace Sift {
             nnue.load(NetLoader::get(0));
             nnue.set(position_);
             std::cout << nnue.forward(position_) << std::endl;
-        }
-
-        void fen() const {
-            std::unique_lock<std::mutex> lock = lockStdout();
-            std::cout << position_.fen() << std::endl;
-        }
-
-        void hash() const {
-            std::unique_lock<std::mutex> lock = lockStdout();
-            std::cout << std::showbase << std::uppercase << std::hex << position_.hash() << std::dec << std::nouppercase << std::noshowbase
-                      << std::endl;
         }
 
         void help() const {
