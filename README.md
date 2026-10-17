@@ -3,7 +3,8 @@
 
 Sift is a superhuman chess engine written in C++.
 
-It implements bitboard-based legal move generation, alpha-beta search with numerous optimization techniques, and an Effeciently Updatable Neural Network (NNUE) for evaluation.
+It implements bitboard-based legal move generation, alpha-beta search with numerous optimization techniques, and an
+Efficiently Updatable Neural Network (NNUE) for evaluation.
 
 _This project does not contain any code written by generative-AI models._
 
