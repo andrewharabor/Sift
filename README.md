@@ -30,11 +30,11 @@ To build for a specific architecture, pass `ARCH=` followed by one of the option
 - `armv8_4`: requires NEON with dotprod
 - `apple_m1`: requires NEON with dotprod for Apple silicon devices
 
-For Linux machines, optimizations for non-uniform memory access (NUMA) are supported with libnuma, which can be enabled by passing `NUMA=on`
+For Linux machines, optimizations for non-uniform memory access (NUMA) are supported with libnuma, which can be enabled by passing `NUMA=on`.
 
 ## Usage
 
-Sift is compliant with the [UCI protocol]((https://gist.github.com/DOBRO/2592c6dad754ba67e6dcaec8c90165bf)), meaning it is a command-line program and does not include its own GUI. It can be used through any separate chess GUI, such as  [En Croissant](https://encroissant.org/), [Cute Chess](https://cutechess.com/), [Nibbler](https://github.com/rooklift/nibbler), and [BanksiaGUI](https://banksiagui.com/).
+Sift is compliant with the [UCI protocol](https://gist.github.com/DOBRO/2592c6dad754ba67e6dcaec8c90165bf), meaning it is a command-line program and does not include its own GUI. It can be used through any third-party chess GUI, such as  [En Croissant](https://encroissant.org/), [Cute Chess](https://cutechess.com/), [Nibbler](https://github.com/rooklift/nibbler), and [BanksiaGUI](https://banksiagui.com/).
 
 ### Standard UCI Commands
 
