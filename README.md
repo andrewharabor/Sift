@@ -115,7 +115,7 @@ Finally, this project would not be possible without the many sources of inspirat
 - [Marvin](https://github.com/bmdanielsson/marvin-chess)
 - [Sebastian Lague's Chess Coding Adventures series](https://www.youtube.com/watch?v=U4ogK0MIzqk&list=PLFt_AvWsXl0cvHyu32ajwh2qU1i6hl77c)
 - [chess-library](https://github.com/Disservin/chess-library)
-- [87flowers](https://87flowers.com/)
+- [87flowers.com](https://87flowers.com/)
 - [asteri.sm](https://asteri.sm/)
 - [Chess Programming Wiki](https://chessprogramming.org/)
 - Stockfish Discord server
