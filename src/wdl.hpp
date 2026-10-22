@@ -31,8 +31,8 @@ namespace Sift {
         }
 
     private:
-        static constexpr std::array<Float64, 4> A = {-244.97139595, 687.39969858, -654.38002091, 608.47087786};
-        static constexpr std::array<Float64, 4> B = {68.24072080, -111.17718819, 74.50316570, 71.16566713};
+        static constexpr std::array<Float64, 4> A = {-336.57386839, 956.83302911, -938.83149101, 667.50701684};
+        static constexpr std::array<Float64, 4> B = {17.67604110, 13.11122988, -34.49582353, 103.31598546};
 
         static constexpr Int32 MATERIAL_MIN = 17;
         static constexpr Int32 MATERIAL_MAX = 78;
