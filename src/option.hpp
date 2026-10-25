@@ -122,13 +122,13 @@ namespace Sift {
 
     class OptionList {
     public:
-        static constexpr Int64 DEFAULT_THREADS = 1;
-        static constexpr Int64 MIN_THREADS = 1;
-        static constexpr Int64 MAX_THREADS = 2048;
-
-        static constexpr Int64 DEFAULT_HASH_MB = 64;
+        static constexpr Int64 DEFAULT_HASH_MB = 16;
         static constexpr Int64 MIN_HASH_MB = 1;
         static constexpr Int64 MAX_HASH_MB = 33554432;
+
+        static constexpr Int64 DEFAULT_THREADS = 1;
+        static constexpr Int64 MIN_THREADS = 1;
+        static constexpr Int64 MAX_THREADS = 1024;
 
         static constexpr Int64 DEFAULT_MULTI_PV = 1;
         static constexpr Int64 MIN_MULTI_PV = 1;
@@ -141,8 +141,6 @@ namespace Sift {
         static constexpr Int64 DEFAULT_MOVE_OVERHEAD_MS = 10;
         static constexpr Int64 MIN_MOVE_OVERHEAD_MS = 0;
         static constexpr Int64 MAX_MOVE_OVERHEAD_MS = 5000;
-
-        static constexpr bool DEFAULT_SOFT_NODES = false;
 
         static constexpr bool DEFAULT_SHOW_WDL = true;
 
