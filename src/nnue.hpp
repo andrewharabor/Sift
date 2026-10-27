@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "accumulator.hpp"
-#include "activation.hpp"
 #include "arch.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
