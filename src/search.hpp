@@ -805,7 +805,8 @@ namespace Sift {
                 if constexpr (ROOT_NODE) {
                     if (thread.rootMoveIdx(move) >= thread.rootMoves.size()) { continue; }
 
-                    if (printInfo_ && thread.main() && timeManager_.elapsed() > CURR_MOVE_DELAY_INTERVAL) {
+                    if (printInfo_ && thread.main() && OPTIONS["ShowCurrMove"].checkValue() &&
+                        timeManager_.elapsed() > CURR_MOVE_DELAY_INTERVAL) {
                         uciCurrMove_(move, movesTried + 1, thread.depth);
                     }
                 }

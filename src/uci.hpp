@@ -53,6 +53,7 @@ namespace Sift {
                     OptionList::MAX_MOVE_OVERHEAD_MS),
                 [](const Option&) {}));
             OPTIONS.add(Option("ShowWDL", CheckOption(OptionList::DEFAULT_SHOW_WDL), [](const Option&) {}));
+            OPTIONS.add(Option("ShowCurrMove", CheckOption(OptionList::DEFAULT_SHOW_CURR_MOVE), [](const Option&) {}));
 
 #if defined(EXTERNAL_TUNE)
             for (Tunable* tunable : TUNABLES) {

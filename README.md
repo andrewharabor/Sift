@@ -8,7 +8,7 @@ Efficiently Updatable Neural Network (NNUE) for evaluation.
 
 _This project does not contain any code written by generative-AI models._
 
-## Strength
+## Playing Strength
 
 TODO
 
@@ -72,15 +72,16 @@ Sift is compliant with the [UCI protocol](https://gist.github.com/DOBRO/2592c6da
 
 ### UCI Options
 
-| **Name**       | **Type** | **Default** | **Range**       | **Description**                                                                   |
-|----------------|----------|-------------|-----------------|-----------------------------------------------------------------------------------|
-| `Hash`         | Spin     | 16          | [1, 33554432]   | Memory allocated to the internal transposition table (in MiB).                    |
-| `ClearHash`    | Button   | N/A         | N/A             | Resets all internal state; equivalent to the `ucinewgame` command.                |
-| `Threads`      | Spin     | 1           | [1, 1024]       | Number of threads used to search.                                                 |
-| `MultiPV`      | Spin     | 1           | [1, 256]        | Number of lines to search at once.                                                |
-| `Contempt`     | Spin     | 0           | [-1000, 1000]   | Static offset applied to all evaluations; roughly equates to the value of a draw. |
-| `MoveOverhead` | Spin     | 10          | [0, 5000]       | Amount of time assumed to be lost to overhead per move (in ms).                   |
-| `ShowWDL`      | Check    | `true`      | `false`, `true` | Display predicted win/draw/loss probabilities in search output.                   |
+| **Name**       | **Type** | **Default** | **Range**         | **Description**                                                                   |
+|----------------|----------|-------------|-------------------|-----------------------------------------------------------------------------------|
+| `Hash`         | Spin     | 16          | [1, 33554432]     | Memory allocated to the internal transposition table (in MiB).                    |
+| `ClearHash`    | Button   | N/A         | N/A               | Resets all internal state; equivalent to the `ucinewgame` command.                |
+| `Threads`      | Spin     | 1           | [1, 2048]         | Number of threads used to search.                                                 |
+| `MultiPV`      | Spin     | 1           | [1, 256]          | Number of lines to search at once.                                                |
+| `Contempt`     | Spin     | 0           | [-10000, 10000]   | Static offset applied to all evaluations; roughly equates to the value of a draw. |
+| `MoveOverhead` | Spin     | 10          | [0, 10000]        | Amount of time assumed to be lost to overhead per move (in ms).                   |
+| `ShowWDL`      | Check    | `true`      | `false`, `true`   | Display predicted win/draw/loss probabilities in search output.                   |
+| `ShowCurrMove` | Check    | `false`     | `false`, `true`   | Display the current root move being considered in search output.                  |
 
 ## Credit
 
