@@ -23,7 +23,7 @@ LD_FLAGS :=
 CXX ?= clang++
 CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
 ifeq ($(findstring clang,$(CXX_VERSION)),)
-    $(info > WARNING: unsupported compiler, use clang++ instead!)
+    $(info ==> WARNING: unsupported compiler, use clang++ instead!)
 endif
 
 ifeq ($(OS),Windows_NT)
@@ -32,7 +32,7 @@ else
     DETECTED_OS := $(shell uname)
 endif
 
-$(info > Detected OS: $(DETECTED_OS))
+$(info ==> Detected OS: $(DETECTED_OS))
 
 ifeq ($(DETECTED_OS),windows)
     VERSION := $(shell type version.txt)
@@ -42,10 +42,10 @@ endif
 
 CPP_FLAGS += -DVERSION=$(VERSION)
 
-$(info > Build version: $(VERSION))
-$(info > Build architecture: $(ARCH))
-$(info > Build mode: $(MODE))
-$(info > NUMA support: $(NUMA))
+$(info ==> Build version: $(VERSION))
+$(info ==> Build architecture: $(ARCH))
+$(info ==> Build mode: $(MODE))
+$(info ==> NUMA support: $(NUMA))
 
 ifeq ($(DETECTED_OS),windows)
     NETWORK_NAME := $(shell type network.txt)
@@ -56,7 +56,7 @@ endif
 NETWORK_FILE := $(NETWORK_NAME).nnue
 PERMED_NETWORK_FILE := $(NETWORK_NAME)-$(ARCH).nnue
 
-$(info > Network: $(NETWORK_NAME))
+$(info ==> Network: $(NETWORK_NAME))
 
 CPP_FLAGS += -DNETWORK_FILE=$(PERMED_NETWORK_FILE)
 
@@ -82,52 +82,52 @@ endif
 
 PROPERTIES = $(shell echo | $(CXX) -march=native -E -dM -)
 ifeq ($(ARCH),native)
-    $(info > Detected architecture properties:)
+    $(info ==> Detected architecture properties:)
     CXX_FLAGS += -march=native
     ifneq ($(findstring __AVX512F__, $(PROPERTIES)),)
         ifneq ($(findstring __AVX512BW__, $(PROPERTIES)),)
-            $(info > AVX-512)
+            $(info ==>     AVX-512)
             CPP_FLAGS += -DUSE_AVX512
         else ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
-        $(info > AVX-512)
+        $(info ==>     AVX-512)
         CPP_FLAGS += -DUSE_AVX512
         endif
     endif
     ifneq ($(findstring __AVX512VNNI__, $(PROPERTIES)),)
-        $(info > AVX-512 VNNI)
+        $(info ==>     AVX-512 VNNI)
         CPP_FLAGS += -DUSE_VNNI512
     endif
     ifneq ($(findstring __AVX512VBMI2__, $(PROPERTIES)),)
-        $(info > AVX-512 VBMI2)
+        $(info ==>     AVX-512 VBMI2)
         CPP_FLAGS += -DUSE_VBMI2
     endif
     ifneq ($(findstring __AVX512VBMI__, $(PROPERTIES)),)
-        $(info > AVX-512 VBMI)
+        $(info ==>     AVX-512 VBMI)
         CPP_FLAGS += -DUSE_VBMI
     endif
     ifneq ($(findstring __AVX2__, $(PROPERTIES)),)
-        $(info > AVX2)
+        $(info ==>     AVX2)
         CPP_FLAGS += -DUSE_AVX2
     endif
     ifneq ($(findstring __BMI2__, $(PROPERTIES)),)
         ifeq ($(findstring __znver1, $(PROPERTIES)),)
             ifeq ($(findstring __znver2, $(PROPERTIES)),)
-                $(info > BMI2)
-                $(info > PEXT)
+                $(info ==>     BMI2)
+                $(info ==>     PEXT)
                 CPP_FLAGS += -DUSE_BMI2 -DUSE_PEXT
             endif
         endif
     endif
     ifneq ($(findstring __POPCNT__, $(PROPERTIES)),)
-        $(info > POPCNT)
+        $(info ==>     POPCNT)
         CPP_FLAGS += -DUSE_POPCNT
     endif
     ifneq ($(findstring __ARM_NEON, $(PROPERTIES)),)
-        $(info > ARM NEON)
+        $(info ==>     ARM NEON)
         CPP_FLAGS += -DUSE_NEON
     endif
     ifneq ($(findstring __ARM_FEATURE_DOTPROD, $(PROPERTIES)),)
-        $(info > ARM NEON DOTPROD)
+        $(info ==>     ARM NEON DOTPROD)
         CPP_FLAGS += -DUSE_NEON_DOTPROD
     endif
 else ifeq ($(ARCH),avx512)
