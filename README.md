@@ -14,7 +14,7 @@ TODO
 
 ## Building From Source
 
-Requirements: `make`, `clang++`, `lld`.
+Requirements: `make`, `clang++`, `lld`, `curl`.
 
 To build a binary tuned for your specific CPU, run:
 
