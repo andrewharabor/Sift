@@ -101,20 +101,34 @@ jobs:
     #     run: |
     #       printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-      - name: Diagnose Windows UCI exit
+      - name: Diagnose Windows UCI shutdown
         if: runner.os == 'Windows'
         timeout-minutes: 5
-        shell: msys2 {0}
+        shell: pwsh
         run: |
-          set +e
+          $exe = Join-Path $PWD "${{ matrix.executable }}"
+          $inputFile = Join-Path $PWD "uci-input.txt"
 
-          printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
-          statuses=("${PIPESTATUS[@]}")
+          "uci`nisready`nquit" |
+            Set-Content -Path $inputFile -Encoding ascii
 
-          echo "printf exit code: ${statuses[0]}"
-          echo "Sift exit code: ${statuses[1]}"
+          $process = Start-Process `
+            -FilePath $exe `
+            -RedirectStandardInput $inputFile `
+            -NoNewWindow `
+            -Wait `
+            -PassThru
 
-          exit "${statuses[1]}"
+          $code = [int]$process.ExitCode
+          $unsigned = [BitConverter]::ToUInt32(
+            [BitConverter]::GetBytes($code), 0
+          )
+
+          Write-Host ("Sift exit code: {0} (0x{1:X8})" -f $code, $unsigned)
+
+          if ($code -ne 0) {
+            exit 1
+          }
 
       - name: Bench on Linux and macOS
         if: runner.os != 'Windows'
