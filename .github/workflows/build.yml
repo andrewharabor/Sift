@@ -36,6 +36,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Linux toolchain
         if: runner.os == 'Linux'
@@ -105,10 +107,22 @@ jobs:
         if: runner.os != 'Windows'
         timeout-minutes: 5
         shell: bash
-        run: ./"${{ matrix.executable }}" bench
+        run: |
+          set -euo pipefail
+          expected=$(git log -1 --format=%B | awk '$1 == "bench:" {print $2}')
+          ./"${{ matrix.executable }}" bench > output
+          actual=$(tail -n 1 output | awk '{print $2}' | tr -d '\r')
+          echo "Bench: got $actual, expected $expected"
+          [[ -n "$expected" && "$actual" == "$expected" ]]
 
       - name: Bench on Windows
         if: runner.os == 'Windows'
         timeout-minutes: 5
         shell: msys2 {0}
-        run: ./"${{ matrix.executable }}" bench
+        run: |
+          set -euo pipefail
+          expected=$(git log -1 --format=%B | awk '$1 == "bench:" {print $2}')
+          ./"${{ matrix.executable }}" bench > output
+          actual=$(tail -n 1 output | awk '{print $2}' | tr -d '\r')
+          echo "Bench: got $actual, expected $expected"
+          [[ -n "$expected" && "$actual" == "$expected" ]]
