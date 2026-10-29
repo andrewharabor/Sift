@@ -85,7 +85,7 @@ jobs:
             SHELL=cmd.exe \
             '.SHELLFLAGS=/c' \
             ARCH=native \
-            MODE=release \
+            MODE=debug \
             NUMA=off \
             EXE="${{ matrix.executable }}"
 

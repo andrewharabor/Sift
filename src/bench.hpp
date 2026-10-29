@@ -9,6 +9,9 @@ namespace Sift {
     namespace Bench {
 #if defined(MEASURE_SPARSITY)
         static constexpr Int32 DEFAULT_DEPTH = 17;
+
+#elif !defined(NDEBUG)
+        static constexpr Int32 DEFAULT_DEPTH = 5;
 #else
         static constexpr Int32 DEFAULT_DEPTH = 13;
 #endif

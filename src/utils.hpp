@@ -12,7 +12,7 @@
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 
-#ifdef NDEBUG
+#if defined(NDEBUG)
     #define FORCE_INLINE __attribute__((always_inline))
 #else
     #define FORCE_INLINE inline
