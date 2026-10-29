@@ -21,7 +21,7 @@ CXX_FLAGS := -std=c++20 -pedantic -Wall -Wextra -Wshadow -Wconversion -fdiagnost
 LD_FLAGS :=
 
 CXX ?= clang++
-CXX_VERSION := $(shell $(CXX) --version 2>/dev/null)
+CXX_VERSION := $(shell $(CXX) --version)
 ifeq ($(findstring clang,$(CXX_VERSION)),)
     $(info ==> WARNING: unsupported compiler, use clang++ instead!)
 endif
