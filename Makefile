@@ -27,14 +27,14 @@ ifeq ($(findstring clang,$(CXX_VERSION)),)
 endif
 
 ifeq ($(OS),Windows_NT)
-    DETECTED_OS := windows
+    DETECTED_OS := Windows
 else
     DETECTED_OS := $(shell uname)
 endif
 
 $(info ==> Detected OS: $(DETECTED_OS))
 
-ifeq ($(DETECTED_OS),windows)
+ifeq ($(DETECTED_OS),Windows)
     VERSION := $(shell type version.txt)
 else
     VERSION := $(shell cat version.txt)
@@ -47,7 +47,7 @@ $(info ==> Build architecture: $(ARCH))
 $(info ==> Build mode: $(MODE))
 $(info ==> NUMA support: $(NUMA))
 
-ifeq ($(DETECTED_OS),windows)
+ifeq ($(DETECTED_OS),Windows)
     NETWORK_NAME := $(shell type network.txt)
 else
     NETWORK_NAME := $(shell cat network.txt)
@@ -60,7 +60,7 @@ $(info ==> Network: $(NETWORK_NAME))
 
 CPP_FLAGS += -DNETWORK_FILE=$(PERMED_NETWORK_FILE)
 
-ifeq ($(DETECTED_OS),windows)
+ifeq ($(DETECTED_OS),Windows)
     ENGINE_EXEC := Sift-$(VERSION)-$(ARCH).exe
     PERM_EXEC := permute-$(NETWORK_NAME)-$(ARCH).exe
     MKDIR = mkdir
@@ -147,7 +147,7 @@ else ifeq ($(ARCH),apple_m1)
     CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
 endif
 
-ifeq ($(DETECTED_OS),windows)
+ifeq ($(DETECTED_OS),Windows)
     CXX_FLAGS += -static
 else
     CXX_FLAGS += -pthread
@@ -160,21 +160,21 @@ endif
 
 ifeq ($(MODE),release)
     CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
-    ifneq ($(DETECTED_OS),windows)
+    ifneq ($(DETECTED_OS),Windows)
         CXX_FLAGS += -flto
         LD_FLAGS  += -flto
     endif
 else ifeq ($(MODE),tune)
     CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
     CPP_FLAGS += -DEXTERNAL_TUNE
-    ifneq ($(DETECTED_OS),windows)
+    ifneq ($(DETECTED_OS),Windows)
         CXX_FLAGS += -flto
         LD_FLAGS  += -flto
     endif
 else ifeq ($(MODE),sparsity)
     CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
     CPP_FLAGS += -DMEASURE_SPARSITY
-    ifneq ($(DETECTED_OS),windows)
+    ifneq ($(DETECTED_OS),Windows)
         CXX_FLAGS += -flto
         LD_FLAGS  += -flto
     endif
@@ -195,7 +195,11 @@ $(ENGINE_EXEC): $(PERMED_NETWORK_FILE) $(ENGINE_OBJS)
 	$(CXX) $(CXX_FLAGS) $(ENGINE_OBJS) -o $@ $(LD_FLAGS)
 
 $(PERMED_NETWORK_FILE): $(PERM_EXEC)
+ifeq ($(DETECTED_OS),Windows)
+	.\$(PERM_EXEC) $(NETWORK_FILE) $(PERMED_NETWORK_FILE)
+else
 	./$(PERM_EXEC) $(NETWORK_FILE) $(PERMED_NETWORK_FILE)
+endif
 
 $(PERM_EXEC): $(NETWORK_FILE) $(PERM_OBJS)
 	$(CXX) $(CXX_FLAGS) $(PERM_OBJS) -o $@ $(LD_FLAGS)
