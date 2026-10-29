@@ -35,7 +35,7 @@ namespace Sift {
         explicit TT(USize sizeMB) noexcept : table_(nullptr), size_(0), capacity_(0), age_(0) { resize(sizeMB, 1); }
 
         ~TT() noexcept {
-            if (table_) { std::free(table_); }
+            if (table_) { Utils::alignedFree(table_); }
         }
 
         void resize(USize sizeMB, USize numThreads) noexcept {

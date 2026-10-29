@@ -89,13 +89,13 @@ jobs:
             NUMA=off \
             EXE="${{ matrix.executable }}"
 
-      - name: UCI Startup on Linux and macOS
+      - name: UCI startup on Linux and macOS
         if: runner.os != 'Windows'
         shell: bash
         run: |
           printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-      - name: UCI Startup on Windows
+      - name: UCI startup on Windows
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
