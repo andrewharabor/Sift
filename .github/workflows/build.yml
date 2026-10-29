@@ -95,11 +95,26 @@ jobs:
         run: |
           printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-      - name: UCI Startup on Windows
+    #   - name: UCI Startup on Windows
+    #     if: runner.os == 'Windows'
+    #     shell: msys2 {0}
+    #     run: |
+    #       printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
+
+      - name: Diagnose Windows UCI exit
         if: runner.os == 'Windows'
+        timeout-minutes: 5
         shell: msys2 {0}
         run: |
+          set +e
+
           printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
+          statuses=("${PIPESTATUS[@]}")
+
+          echo "printf exit code: ${statuses[0]}"
+          echo "Sift exit code: ${statuses[1]}"
+
+          exit "${statuses[1]}"
 
       - name: Bench on Linux and macOS
         if: runner.os != 'Windows'
