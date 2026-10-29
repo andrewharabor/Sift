@@ -85,7 +85,7 @@ jobs:
             SHELL=cmd.exe \
             '.SHELLFLAGS=/c' \
             ARCH=native \
-            MODE=debug \
+            MODE=release \
             NUMA=off \
             EXE="${{ matrix.executable }}"
 
@@ -95,40 +95,11 @@ jobs:
         run: |
           printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-    #   - name: UCI Startup on Windows
-    #     if: runner.os == 'Windows'
-    #     shell: msys2 {0}
-    #     run: |
-    #       printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
-
-      - name: Diagnose Windows UCI shutdown
+      - name: UCI Startup on Windows
         if: runner.os == 'Windows'
-        timeout-minutes: 5
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $exe = Join-Path $PWD "${{ matrix.executable }}"
-          $inputFile = Join-Path $PWD "uci-input.txt"
-
-          "uci`nisready`nquit" |
-            Set-Content -Path $inputFile -Encoding ascii
-
-          $process = Start-Process `
-            -FilePath $exe `
-            -RedirectStandardInput $inputFile `
-            -NoNewWindow `
-            -Wait `
-            -PassThru
-
-          $code = [int]$process.ExitCode
-          $unsigned = [BitConverter]::ToUInt32(
-            [BitConverter]::GetBytes($code), 0
-          )
-
-          Write-Host ("Sift exit code: {0} (0x{1:X8})" -f $code, $unsigned)
-
-          if ($code -ne 0) {
-            exit 1
-          }
+          printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
       - name: Bench on Linux and macOS
         if: runner.os != 'Windows'
