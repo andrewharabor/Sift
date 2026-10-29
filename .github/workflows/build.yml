@@ -43,12 +43,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y make clang lld curl
+          sudo apt-get install -y make clang lld curl git
 
       - name: Install macOS toolchain
         if: runner.os == 'macOS'
         run: |
-          brew install llvm lld
+          brew install llvm lld git
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
 
@@ -63,6 +63,7 @@ jobs:
             mingw-w64-clang-x86_64-lld
             mingw-w64-clang-x86_64-make
             curl
+            git
 
       - name: Build Linux and macOS
         if: runner.os != 'Windows'
