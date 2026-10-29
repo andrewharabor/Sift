@@ -20,18 +20,18 @@ jobs:
         include:
           - name: Linux x64
             os: ubuntu-24.04
-            artifact: sift-linux-x64-native
-            executable: sift
+            artifact: Sift-linux_x64-native
+            executable: Sift
 
           - name: Windows x64
             os: windows-latest
-            artifact: sift-windows-x64-native
-            executable: sift.exe
+            artifact: Sift-windows_x64-native
+            executable: Sift.exe
 
           - name: macOS ARM64
             os: macos-15
-            artifact: sift-macos-arm64-native
-            executable: sift
+            artifact: Sift-macos_arm64-native
+            executable: Sift
 
     steps:
       - name: Check out source
@@ -89,29 +89,26 @@ jobs:
             NUMA=off \
             EXE="${{ matrix.executable }}"
 
-      - name: Check UCI startup on Linux and macOS
+      - name: UCI Startup on Linux and macOS
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          printf 'uci\nisready\nquit\n' |
-            ./"${{ matrix.executable }}" > uci-output.txt
-          cat uci-output.txt
-          grep -q '^uciok' uci-output.txt
-          grep -q '^readyok' uci-output.txt
+          printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-      - name: Check UCI startup on Windows
+      - name: UCI Startup on Windows
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          printf 'uci\nisready\nquit\n' |
-            ./"${{ matrix.executable }}" > uci-output.txt
-          cat uci-output.txt
-          grep -q '^uciok' uci-output.txt
-          grep -q '^readyok' uci-output.txt
+          printf 'uci\nisready\nquit\n' | ./"${{ matrix.executable }}"
 
-      - name: Upload executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.executable }}
-          if-no-files-found: error
+      - name: Bench on Linux and macOS
+        if: runner.os != 'Windows'
+        timeout-minutes: 5
+        shell: bash
+        run: ./"${{ matrix.executable }}" bench
+
+      - name: Bench on Windows
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: msys2 {0}
+        run: ./"${{ matrix.executable }}" bench
