@@ -154,7 +154,7 @@ else
     LD_FLAGS  += -pthread
 endif
 
-ifeq ($(DETECTED_OS),darwin)
+ifeq ($(DETECTED_OS),Darwin)
     LD_FLAGS += -fuse-ld=lld
 endif
 
