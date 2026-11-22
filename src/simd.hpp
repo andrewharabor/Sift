@@ -127,9 +127,9 @@ namespace Sift {
             return _mm512_fmullAddAdjInt16_ps(a, b, c);
         }
 
-        static FORCE_INLINE Float32 redAddFloat32(VecFloat32* v) { return _mm512_reduce_add_ps(v[0]); }
+        static FORCE_INLINE Float32 reduceAddFloat32(VecFloat32* v) { return _mm512_reduce_add_ps(v[0]); }
 
-        static FORCE_INLINE UInt32 nonzerosMask(VecInt32 chunk) { return _mm512_cmpgt_epi32_mask(chunk, _mm512_setzero_si512()); }
+        static FORCE_INLINE UInt32 nnzMask(VecInt32 chunk) { return _mm512_cmpgt_epi32_mask(chunk, _mm512_setzero_si512()); }
 
 #elif defined(USE_AVX2)
 
@@ -185,7 +185,7 @@ namespace Sift {
             return _mm256_fmullAddAdjInt16_ps(a, b, c);
         }
 
-        static FORCE_INLINE Float32 redAddFloat32(VecFloat32* v) {
+        static FORCE_INLINE Float32 reduceAddFloat32(VecFloat32* v) {
             v[0] = _mm256_add_ps(v[0], v[1]);
             __m128 high = _mm256_extractf128_ps(v[0], 1);
             __m128 low = _mm256_castps256_ps128(v[0]);
@@ -195,12 +195,33 @@ namespace Sift {
             return (reinterpret_cast<Float32*>(&sum64))[0] + (reinterpret_cast<Float32*>(&sum64))[1];
         }
 
-        static FORCE_INLINE UInt32 nonzerosMask(VecInt32 chunk) {
+        static FORCE_INLINE UInt32 nnzMask(VecInt32 chunk) {
             return _mm256_movemask_ps(_mm256_castsi256_ps(_mm256_cmpgt_epi32(chunk, _mm256_setzero_si256())));
         }
 
 #elif defined(USE_NEON)
 
+    private:
+        static FORCE_INLINE VecInt16 mulAddAdjUInt8Int8(VecUInt8 a, VecInt8 b) {
+            VecInt16 tl = vmulq_s16(vreinterpretq_s16_u16(vmovl_u8(vget_low_u8(a))), vmovl_s8(vget_low_s8(b)));
+            VecInt16 th = vmulq_s16(vreinterpretq_s16_u16(vmovl_u8(vget_high_u8(a))), vmovl_s8(vget_high_s8(b)));
+            return vqaddq_s16(vuzp1q_s16(tl, th), vuzp2q_s16(tl, th));
+        }
+
+        static FORCE_INLINE VecInt32 mullAddAdjInt16(VecInt16 a, VecInt16 b) {
+            VecInt32 low = vmull_s16(vget_low_s16(a), vget_low_s16(b));
+            VecInt32 high = vmull_high_s16(a, b);
+            return vpaddq_s32(low, high);
+        }
+
+        static FORCE_INLINE Float32 reduceAddFloat32Length(Float32* v, USize length) {
+            if (length == 2) { return v[0] + v[1]; }
+            length /= 2;
+            for (USize i = 0; i < length; i++) { v[i] += v[i + length]; }
+            return reduceAddFloat32Length(v, length);
+        }
+
+    public:
         static FORCE_INLINE VecInt16 addInt16(VecInt16 x, VecInt16 y) { return vaddq_s16(x, y); }
 
         static FORCE_INLINE VecInt16 subInt16(VecInt16 x, VecInt16 y) { return vsubq_s16(x, y); }
@@ -224,21 +245,9 @@ namespace Sift {
         }
 
         static FORCE_INLINE VecInt16 mulHiInt16(VecInt16 x, VecInt16 y) {
-            VecInt32 lo = vmull_s16(vget_low_s16(x), vget_low_s16(y));
-            VecInt32 hi = vmull_s16(vget_high_s16(x), vget_high_s16(y));
-            return vcombine_s16(vshrn_n_s32(lo, 16), vshrn_n_s32(hi, 16));
-        }
-
-        static FORCE_INLINE VecInt16 mulAddAdjUInt8Int8(VecUInt8 a, VecInt8 b) {
-            VecInt16 tl = vmulq_s16(vreinterpretq_s16_u16(vmovl_u8(vget_low_u8(a))), vmovl_s8(vget_low_s8(b)));
-            VecInt16 th = vmulq_s16(vreinterpretq_s16_u16(vmovl_u8(vget_high_u8(a))), vmovl_s8(vget_high_s8(b)));
-            return vqaddq_s16(vuzp1q_s16(tl, th), vuzp2q_s16(tl, th));
-        }
-
-        static FORCE_INLINE VecInt32 mullAddAdjInt16(VecInt16 a, VecInt16 b) {
-            VecInt32 low = vmull_s16(vget_low_s16(a), vget_low_s16(b));
-            VecInt32 high = vmull_high_s16(a, b);
-            return vpaddq_s32(low, high);
+            VecInt32 low = vmull_s16(vget_low_s16(x), vget_low_s16(y));
+            VecInt32 high = vmull_s16(vget_high_s16(x), vget_high_s16(y));
+            return vcombine_s16(vshrn_n_s32(low, 16), vshrn_n_s32(high, 16));
         }
 
         static FORCE_INLINE VecInt32 dotProdUInt8Int8(VecInt32 sum, VecUInt8 u, VecInt8 i) {
@@ -271,23 +280,16 @@ namespace Sift {
 
         static FORCE_INLINE VecFloat32 mulAddAdjFloat32(VecFloat32 a, VecFloat32 b, VecFloat32 c) { return vfmaq_f32(c, a, b); }
 
-        static FORCE_INLINE Float32 redAddFloat32Length(Float32* v, USize length) {
-            if (length == 2) { return v[0] + v[1]; }
-            length /= 2;
-            for (USize i = 0; i < length; i++) { v[i] += v[i + length]; }
-            return redAddFloat32Length(v, length);
+        static FORCE_INLINE Float32 reduceAddFloat32(VecFloat32* v) {
+            return reduceAddFloat32Length(reinterpret_cast<Float32*>(v), 64 / sizeof(Float32));
         }
 
-        static FORCE_INLINE Float32 redAddFloat32(VecFloat32* v) {
-            return redAddFloat32Length(reinterpret_cast<Float32*>(v), 64 / sizeof(Float32));
-        }
-
-        static FORCE_INLINE UInt32 nonzerosMask(VecInt32 chunk) {
+        static FORCE_INLINE UInt32 nnzMask(VecInt32 chunk) {
             uint32x4_t mask = vcgtq_s32(chunk, vdupq_n_s32(0));
-            uint16x4_t narrowed_mask = vmovn_u32(mask);
-            uint64_t packed_mask = vget_lane_u64(vreinterpret_u64_u16(narrowed_mask), 0);
-            return ((packed_mask & (1ULL << 0)) >> 0) | ((packed_mask & (1ULL << 16)) >> 15) | ((packed_mask & (1ULL << 32)) >> 30) |
-                   ((packed_mask & (1ULL << 48)) >> 45);
+            uint16x4_t narrowed = vmovn_u32(mask);
+            uint64_t packed = vget_lane_u64(vreinterpret_u64_u16(narrowed), 0);
+            return ((packed & (1ULL << 0)) >> 0) | ((packed & (1ULL << 16)) >> 15) | ((packed & (1ULL << 32)) >> 30) |
+                   ((packed & (1ULL << 48)) >> 45);
         }
 
 #endif
