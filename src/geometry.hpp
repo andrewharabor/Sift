@@ -1,9 +1,5 @@
 #pragma once
 
-#if !defined(USE_AVX2) && !defined(USE_AVX512) && !defined(USE_NEON)
-    #error Unsupported architecture: no SIMD extension found!
-#endif
-
 #include <array>
 #include <span>
 #include <utility>

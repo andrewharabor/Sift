@@ -467,10 +467,6 @@ namespace Sift {
             std::cout << " time " << time;
             std::cout << " nps " << (nodes * 1000ULL) / (time + 1);
             std::cout << std::endl;
-
-#if defined(MEASURE_SPARSITY)
-            SparseIterator<NNUE::L1_SIZE>::writeFtActCounts();
-#endif
         }
 
         void perft(std::istringstream& stream) {

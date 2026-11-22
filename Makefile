@@ -145,6 +145,8 @@ else ifeq ($(ARCH),armv8_4)
 else ifeq ($(ARCH),apple_m1)
     CXX_FLAGS += -mcpu=apple-m1 --target=arm64-apple-macos11
     CPP_FLAGS += -DUSE_NEON -DUSE_NEON_DOTPROD
+else ifeq ($(ARCH),generic)
+	CPP_FLAGS += -DUSE_GENERIC
 endif
 
 ifeq ($(DETECTED_OS),Windows)
@@ -167,13 +169,6 @@ ifeq ($(MODE),release)
 else ifeq ($(MODE),tune)
     CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
     CPP_FLAGS += -DEXTERNAL_TUNE
-    ifneq ($(DETECTED_OS),Windows)
-        CXX_FLAGS += -flto
-        LD_FLAGS  += -flto
-    endif
-else ifeq ($(MODE),sparsity)
-    CXX_FLAGS += -O3 -DNDEBUG -funroll-loops
-    CPP_FLAGS += -DMEASURE_SPARSITY
     ifneq ($(DETECTED_OS),Windows)
         CXX_FLAGS += -flto
         LD_FLAGS  += -flto
@@ -230,7 +225,7 @@ clean:
 
 .PHONY: help
 help:
-	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2_bmi2|zen2|armv8_4|apple_m1]> <MODE=[release|tune|sparsity|debug]> <NUMA=[off|on]>"
+	@echo "Usage: make <TARGET> <ARCH=[native|avx512|avx2_bmi2|zen2|armv8_4|apple_m1|generic]> <MODE=[release|tune|debug]> <NUMA=[off|on]>"
 	@echo "Targets:"
 	@echo "  engine"
 	@echo "  format"

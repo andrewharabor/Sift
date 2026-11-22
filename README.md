@@ -34,6 +34,7 @@ To build for a specific architecture, pass `ARCH=` followed by one of the option
 - `zen2`: requires BMI and AVX2, but doesn't assume fast PEXT
 - `armv8_4`: requires NEON with dotprod
 - `apple_m1`: requires NEON with dotprod for Apple silicon devices
+- `generic`: portable fallback for any CPU
 
 For Linux machines, optimizations for non-uniform memory access (NUMA) are supported with libnuma, which can be enabled by passing `NUMA=on`.
 

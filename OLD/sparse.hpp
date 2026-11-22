@@ -91,37 +91,5 @@ namespace Sift {
         USize count_ = 0;
 
 #endif
-
-#if defined(MEASURE_SPARSITY)
-
-    public:
-        static inline void trackFtActs(std::span<const UInt8, L1_SIZE> ftActs) noexcept {
-            for (USize i = 0; i < L1_SIZE; i++) {
-                if (ftActs[i] != 0) { ftActCounts_[i % (L1_SIZE / 2)]++; }
-            }
-        }
-
-        static inline void writeFtActCounts() noexcept {
-            std::ofstream file = std::ofstream("ft-acts.txt", std::ios::binary);
-
-            assert(file.is_open());
-
-            bool first = true;
-            for (const USize count : ftActCounts_) {
-                if (!first) { file << ", "; }
-
-                first = false;
-
-                file << count;
-            }
-            file << std::endl;
-
-            file.close();
-        }
-
-    private:
-        static inline std::array<USize, L1_SIZE / 2> ftActCounts_ = {};
-
-#endif
     };
 }

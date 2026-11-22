@@ -338,10 +338,6 @@ namespace Sift {
             propagateL2(bucket, l1Out, l2Out);
             activateForwardL3(bucket, l1Out, l2Out, l3Out);
 
-#if defined(MEASURE_SPARSITY)
-            SparseIterator<L1_SIZE>::trackFtActs(ftOut);
-#endif
-
             Int64 output = static_cast<Int64>(l3Out);
             output *= SCALE64;
             output /= QUANT64 * QUANT64 * QUANT64 * QUANT64;
