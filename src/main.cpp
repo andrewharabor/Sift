@@ -6,7 +6,7 @@
 
 #include "attacks.hpp"
 #include "cuckoo.hpp"
-#include "loader.hpp"
+#include "features.hpp"
 #include "numa.hpp"
 #include "tunable.hpp"
 #include "uci.hpp"
@@ -42,10 +42,10 @@ int run(std::span<const std::string_view> args) {
 
 int main(int argc, const char* argv[]) {
     Attacks::init();
+    Features::init();
     CuckooTable::init();
     TunableList::init();
     NUMA::init();
-    NetLoader::init();
 
     std::vector<std::string_view> args;
     args.reserve(static_cast<USize>(argc));
