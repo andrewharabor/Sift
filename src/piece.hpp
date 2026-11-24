@@ -227,10 +227,24 @@ namespace Sift {
         constexpr bool operator!=(const Color& other) const noexcept { return color() != other; }
 
         constexpr PieceType type() const noexcept {
-            return (piece_ == PieceEnum::NONE) ? PieceType::NONE : PieceType(static_cast<UInt8>(piece_) % 6);
+            assert(piece_ != PieceEnum::NONE);
+            return PieceType(static_cast<UInt8>(piece_) % 6);
         }
 
-        constexpr Color color() const noexcept { return (piece_ == PieceEnum::NONE) ? Color::NONE : Color(static_cast<UInt8>(piece_) / 6); }
+        constexpr Color color() const noexcept {
+            assert(piece_ != PieceEnum::NONE);
+            return Color(static_cast<UInt8>(piece_) / 6);
+        }
+
+        constexpr Piece flippedColor() const noexcept {
+            assert(piece_ != PieceEnum::NONE);
+            return Piece(type(), ~color());
+        }
+
+        constexpr Piece flippedColor(bool condition) const noexcept {
+            assert(piece_ != PieceEnum::NONE);
+            return (condition) ? flippedColor() : *this;
+        }
 
         constexpr UInt8 index() const noexcept { return static_cast<UInt8>(piece_); }
 

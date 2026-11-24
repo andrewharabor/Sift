@@ -268,26 +268,24 @@ namespace Sift {
 
         constexpr Square operator-(Direction direction) const noexcept { return *this + (-direction); }
 
-        constexpr Square& flip() noexcept {
-            assert(square_ != SquareEnum::NONE);
-            square_ = static_cast<SquareEnum>(index() ^ 56);
-            return *this;
-        }
-
         constexpr Square flipped() const noexcept {
             assert(square_ != SquareEnum::NONE);
             return Square(static_cast<SquareEnum>(index() ^ 56));
         }
 
-        constexpr Square& mirror() noexcept {
+        constexpr Square flipped(bool condition) const noexcept {
             assert(square_ != SquareEnum::NONE);
-            square_ = static_cast<SquareEnum>(index() ^ 7);
-            return *this;
+            return (condition) ? flipped() : *this;
         }
 
         constexpr Square mirrored() const noexcept {
             assert(square_ != SquareEnum::NONE);
             return Square(static_cast<SquareEnum>(index() ^ 7));
+        }
+
+        constexpr Square mirrored(bool condition) const noexcept {
+            assert(square_ != SquareEnum::NONE);
+            return (condition) ? mirrored() : *this;
         }
 
         constexpr File file() const noexcept {

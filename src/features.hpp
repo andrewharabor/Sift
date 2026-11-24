@@ -16,8 +16,8 @@ namespace Sift {
 
         constexpr PiecePair() noexcept {}
 
-        constexpr PiecePair(bool excluded, bool semiExcluded, Int32 feature) noexcept {
-            data = (semiExcluded && !excluded) | (excluded << 1) | (feature << 8);
+        constexpr PiecePair(bool excluded, bool semiExcluded, Int32 index) noexcept {
+            data = (semiExcluded && !excluded) | (excluded << 1) | (static_cast<UInt32>(index) << 8);
         }
 
         constexpr bool excluded(Square attackerSq, Square victimSq) const noexcept {
@@ -25,26 +25,28 @@ namespace Sift {
             return ((static_cast<UInt8>(data) + less) & 2);
         }
 
-        constexpr Int32 feature() const noexcept { return data >> 8; }
+        constexpr Int32 index() const noexcept { return static_cast<Int32>(data >> 8); }
     };
 
     class Features {
     public:
-        static constexpr USize TI_FEATURES = 59808;
-        static constexpr USize MAX_ACTIVE_TI_FEATURES = 128;
+        static constexpr USize PSQ_COUNT = 768;
+
+        static constexpr USize TI_COUNT = 59808;
+        static constexpr USize MAX_ACTIVE_TI = 128;
 
         static constexpr USize PP_SQUARES = 48;
-        static constexpr USize PP_FEATURES = 4560;
-        static constexpr USize MAX_ACTIVE_PP_FEATURES = 64;
+        static constexpr USize PP_COUNT = 4560;
+        static constexpr USize MAX_ACTIVE_PP = 64;
 
-        static constexpr USize MAX_ACTIVE_THREAT_FEATURES = MAX_ACTIVE_TI_FEATURES + MAX_ACTIVE_PP_FEATURES;
+        static constexpr USize MAX_ACTIVE_THREATS = MAX_ACTIVE_TI + MAX_ACTIVE_PP;
 
         static constexpr USize TI_INDEX_OFFSET = PP_FEATURES;
 
         static inline std::array<Bitboard, 64> PP_MASKS;
         static inline MultiArray<PiecePair, 12, 12> PIECE_PAIRS;
-        static inline MultiArray<UInt16, 12, 64> PIECE_OFFSETS;
-        static inline MultiArray<UInt8, 12, 64, 64> ATTACK_INDICES;
+        static inline MultiArray<Int32, 12, 64> PIECE_OFFSETS;
+        static inline MultiArray<Int32, 12, 64, 64> ATTACK_INDICES;
 
         constexpr void init() noexcept {
             static constexpr MultiArray<Int32, 6, 6> PIECE_TARGET_MAP = {{
@@ -84,7 +86,7 @@ namespace Sift {
                 }
                 PIECE_OFFSETS[piece.index()] = pieceOffset;
                 OFFSETS[piece.index()] = offset;
-                offset += PIECE_TARGET_COUNT<FeatureSet>[piece.type().index()] * pieceOffset;
+                offset += PIECE_TARGET_COUNT[piece.type().index()] * pieceOffset;
             }
 
             for (UInt8 atk = 0; atk < 12; atk++) {
@@ -92,18 +94,18 @@ namespace Sift {
                 for (UInt8 vic = 0; vic < 12; vic++) {
                     const Piece victim = Piece(victim);
                     const Int32 map = PIECE_TARGET_MAP[attacker.type().index()][victim.type().index()];
-                    const Int32 feature =
+                    const Int32 index =
                         OFFSETS[attacker.index()] +
                         (static_cast<Int32>(victim.color().index()) * (PIECE_TARGET_COUNT[attacker.type().index()] / 2) + map) *
                             PIECE_OFFSETS[attacker.index()];
                     const bool enemies = (attacker.color() != victim.color());
-                    const bool semiExcluded = ((attacker.type() == victime.type()) && (enemies || attacker.type() != PieceType::PAWN));
+                    const bool semiExcluded = ((attacker.type() == victim.type()) && (enemies || attacker.type() != PieceType::PAWN));
                     const bool excluded = map < 0;
 
-                    assert(feature >= 0 || excluded);
+                    assert(index >= 0 || excluded);
 
-                    if (excluded) { feature = 0; }
-                    PIECE_PAIRS[attacker.index()][victim.index()] = PiecePair(excluded, semiExcluded, feature);
+                    if (excluded) { index = 0; }
+                    PIECE_PAIRS[attacker.index()][victim.index()] = PiecePair(excluded, semiExcluded, index);
                 }
             }
 
@@ -119,6 +121,39 @@ namespace Sift {
                     }
                 }
             }
+        }
+
+        template<Color COLOR>
+        static constexpr USize psqIndex(Piece piece, Square square, USize kingBucket, bool mirror) noexcept {
+            static_assert(COLOR != Color::NONE);
+            assert(piece != Piece::NONE);
+            assert(square != Square::NONE);
+            const Piece relativePc = piece.flippedColor(COLOR == Color::BLACK);
+            const Square relativeSq = square.flipped(COLOR == Color::BLACK).mirrored(mirror);
+            return PSQ_COUNT * kingBucket + 64 * relativePc.index() + relativeSq.index();
+        }
+
+        template<Color COLOR>
+        static constexpr USize tiIndex(Piece attacker, Piece victim, Square attackerSq, Square victimSq, bool mirror) noexcept {
+            static_assert(COLOR != Color::NONE);
+            assert(attacker != Piece::NONE);
+            assert(attackerSq != Square::NONE);
+            assert(victim != Piece::NONE);
+            assert(victimSq != Square::NONE);
+
+            const Piece relativeAtk = attacker.flippedColor(COLOR == Color::BLACK);
+            const Piece relativeVic = victim.flippedColor(COLOR == Color::BLACK);
+            const Piece relativeAtkSq = attackerSq.flipped(COLOR == Color::BLACK).mirrored(mirror);
+            const Piece relativeVicSq = victimSq.flipped(COLOR == Color::BLACK).mirrored(mirror);
+
+            const PiecePair piecePair = PIECE_PAIRS[relativeAtk.index()][relativeVic.index()];
+            if (piecePair.excluded(relativeAtkSq, relativeVicSq)) { return TI_COUNT; }
+
+            Int32 index = piecePair.index() + PIECE_OFFSETS[relativeAtk.index()][relativeAtkSq.index()] +
+                          ATTACK_INDICES[relativeAtk.index()][relativeAtkSq.index()][relativeVicSq.index()];
+
+            assert(0 <= index && index < TI_COUNT);
+            return static_cast<USize>(index);
         }
     };
 }
