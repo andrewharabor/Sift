@@ -155,5 +155,19 @@ namespace Sift {
             assert(0 <= index && index < TI_COUNT);
             return static_cast<USize>(index);
         }
+
+        template<Color COLOR>
+        static constexpr Int32 pawnID(Square square, Int32 offset, bool mirror) noexcept {
+            static_assert(COLOR != Color::NONE);
+            assert(square != Square::NONE);
+            const Square relativeSq = square.flipped(COLOR == Color::BLACK).mirrored(mirror);
+            return offset + static_cast<Int32>(relativeSq.index()) - 8;
+        }
+
+        static constexpr USize ppIndex(Int32 id1, Int32 id2) noexcept {
+            const Int32 hi = std::max(id1, id2);
+            const Int32 lo = std::min(id1, id2);
+            return static_cast<USize>(hi * (hi - 1) / 2 + lo);
+        }
     };
 }
