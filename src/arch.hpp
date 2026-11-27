@@ -17,7 +17,7 @@ namespace Sift {
 
         static constexpr bool MERGED_KINGS = true;  // FIXME: remove
 
-        static constexpr std::array<USize, 64> BUCKET_LAYOUT = {
+        static constexpr std::array<USize, 64> KING_BUCKET_LAYOUT = {
             // clang-format off
         0, 1, 2, 3, 3, 2, 1, 0,
         4, 5, 6, 7, 7, 6, 5, 4,
@@ -30,8 +30,8 @@ namespace Sift {
             // clang-format on
         };
 
-        static constexpr USize BUCKET_COUNT = 16;
-        static constexpr USize REFRESH_TABLE_SIZE = BUCKET_COUNT * 2;
+        static constexpr USize KING_BUCKET_COUNT = 16;
+        static constexpr USize REFRESH_TABLE_SIZE = KING_BUCKET_COUNT * 2;
 
         static constexpr USize L1_SIZE = 1024;
         static constexpr USize L2_SIZE = 32;
@@ -46,7 +46,7 @@ namespace Sift {
         static constexpr bool DUAL_ACTIVATION = true;  // FIXME: remove
         static constexpr bool SKIP_L2 = true;          // FIXME: remove
 
-        static constexpr USize OUTPUT_BUCKETS = 8;
+        static constexpr USize OUTPUT_BUCKET_COUNT = 8;
 
         static constexpr bool needsMirror(Square kingSquare) noexcept { return kingSquare.file() > File::D; }
 
@@ -56,12 +56,12 @@ namespace Sift {
 
         static constexpr USize kingBucket(Color color, Square kingSquare) noexcept {
             kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-            return Arch::BUCKET_LAYOUT[kingSquare.index()];
+            return Arch::KING_BUCKET_LAYOUT[kingSquare.index()];
         }
 
         static constexpr USize refreshTableIdx(Color color, Square kingSquare) noexcept {
             kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-            return Arch::BUCKET_LAYOUT[kingSquare.index()] * 2 + needsMirror(kingSquare);
+            return Arch::KING_BUCKET_LAYOUT[kingSquare.index()] * 2 + needsMirror(kingSquare);
         }
 
         static constexpr bool needsRefresh(Color color, Square prevKingSquare, Square kingSquare) noexcept {
@@ -73,11 +73,11 @@ namespace Sift {
 
             prevKingSquare = (color == Color::WHITE) ? prevKingSquare : prevKingSquare.flipped();
             kingSquare = (color == Color::WHITE) ? kingSquare : kingSquare.flipped();
-            return Arch::BUCKET_LAYOUT[prevKingSquare.index()] != Arch::BUCKET_LAYOUT[kingSquare.index()];
+            return Arch::KING_BUCKET_LAYOUT[prevKingSquare.index()] != Arch::KING_BUCKET_LAYOUT[kingSquare.index()];
         }
 
         static constexpr USize outputBucket(const Position& position) noexcept {
-            return (position.occupied().count() - 2) / (32 / Arch::OUTPUT_BUCKETS);
+            return (position.occupied().count() - 2) / (32 / Arch::OUTPUT_BUCKET_COUNT);
         }
 
     private:
