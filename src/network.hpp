@@ -2,30 +2,31 @@
 
 #include <span>
 
+#include "arch.hpp"
+#include "ft.hpp"
+#include "multilayer.hpp"
 #include "position.hpp"
 #include "reader.hpp"
 #include "types.hpp"
 
 namespace Sift {
-    template<typename FeatureTransformer, typename Output, typename Arch>
-    class PerspectiveNetwork {
-    private:
-        using InputType = std::span<const Int16, FeatureTransformer::OUTPUT_SIZE>;
-
+    class Network {
     public:
-        constexpr const FeatureTransformer& ft() const noexcept { return ft_; }
+        constexpr const FT& ft() const noexcept { return ft_; }
 
-        inline Int32 forward(const Position& position, InputType friendlyPSQInputs, InputType enemyPSQInputs,
-            InputType friendlyThreatInputs, InputType enemyThreatInputs) const noexcept {
-            return arch_.forward(Output::bucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs, enemyThreatInputs);
+        inline Int32 forward(const Position& position, std::span<const Int16, FT::OUTPUT_SIZE> friendlyPSQInputs,
+            std::span<const Int16, FT::OUTPUT_SIZE> enemyPSQInputs, std::span<const Int16, FT::OUTPUT_SIZE> friendlyThreatInputs,
+            std::span<const Int16, FT::OUTPUT_SIZE> enemyThreatInputs) const noexcept {
+            return multilayer_.forward(Arch::outputBucket(position), friendlyPSQInputs, enemyPSQInputs, friendlyThreatInputs,
+                enemyThreatInputs);
         }
 
-        inline bool load(ByteReader& reader) noexcept { return ft_.load(reader) && arch_.load(reader); }
+        inline bool load(ByteReader& reader) noexcept { return ft_.load(reader) && multilayer_.load(reader); }
 
-        static constexpr USize byteSize() noexcept { return FeatureTransformer::byteSize() + Arch::byteSize(); }
+        static constexpr USize byteSize() noexcept { return FT::byteSize() + Multilayer::byteSize(); }
 
     private:
-        FeatureTransformer ft_;
-        Arch arch_;
+        FT ft_;
+        Multilayer multilayer_;
     };
 }

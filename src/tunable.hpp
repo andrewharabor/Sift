@@ -135,7 +135,7 @@ namespace Sift {
 
     static inline std::array<Int32, 7> SEE_PIECE_VALUES;
 
-    namespace SEE { static void init(); }
+    namespace SEE { void init(); }
 
     TUNABLE_CALLBACK(SEE_PAWN_VALUE, 89, 50, 200, []() { SEE::init(); });
     TUNABLE_CALLBACK(SEE_KNIGHT_VALUE, 447, 300, 700, []() { SEE::init(); });
@@ -349,7 +349,7 @@ namespace Sift {
 
     static inline MultiArray<Int32, 2, 256, 256> LMR_TABLE;
 
-    namespace LMR { static void init(); }
+    namespace LMR { void init(); }
 
     TUNABLE_CALLBACK(LMR_NOISY_BASE, -4, -50, 75, []() { LMR::init(); })
     TUNABLE_CALLBACK(LMR_NOISY_DIVISOR, 250, 150, 350, []() { LMR::init(); })
@@ -380,7 +380,7 @@ namespace Sift {
 
     static inline MultiArray<Int32, 2, 256> LMP_TABLE;
 
-    namespace LMP { static void init(); }
+    namespace LMP { void init(); }
 
     TUNABLE_CALLBACK(LMP_TABLE_BASE, 4, 0, 20, []() { LMP::init(); })
 

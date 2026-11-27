@@ -7,11 +7,11 @@
 #include <fstream>
 #include <span>
 
+#include "arch.hpp"
 #include "simd.hpp"
 #include "types.hpp"
 
 namespace Sift {
-    template<USize L1_SIZE>
     class SparseIterator {
 #if defined(USE_VBMI2)
 
@@ -31,7 +31,7 @@ namespace Sift {
         constexpr USize index(USize idx) const noexcept { return indices_[idx]; }
 
     private:
-        static constexpr USize CHUNKS = L1_SIZE / (sizeof(Int32) / sizeof(Int8));
+        static constexpr USize CHUNKS = Arch::L1_SIZE / (sizeof(Int32) / sizeof(Int8));
 
         alignas(SIMD::ALIGNMENT) std::array<UInt16, CHUNKS> indices_ = {};
 
@@ -82,45 +82,13 @@ namespace Sift {
             return indices;
         }();
 
-        static constexpr USize CHUNKS = L1_SIZE / (sizeof(Int32) / sizeof(Int8));
+        static constexpr USize CHUNKS = Arch::L1_SIZE / (sizeof(Int32) / sizeof(Int8));
         static constexpr USize CHUNK_SIZE = 2 * SIMD::CHUNK_SIZE_32;
         static constexpr USize OUTPUTS_PER_CHUNK = CHUNK_SIZE / 8;
 
         alignas(SIMD::ALIGNMENT) std::array<UInt16, CHUNKS> indices_ = {};
         Vec128UInt16 base_ = SIMD::zero128UInt16();
         USize count_ = 0;
-
-#endif
-
-#if defined(MEASURE_SPARSITY)
-
-    public:
-        static inline void trackFtActs(std::span<const UInt8, L1_SIZE> ftActs) noexcept {
-            for (USize i = 0; i < L1_SIZE; i++) {
-                if (ftActs[i] != 0) { ftActCounts_[i % (L1_SIZE / 2)]++; }
-            }
-        }
-
-        static inline void writeFtActCounts() noexcept {
-            std::ofstream file = std::ofstream("ft-acts.txt", std::ios::binary);
-
-            assert(file.is_open());
-
-            bool first = true;
-            for (const USize count : ftActCounts_) {
-                if (!first) { file << ", "; }
-
-                first = false;
-
-                file << count;
-            }
-            file << std::endl;
-
-            file.close();
-        }
-
-    private:
-        static inline std::array<USize, L1_SIZE / 2> ftActCounts_ = {};
 
 #endif
     };

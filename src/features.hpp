@@ -4,6 +4,7 @@
 #include <limits>
 #include <utility>
 
+#include "arch.hpp"
 #include "attacks.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
@@ -16,7 +17,6 @@ namespace Sift {
         Piece piece;
         Square square;
 
-        template<typename FeatureSet>
         constexpr USize index(Color color, Square kingSquare) const noexcept {
             assert(piece != Piece::NONE);
             assert(square != Square::NONE);
@@ -24,13 +24,13 @@ namespace Sift {
             assert(kingSquare != Square::NONE);
 
             Square sq = (color == Color::WHITE) ? square : square.flipped();
-            sq = FeatureSet::mirror(sq, kingSquare);
+            sq = Arch::mirror(sq, kingSquare);
             Piece pc = (color == Color::WHITE) ? piece : Piece(piece.type(), ~piece.color());
-            if constexpr (FeatureSet::MERGED_KINGS) {
+            if constexpr (Arch::MERGED_KINGS) {  // FIXME: remove
                 if (pc.type() == PieceType::KING) { pc = Piece(PieceType::KING, Color::WHITE); }
             }
 
-            const USize bucketOffset = FeatureSet::bucket(color, kingSquare) * FeatureSet::PSQ_FEATURES;
+            const USize bucketOffset = Arch::kingBucket(color, kingSquare) * Arch::PSQ_FEATURES;
 
             return bucketOffset + 64 * pc.index() + sq.index();
         }
@@ -42,7 +42,6 @@ namespace Sift {
         Piece victim;
         Square victimSq;
 
-        template<typename FeatureSet>
         constexpr Int64 index(Color color, Square kingSquare) const noexcept {
             assert(attacker != Piece::NONE);
             assert(attackerSq != Square::NONE);
@@ -53,31 +52,22 @@ namespace Sift {
 
             Piece atk = (color == Color::WHITE) ? attacker : Piece(attacker.type(), ~attacker.color());
             Square atkSq = (color == Color::WHITE) ? attackerSq : attackerSq.flipped();
-            atkSq = FeatureSet::mirror(atkSq, kingSquare);
+            atkSq = Arch::mirror(atkSq, kingSquare);
             Piece vic = (color == Color::WHITE) ? victim : Piece(victim.type(), ~victim.color());
             Square vicSq = (color == Color::WHITE) ? victimSq : victimSq.flipped();
-            vicSq = FeatureSet::mirror(vicSq, kingSquare);
+            vicSq = Arch::mirror(vicSq, kingSquare);
 
             const bool forwards = atkSq.index() < vicSq.index();
 
-            const Int64 attackIdx = ATTACK_INDICES<FeatureSet>[atk.index()][vic.index()][forwards];
-            const Int64 offset = OFFSETS<FeatureSet>.offsets[atk.index()][atkSq.index()];
+            const Int64 attackIdx = ATTACK_INDICES[atk.index()][vic.index()][forwards];
+            const Int64 offset = OFFSETS.offsets[atk.index()][atkSq.index()];
             const Int64 pieceIdx = PIECE_INDICES[atk.index()][atkSq.index()][vicSq.index()];
 
-            return FeatureSet::THREAT_OFFSET + attackIdx + offset + pieceIdx;
+            return Arch::THREAT_OFFSET + attackIdx + offset + pieceIdx;
         }
 
     private:
-        static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP_PAWNS = {{
-            {0, 1, -1, 2, -1, -1},
-            {0, 1, 2, 3, 4, -1},
-            {0, 1, 2, 3, -1, -1},
-            {0, 1, 2, 3, -1, -1},
-            {0, 1, 2, 3, 4, -1},
-            {-1, -1, -1, -1, -1, -1},
-        }};
-
-        static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP_NO_PAWNS = {{
+        static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP = {{
             {-1, 0, -1, 1, -1, -1},
             {0, 1, 2, 3, 4, -1},
             {0, 1, 2, 3, -1, -1},
@@ -86,22 +76,7 @@ namespace Sift {
             {-1, -1, -1, -1, -1, -1},
         }};
 
-        template<typename FeatureSet>
-        static constexpr MultiArray<Int64, 6, 6> PIECE_TARGET_MAP =
-            (FeatureSet::PAWN_PAWN_INPUTS) ? PIECE_TARGET_MAP_NO_PAWNS : PIECE_TARGET_MAP_PAWNS;
-
-        template<typename FeatureSet>
-        static constexpr std::array<Int64, 6> PIECE_TARGET_COUNT = [] {
-            std::array<Int64, 6> counts = {};
-            for (USize atk = 0; atk < 6; atk++) {
-                Int64 count = 0;
-                for (USize vic = 0; vic < 6; vic++) {
-                    if (PIECE_TARGET_MAP<FeatureSet>[atk][vic] >= 0) { count++; }
-                }
-                counts[atk] = 2 * count;
-            }
-            return counts;
-        }();
+        static constexpr std::array<Int64, 6> PIECE_TARGET_COUNT = {4, 10, 8, 8, 10, 0};
 
         static inline MultiArray<Int64, 64, 64> pieceIndices(Piece piece) noexcept {
             Attacks::init();
@@ -130,7 +105,6 @@ namespace Sift {
             return indices;
         }();
 
-        template<typename FeatureSet>
         static inline auto OFFSETS = [] {
             Attacks::init();
 
@@ -152,12 +126,11 @@ namespace Sift {
                     }
                 }
                 offsets.indices[piece.index()] = {pieceOffset, offset};
-                offset += PIECE_TARGET_COUNT<FeatureSet>[piece.type().index()] * pieceOffset;
+                offset += PIECE_TARGET_COUNT[piece.type().index()] * pieceOffset;
             }
             return offsets;
         }();
 
-        template<typename FeatureSet>
         static inline MultiArray<Int64, 12, 12, 2> ATTACK_INDICES = [] {
             MultiArray<Int64, 12, 12, 2> indices = {};
             for (UInt8 i = 0; i < 12; i++) {
@@ -165,13 +138,12 @@ namespace Sift {
                 for (UInt8 j = 0; j < 12; j++) {
                     const Piece vic = Piece(j);
                     const bool enemies = atk.color() != vic.color();
-                    const Int64 map = PIECE_TARGET_MAP<FeatureSet>[atk.type().index()][vic.type().index()];
+                    const Int64 map = PIECE_TARGET_MAP[atk.type().index()][vic.type().index()];
                     const bool semiExcluded = ((atk.type() == vic.type()) && (enemies || atk.type() != PieceType::PAWN));
                     const bool excluded = map < 0;
-                    const auto [pieceOffset, offset] = OFFSETS<FeatureSet>.indices[i];
+                    const auto [pieceOffset, offset] = OFFSETS.indices[i];
                     const Int64 featureIdx =
-                        offset +
-                        (static_cast<Int64>(vic.color()) * (PIECE_TARGET_COUNT<FeatureSet>[atk.type().index()] / 2) + map) * pieceOffset;
+                        offset + (static_cast<Int64>(vic.color()) * (PIECE_TARGET_COUNT[atk.type().index()] / 2) + map) * pieceOffset;
                     indices[i][j][0] = (excluded) ? std::numeric_limits<Int64>::min() : featureIdx;
                     indices[i][j][1] = (excluded || semiExcluded) ? std::numeric_limits<Int64>::min() : featureIdx;
                 }
@@ -198,7 +170,6 @@ namespace Sift {
             return masks;
         }();
 
-        template<typename FeatureSet>
         constexpr UInt16 index(Color color, Square kingSquare) const noexcept {
             assert(squareA != Square::NONE);
             assert(colorA != Color::NONE);
@@ -207,15 +178,14 @@ namespace Sift {
             assert(color != Color::NONE);
             assert(kingSquare != Square::NONE);
 
-            const UInt16 aID = pawnID<FeatureSet>(color, kingSquare, colorA, squareA);
-            const UInt16 bID = pawnID<FeatureSet>(color, kingSquare, colorB, squareB);
+            const UInt16 aID = pawnID(color, kingSquare, colorA, squareA);
+            const UInt16 bID = pawnID(color, kingSquare, colorB, squareB);
             const UInt16 hi = std::max(aID, bID);
             const UInt16 lo = std::min(aID, bID);
             return hi * (hi - 1) / 2 + lo;
         }
 
     private:
-        template<typename FeatureSet>
         static constexpr UInt16 pawnID(Color color, Square kingSquare, Color pawnColor, Square pawnSquare) noexcept {
             assert(color != Color::NONE);
             assert(kingSquare != Square::NONE);
@@ -224,7 +194,7 @@ namespace Sift {
             assert(pawnSquare.index() >= 8 && pawnSquare.index() < 56);
 
             Square pawnSq = (color == Color::WHITE) ? pawnSquare : pawnSquare.flipped();
-            pawnSq = FeatureSet::mirror(pawnSq, kingSquare);
+            pawnSq = Arch::mirror(pawnSq, kingSquare);
 
             const UInt16 offset = (color != pawnColor) ? 48 : 0;
             return offset + static_cast<UInt16>(pawnSq) - 8;

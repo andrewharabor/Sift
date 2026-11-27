@@ -10,58 +10,54 @@
 #include <vector>
 
 #include "accumulator.hpp"
-#include "arch.hpp"
 #include "bitboard.hpp"
 #include "color.hpp"
 #include "coords.hpp"
 #include "features.hpp"
+#include "ft.hpp"
 #include "geometry.hpp"
-#include "input.hpp"
+#include "multilayer.hpp"
 #include "network.hpp"
-#include "output.hpp"
 #include "piece.hpp"
 #include "simd.hpp"
 #include "types.hpp"
+#include "updates.hpp"
 #include "utils.hpp"
 
 namespace Sift {
-    template<typename FeatureSet>
     struct BoardObserver {
     public:
-        typename FeatureSet::Updates& updates;
+        Updates& updates;
 
         inline void kingMove(Color color, Square from, Square to) noexcept {
-            if (FeatureSet::needsRefresh(color, from, to)) { updates.setPSQRefresh(color); }
-
-            if constexpr (FeatureSet::THREAT_INPUTS) {
-                if (FeatureSet::needsMirror(from) != FeatureSet::needsMirror(to)) { updates.setTIRefresh(color); }
-            }
+            if (Arch::needsRefresh(color, from, to)) { updates.setPSQRefresh(color); }
+            if (Arch::needsMirror(from) != Arch::needsMirror(to)) { updates.setTIRefresh(color); }
         }
 
         inline void addPiece(const Position& position, Piece piece, Square square) noexcept {
             updates.addPSQFeature(PSQFeature(piece, square));
-            if constexpr (FeatureSet::THREAT_INPUTS) { updateTIFeaturesOnChange<true>(position, piece, square); }
+            updateTIFeaturesOnChange<true>(position, piece, square);
         }
 
         inline void removePiece(const Position& position, Piece piece, Square square) noexcept {
             updates.subPSQFeature(PSQFeature(piece, square));
-            if constexpr (FeatureSet::THREAT_INPUTS) { updateTIFeaturesOnChange<false>(position, piece, square); }
+            updateTIFeaturesOnChange<false>(position, piece, square);
         }
 
         inline void transmutePiece(const Position& position, Piece fromPiece, Piece toPiece, Square square) noexcept {
             updates.subPSQFeature(PSQFeature(fromPiece, square));
             updates.addPSQFeature(PSQFeature(toPiece, square));
-            if constexpr (FeatureSet::THREAT_INPUTS) { updateTIFeaturesOnTransmute(position, fromPiece, toPiece, square); }
+            updateTIFeaturesOnTransmute(position, fromPiece, toPiece, square);
         }
 
         inline void movePiece(const Position& position, Piece fromPiece, Piece toPiece, Square fromSquare, Square toSquare) noexcept {
             updates.subPSQFeature(PSQFeature(fromPiece, fromSquare));
             updates.addPSQFeature(PSQFeature(toPiece, toSquare));
-            if constexpr (FeatureSet::THREAT_INPUTS) { updateTIFeaturesOnMove(position, fromPiece, toPiece, fromSquare, toSquare); }
+            updateTIFeaturesOnMove(position, fromPiece, toPiece, fromSquare, toSquare);
         }
 
         inline void pawnChanges(Bitboard whiteBefore, Bitboard blackBefore, Bitboard whiteAfter, Bitboard blackAfter) noexcept {
-            if constexpr (FeatureSet::PAWN_PAWN_INPUTS) { updates.setPawns(whiteBefore, blackBefore, whiteAfter, blackAfter); }
+            updates.setPawns(whiteBefore, blackBefore, whiteAfter, blackAfter);
         }
 
     private:
@@ -97,12 +93,10 @@ namespace Sift {
                 return static_cast<USize>(std::popcount(bits));
             };
 
-            if constexpr (FeatureSet::THREAT_INPUTS) {
-                if constexpr (ADD) {
-                    updates.writeAddTIFeatures(writeFeatures);
-                } else {
-                    updates.writeSubTIFeatures(writeFeatures);
-                }
+            if constexpr (ADD) {
+                updates.writeAddTIFeatures(writeFeatures);
+            } else {
+                updates.writeSubTIFeatures(writeFeatures);
             }
         }
 
@@ -128,12 +122,10 @@ namespace Sift {
                 return count;
             };
 
-            if constexpr (FeatureSet::THREAT_INPUTS) {
-                if constexpr (ADD) {
-                    updates.writeSubTIFeatures(writeFeatures);
-                } else {
-                    updates.writeAddTIFeatures(writeFeatures);
-                }
+            if constexpr (ADD) {
+                updates.writeSubTIFeatures(writeFeatures);
+            } else {
+                updates.writeAddTIFeatures(writeFeatures);
             }
         }
 
@@ -156,12 +148,10 @@ namespace Sift {
                 const Square victimSquare = (OUTGOING) ? otherSquare : square;
                 const TIFeature feature = TIFeature(attacker, attackerSquare, victim, victimSquare);
 
-                if constexpr (FeatureSet::THREAT_INPUTS) {
-                    if constexpr (ADD) {
-                        updates.addTIFeature(feature);
-                    } else {
-                        updates.subTIFeature(feature);
-                    }
+                if constexpr (ADD) {
+                    updates.addTIFeature(feature);
+                } else {
+                    updates.subTIFeature(feature);
                 }
             }
         }
@@ -182,12 +172,10 @@ namespace Sift {
                 const Square victimSquare = squares[j];
                 const TIFeature feature = TIFeature(attacker, attackerSquare, victim, victimSquare);
 
-                if constexpr (FeatureSet::THREAT_INPUTS) {
-                    if constexpr (ADD) {
-                        updates.subTIFeature(feature);
-                    } else {
-                        updates.addTIFeature(feature);
-                    }
+                if constexpr (ADD) {
+                    updates.subTIFeature(feature);
+                } else {
+                    updates.addTIFeature(feature);
                 }
             }
 
@@ -256,49 +244,7 @@ namespace Sift {
 
     class NNUE {
     public:
-        static constexpr USize L1_SIZE = 1024;
-        static constexpr USize L2_SIZE = 32;
-        static constexpr USize L3_SIZE = 64;
-
-        static constexpr Int32 FT_SCALE_BITS = 7;
-        static constexpr Int32 FT_QUANT_BITS = 8;
-        static constexpr Int32 L1_QUANT_BITS = 7;
-
-        static constexpr Int32 SCALE = 400;
-
-        static constexpr bool DUAL_ACTIVATION = true;
-        static constexpr bool SKIP_L2 = true;
-
-        using PSQFeatureSet = MergedMirroredKingBucketInputs<
-            // clang-format off
-            MirroredKingSide::ABCD,
-            0, 1, 2, 3,
-            4, 5, 6, 7,
-            8, 9, 10, 11,
-            8, 9, 10, 11,
-            12, 12, 13, 13,
-            12, 12, 13, 13,
-            14, 14, 15, 15,
-            14, 14, 15, 15
-            // clang-format on
-            >;
-
-        using InputFeatureSet = PawnPawnThreatInputs<PSQFeatureSet>;
-
-        using Updates = InputFeatureSet::Updates;
-        using BoardObserver = BoardObserver<InputFeatureSet>;
-
-        using FeatureTransformer = FeatureTransformer<L1_SIZE, InputFeatureSet>;
-        using Accumulator = FeatureTransformer::Accumulator;
-        using RefreshTable = FeatureTransformer::RefreshTable;
-        using RefreshTableEntry = RefreshTableEntry<Accumulator>;
-
-        using UpdatableAccumulator = UpdatableAccumulator<InputFeatureSet, FeatureTransformer>;
-
-        using Output = MaterialCountBucketOutput<8>;
-
-        using Arch = PairwiseMultilayerArch<InputFeatureSet, L1_SIZE, L2_SIZE, L3_SIZE, FT_SCALE_BITS, FT_QUANT_BITS, L1_QUANT_BITS,
-            DUAL_ACTIVATION, SKIP_L2, Output, SCALE>;
+        using Arch = PairwiseMultilayerArch;
 
         using Network = PerspectiveNetwork<FeatureTransformer, Output, Arch>;
 
