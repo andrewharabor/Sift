@@ -398,7 +398,7 @@ namespace Sift {
         template<bool ZERO_INIT>
         FORCE_INLINE void accumulateThreatChanges(std::span<Int16, L1_SIZE> acc, const FeatureTransformer& ft, std::span<const UInt16> adds,
             std::span<const UInt16> subs) noexcept {
-            static constexpr USize CHUNK_SIZE = SIMD::CHUNK_SIZE<Int16>;
+            static constexpr USize CHUNK_SIZE = SIMD::CHUNK_SIZE_16;
             static constexpr USize CHUNKS = L1_SIZE / CHUNK_SIZE;
 
             static_assert(L1_SIZE % CHUNK_SIZE == 0);
@@ -414,26 +414,26 @@ namespace Sift {
             static_assert(CHUNKS % TILE == 0);
 
             for (USize i = 0; i < CHUNKS; i += TILE) {
-                std::array<Vec<Int16>, TILE> tmp;
+                std::array<VecInt16, TILE> tmp;
                 for (USize j = 0; j < TILE; j++) {
                     if constexpr (ZERO_INIT) {
-                        tmp[j] = SIMD::zero<Int16>();
+                        tmp[j] = SIMD::zeroInt16();
                     } else {
-                        tmp[j] = SIMD::load<Int16>(&acc[(i + j) * CHUNK_SIZE]);
+                        tmp[j] = SIMD::loadInt16(&acc[(i + j) * CHUNK_SIZE]);
                     }
                 }
 
                 for (const UInt16 idx : subs) {
                     const Int8* sub = ft.threatWeightPtr(idx);
-                    for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::sub<Int16>(tmp[j], SIMD::widenLoadInt8(&sub[(i + j) * CHUNK_SIZE])); }
+                    for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::subInt16(tmp[j], SIMD::widenLoadInt8(&sub[(i + j) * CHUNK_SIZE])); }
                 }
 
                 for (const UInt16 idx : adds) {
                     const Int8* add = ft.threatWeightPtr(idx);
-                    for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::add<Int16>(tmp[j], SIMD::widenLoadInt8(&add[(i + j) * CHUNK_SIZE])); }
+                    for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::addInt16(tmp[j], SIMD::widenLoadInt8(&add[(i + j) * CHUNK_SIZE])); }
                 }
 
-                for (USize j = 0; j < TILE; j++) { SIMD::store<Int16>(&acc[(i + j) * CHUNK_SIZE], tmp[j]); }
+                for (USize j = 0; j < TILE; j++) { SIMD::storeInt16(&acc[(i + j) * CHUNK_SIZE], tmp[j]); }
             }
         }
 

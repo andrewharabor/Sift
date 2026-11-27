@@ -17,7 +17,7 @@ namespace Sift {
 
     public:
         FORCE_INLINE void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
-            const UInt32 mask = _mm512_kunpackw(SIMD::nonzeroMask<UInt8>(vec2), SIMD::nonzeroMask<UInt8>(vec1));
+            const UInt32 mask = _mm512_kunpackw(SIMD::nonzeroMaskUInt8(vec2), SIMD::nonzeroMaskUInt8(vec1));
             const auto indices = _mm512_maskz_compress_epi16(mask, base_);
             _mm512_storeu_si512(&indices_[count_], indices);
             base_ = _mm512_add_epi16(base_, _mm512_set1_epi16(32));
@@ -50,7 +50,7 @@ namespace Sift {
 
     public:
         FORCE_INLINE void update(VecUInt8 vec1, VecUInt8 vec2) noexcept {
-            const UInt32 mask = (SIMD::nonzeroMask<UInt8>(vec2) << SIMD::CHUNK_SIZE<Int32>) | (SIMD::nonzeroMask<UInt8>(vec1));
+            const UInt32 mask = (SIMD::nonzeroMaskUInt8(vec2) << SIMD::CHUNK_SIZE_32) | (SIMD::nonzeroMaskUInt8(vec1));
             for (UInt32 output = 0; output < OUTPUTS_PER_CHUNK; output++) {
                 const UInt32 byte = (mask >> (output * 8)) & 0xFF;
                 const Vec128UInt16 nonzero = SIMD::load128UInt16(&NONZERO_INDICES[byte]);
@@ -83,7 +83,7 @@ namespace Sift {
         }();
 
         static constexpr USize CHUNKS = L1_SIZE / (sizeof(Int32) / sizeof(Int8));
-        static constexpr USize CHUNK_SIZE = 2 * SIMD::CHUNK_SIZE<Int32>;
+        static constexpr USize CHUNK_SIZE = 2 * SIMD::CHUNK_SIZE_32;
         static constexpr USize OUTPUTS_PER_CHUNK = CHUNK_SIZE / 8;
 
         alignas(SIMD::ALIGNMENT) std::array<UInt16, CHUNKS> indices_ = {};
