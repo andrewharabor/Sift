@@ -236,9 +236,9 @@ namespace Sift {
     struct RefreshTable {
         std::array<RefreshTableEntry, Arch::REFRESH_TABLE_SIZE> entries = {};
 
-        inline void init(const Network& network) noexcept {
+        inline void init(const Network* network) noexcept {
             for (auto& entry : entries) {
-                entry.acc.init(network.ftBiases);
+                entry.acc.init(network->ftBiases);
                 for (auto& colorBitboards : entry.pieceBitboards) { colorBitboards.fill(Bitboard()); }
                 for (auto& colorOccupancy : entry.occupancyBitboards) { colorOccupancy.fill(Bitboard()); }
             }

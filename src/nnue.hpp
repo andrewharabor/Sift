@@ -23,10 +23,6 @@
 namespace Sift {
     class NNUE {
     public:
-        using Arch = PairwiseMultilayerArch;
-
-        using Network = PerspectiveNetwork<FeatureTransformer, Output, Arch>;
-
         NNUE() noexcept : curr_(), refreshTable_(), network_() { accStack_.resize(RESERVED_STATES); }
 
         constexpr void load(const Network* network) noexcept {
@@ -39,18 +35,18 @@ namespace Sift {
 
             curr_ = &accStack_[0];
 
-            refreshTable_.init(network_->ft());
+            refreshTable_.init(network_);
 
             for (const Color color : {Color::WHITE, Color::BLACK}) {
                 const Square kingSquare = position.kingSquare(color);
-                const USize tableIdx = InputFeatureSet::refreshTableIdx(color, kingSquare);
+                const USize tableIdx = Arch::refreshTableIdx(color, kingSquare);
                 RefreshTableEntry& entry = refreshTable_.entries[tableIdx];
 
                 resetPSQAcc(entry.acc, color, position);
                 curr_->psqAcc.copy(color, entry.acc);
                 entry.updateBitboards(color, position);
 
-                if constexpr (InputFeatureSet::THREAT_INPUTS) { resetThreatAcc(curr_->threatAcc, color, position); }
+                resetThreatAcc(curr_->threatAcc, color, position);
             }
         }
 
@@ -75,11 +71,12 @@ namespace Sift {
 
             update(position);
 
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                return forwardNetwork(curr_->psqAcc, curr_->threatAcc, position, color);
-            } else {
-                return forwardNetwork(curr_->psqAcc, Accumulator(), position, color);
-            }
+            const auto& friendlyPSQAcc = curr_->psqAcc.data(color);
+            const auto& enemyPSQAcc = curr_->psqAcc.data(~color);
+            const auto& friendlyThreatAcc = curr_->threatAcc.data(color);
+            const auto& enemyThreatAcc = curr_->threatAcc.data(~color);
+
+            return network_->forward(position, friendlyPSQAcc, enemyPSQAcc, friendlyThreatAcc, enemyThreatAcc);
         }
 
     private:
@@ -99,20 +96,20 @@ namespace Sift {
             if (updates.psqAddSize == 0 && updates.psqSubSize == 0) { return; }
 
             if (updates.psqAddSize == 1 && updates.psqSubSize == 1) {
-                const USize sub = updates.psqSubs[0].index<InputFeatureSet>(color, kingSquare);
-                const USize add = updates.psqAdds[0].index<InputFeatureSet>(color, kingSquare);
-                curr.psqAcc.sub1Add1From(prev, network_.ftPSQWeights, color, sub, add);
+                const USize sub = updates.psqSubs[0].index(color, kingSquare);
+                const USize add = updates.psqAdds[0].index(color, kingSquare);
+                curr.psqAcc.sub1Add1From(prev, network_->ftPSQWeights, color, sub, add);
             } else if (updates.psqAddSize == 1 && updates.psqSubSize == 2) {
-                const USize sub1 = updates.psqSubs[0].index<InputFeatureSet>(color, kingSquare);
-                const USize sub2 = updates.psqSubs[1].index<InputFeatureSet>(color, kingSquare);
-                const USize add = updates.psqAdds[0].index<InputFeatureSet>(color, kingSquare);
-                curr.psqAcc.sub2Add1From(prev, network_.ftPSQWeights, color, sub1, sub2, add);
+                const USize sub1 = updates.psqSubs[0].index(color, kingSquare);
+                const USize sub2 = updates.psqSubs[1].index(color, kingSquare);
+                const USize add = updates.psqAdds[0].index(color, kingSquare);
+                curr.psqAcc.sub2Add1From(prev, network_->ftPSQWeights, color, sub1, sub2, add);
             } else if (updates.psqAddSize == 2 && updates.psqSubSize == 2) {
-                const USize sub1 = updates.psqSubs[0].index<InputFeatureSet>(color, kingSquare);
-                const USize sub2 = updates.psqSubs[1].index<InputFeatureSet>(color, kingSquare);
-                const USize add1 = updates.psqAdds[0].index<InputFeatureSet>(color, kingSquare);
-                const USize add2 = updates.psqAdds[1].index<InputFeatureSet>(color, kingSquare);
-                curr.psqAcc.sub2Add2From(prev, network_.ftPSQWeights, color, sub1, sub2, add1, add2);
+                const USize sub1 = updates.psqSubs[0].index(color, kingSquare);
+                const USize sub2 = updates.psqSubs[1].index(color, kingSquare);
+                const USize add1 = updates.psqAdds[0].index(color, kingSquare);
+                const USize add2 = updates.psqAdds[1].index(color, kingSquare);
+                curr.psqAcc.sub2Add2From(prev, network_->ftPSQWeights, color, sub1, sub2, add1, add2);
             } else {
                 assert(false);
             }
@@ -121,12 +118,12 @@ namespace Sift {
         }
 
         template<bool ZERO_INIT>
-        FORCE_INLINE void accumulateThreatChanges(std::span<Int16, L1_SIZE> acc, const Network& network, std::span<const UInt16> adds,
+        FORCE_INLINE void accumulateThreatChanges(std::span<Int16, Arch::L1_SIZE> acc, const Network* network, std::span<const UInt16> adds,
             std::span<const UInt16> subs) noexcept {
             static constexpr USize CHUNK_SIZE = SIMD::CHUNK_SIZE_16;
-            static constexpr USize CHUNKS = L1_SIZE / CHUNK_SIZE;
+            static constexpr USize CHUNKS = Arch::L1_SIZE / CHUNK_SIZE;
 
-            static_assert(L1_SIZE % CHUNK_SIZE == 0);
+            static_assert(Arch::L1_SIZE % CHUNK_SIZE == 0);
 
 #if defined(USE_AVX512)
             static constexpr USize TILE_TARGET = 32;
@@ -149,12 +146,12 @@ namespace Sift {
                 }
 
                 for (const UInt16 idx : subs) {
-                    const Int8* sub = network.ftThreatWeightPtr(idx);
+                    const Int8* sub = network->ftThreatWeightPtr(idx);
                     for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::subInt16(tmp[j], SIMD::widenLoadInt8(&sub[(i + j) * CHUNK_SIZE])); }
                 }
 
                 for (const UInt16 idx : adds) {
-                    const Int8* add = network.ftThreatWeightPtr(idx);
+                    const Int8* add = network->ftThreatWeightPtr(idx);
                     for (USize j = 0; j < TILE; j++) { tmp[j] = SIMD::addInt16(tmp[j], SIMD::widenLoadInt8(&add[(i + j) * CHUNK_SIZE])); }
                 }
 
@@ -182,7 +179,7 @@ namespace Sift {
             Bitboard blackAfter, std::span<UInt16> adds, std::span<UInt16> subs, USize& addOffset, USize& subOffset) noexcept {
 #if defined(USE_VBMI2)
 
-            const UInt8 squareMask = ((color == Color::BLACK) ? 0b111000 : 0) ^ ((InputFeatureSet::needsMirror(kingSquare)) ? 0b000111 : 0);
+            const UInt8 squareMask = ((color == Color::BLACK) ? 0b111000 : 0) ^ ((Arch::needsMirror(kingSquare)) ? 0b000111 : 0);
             const Bitboard friendlyBefore = (color == Color::WHITE) ? whiteBefore : blackBefore;
             const Bitboard friendlyAfter = (color == Color::WHITE) ? whiteAfter : blackAfter;
             const Bitboard after = whiteAfter | blackAfter;
@@ -284,14 +281,14 @@ namespace Sift {
                     while (whiteMasked) {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
-                        adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        adds[addOffset++] = feature.index(color, kingSquare);
                     }
 
                     Bitboard blackMasked = blackAfter & mask;
                     while (blackMasked) {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
-                        adds[addOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        adds[addOffset++] = feature.index(color, kingSquare);
                     }
                 }
 
@@ -305,14 +302,14 @@ namespace Sift {
                     while (whiteMasked) {
                         const UInt8 sq2 = whiteMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::WHITE);
-                        subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        subs[subOffset++] = feature.index(color, kingSquare);
                     }
 
                     Bitboard blackMasked = blackBefore & mask;
                     while (blackMasked) {
                         const UInt8 sq2 = blackMasked.pop();
                         PPFeature feature = PPFeature(Square(sq1), pawnColor, Square(sq2), Color::BLACK);
-                        subs[subOffset++] = feature.index<InputFeatureSet>(color, kingSquare);
+                        subs[subOffset++] = feature.index(color, kingSquare);
                     }
                 }
             }
@@ -320,7 +317,7 @@ namespace Sift {
 #endif
         }
 
-        inline void addThreatFeatures(std::span<Int16, L1_SIZE> acc, Color color, const Position& position) noexcept {
+        inline void addThreatFeatures(std::span<Int16, Arch::L1_SIZE> acc, Color color, const Position& position) noexcept {
             const Square kingSquare = position.kingSquare(color);
             const Bitboard occupied = position.occupied();
             const Bitboard kings = position.pieces(PieceType::KING);
@@ -337,7 +334,7 @@ namespace Sift {
                     const Square to = Square(attacks.pop());
                     const Piece victim = position.pieceAt(to);
                     const TIFeature feature = TIFeature(piece, from, victim, to);
-                    const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
+                    const Int64 idx = feature.index(color, kingSquare);
                     if (idx >= 0) {
                         indices[size++] = static_cast<UInt16>(idx);
                         assert(size <= indices.size());
@@ -345,39 +342,37 @@ namespace Sift {
                 }
             }
 
-            if constexpr (InputFeatureSet::PAWN_PAWN_INPUTS) {
-                Bitboard friendlyPawns = position.pieces(PieceType::PAWN, color);
-                Bitboard enemyPawns = position.pieces(PieceType::PAWN, ~color);
+            Bitboard friendlyPawns = position.pieces(PieceType::PAWN, color);
+            Bitboard enemyPawns = position.pieces(PieceType::PAWN, ~color);
 
-                while (friendlyPawns) {
-                    const Square square1 = Square(friendlyPawns.pop());
+            while (friendlyPawns) {
+                const Square square1 = Square(friendlyPawns.pop());
 
-                    Bitboard friendlyMasked = PPFeature::MASKS[square1.index()] & friendlyPawns;
-                    while (friendlyMasked) {
-                        const Square square2 = Square(friendlyMasked.pop());
-                        const PPFeature feature = PPFeature(square1, color, square2, color);
-                        indices[size++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        assert(size <= indices.size());
-                    }
-
-                    Bitboard enemyMasked = PPFeature::MASKS[square1.index()] & enemyPawns;
-                    while (enemyMasked) {
-                        const Square square2 = Square(enemyMasked.pop());
-                        const PPFeature feature = PPFeature(square1, color, square2, ~color);
-                        indices[size++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        assert(size <= indices.size());
-                    }
+                Bitboard friendlyMasked = PPFeature::MASKS[square1.index()] & friendlyPawns;
+                while (friendlyMasked) {
+                    const Square square2 = Square(friendlyMasked.pop());
+                    const PPFeature feature = PPFeature(square1, color, square2, color);
+                    indices[size++] = feature.index(color, kingSquare);
+                    assert(size <= indices.size());
                 }
 
-                while (enemyPawns) {
-                    const Square square1 = Square(enemyPawns.pop());
-                    Bitboard enemyMasked = PPFeature::MASKS[square1.index()] & enemyPawns;
-                    while (enemyMasked) {
-                        const Square square2 = Square(enemyMasked.pop());
-                        const PPFeature feature = PPFeature(square1, ~color, square2, ~color);
-                        indices[size++] = feature.index<InputFeatureSet>(color, kingSquare);
-                        assert(size <= indices.size());
-                    }
+                Bitboard enemyMasked = PPFeature::MASKS[square1.index()] & enemyPawns;
+                while (enemyMasked) {
+                    const Square square2 = Square(enemyMasked.pop());
+                    const PPFeature feature = PPFeature(square1, color, square2, ~color);
+                    indices[size++] = feature.index(color, kingSquare);
+                    assert(size <= indices.size());
+                }
+            }
+
+            while (enemyPawns) {
+                const Square square1 = Square(enemyPawns.pop());
+                Bitboard enemyMasked = PPFeature::MASKS[square1.index()] & enemyPawns;
+                while (enemyMasked) {
+                    const Square square2 = Square(enemyMasked.pop());
+                    const PPFeature feature = PPFeature(square1, ~color, square2, ~color);
+                    indices[size++] = feature.index(color, kingSquare);
+                    assert(size <= indices.size());
                 }
             }
 
@@ -394,7 +389,7 @@ namespace Sift {
 
             for (USize i = 0; i < updates.tiAddSize; i++) {
                 const TIFeature& feature = updates.tiAdds[i];
-                const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
+                const Int64 idx = feature.index(color, kingSquare);
                 if (idx >= 0) {
                     adds[addSize++] = static_cast<UInt16>(idx);
                     assert(addSize <= adds.size());
@@ -403,23 +398,21 @@ namespace Sift {
 
             for (USize i = 0; i < updates.tiSubSize; i++) {
                 const TIFeature& feature = updates.tiSubs[i];
-                const Int64 idx = feature.index<InputFeatureSet>(color, kingSquare);
+                const Int64 idx = feature.index(color, kingSquare);
                 if (idx >= 0) {
                     subs[subSize++] = static_cast<UInt16>(idx);
                     assert(subSize <= subs.size());
                 }
             }
 
-            if constexpr (InputFeatureSet::PAWN_PAWN_INPUTS) {
-                const Bitboard whiteBefore = updates.pawnsBefore[0];
-                const Bitboard blackBefore = updates.pawnsBefore[1];
-                const Bitboard whiteAfter = updates.pawnsAfter[0];
-                const Bitboard blackAfter = updates.pawnsAfter[1];
-                if (whiteBefore != whiteAfter || blackBefore != blackAfter) {
-                    writePPChanges(color, kingSquare, whiteBefore, blackBefore, whiteAfter, blackAfter, adds, subs, addSize, subSize);
-                    assert(addSize <= adds.size());
-                    assert(subSize <= subs.size());
-                }
+            const Bitboard whiteBefore = updates.pawnsBefore[0];
+            const Bitboard blackBefore = updates.pawnsBefore[1];
+            const Bitboard whiteAfter = updates.pawnsAfter[0];
+            const Bitboard blackAfter = updates.pawnsAfter[1];
+            if (whiteBefore != whiteAfter || blackBefore != blackAfter) {
+                writePPChanges(color, kingSquare, whiteBefore, blackBefore, whiteAfter, blackAfter, adds, subs, addSize, subSize);
+                assert(addSize <= adds.size());
+                assert(subSize <= subs.size());
             }
 
             accumulateThreatChanges<false>(curr.threatAcc.data(color), network_, std::span<const UInt16>{adds.data(), addSize},
@@ -435,19 +428,19 @@ namespace Sift {
                 const Piece piece = position.pieceAt(square);
                 if (piece != Piece::NONE) {
                     const PSQFeature feature = PSQFeature(piece, square);
-                    const USize idx = feature.index<InputFeatureSet>(color, kingSquare);
-                    acc.add1(network_->ft(), color, idx);
+                    const USize idx = feature.index(color, kingSquare);
+                    acc.add1(network_->ftPSQWeights, color, idx);
                 }
             }
         }
 
         inline void resetThreatAcc(Accumulator& acc, Color color, const Position& position) noexcept {
-            if constexpr (InputFeatureSet::THREAT_INPUTS) { addThreatFeatures(acc.data(color), color, position); }
+            addThreatFeatures(acc.data(color), color, position);
         }
 
         inline void refreshPSQAcc(UpdatableAccumulator& curr, Color color, const Position& position) noexcept {
             const Square kingSquare = position.kingSquare(color);
-            const USize tableIdx = InputFeatureSet::refreshTableIdx(color, kingSquare);
+            const USize tableIdx = Arch::refreshTableIdx(color, kingSquare);
             RefreshTableEntry& entry = refreshTable_.entries[tableIdx];
 
             std::array<USize, 32> adds;
@@ -464,7 +457,7 @@ namespace Sift {
                 while (added) {
                     const Square square = Square(added.pop());
                     const PSQFeature feature = PSQFeature(piece, square);
-                    adds[addSize++] = feature.index<InputFeatureSet>(color, kingSquare);
+                    adds[addSize++] = feature.index(color, kingSquare);
                     assert(addSize <= adds.size());
                 }
 
@@ -472,7 +465,7 @@ namespace Sift {
                 while (removed) {
                     const Square square = Square(removed.pop());
                     const PSQFeature feature = PSQFeature(piece, square);
-                    subs[subSize++] = feature.index<InputFeatureSet>(color, kingSquare);
+                    subs[subSize++] = feature.index(color, kingSquare);
                     assert(subSize <= subs.size());
                 }
             }
@@ -482,13 +475,13 @@ namespace Sift {
                 const USize add2 = adds[addSize - 2];
                 const USize add3 = adds[addSize - 3];
                 const USize add4 = adds[addSize - 4];
-                entry.acc.add4(network_.ftPSQWeights, color, add1, add2, add3, add4);
+                entry.acc.add4(network_->ftPSQWeights, color, add1, add2, add3, add4);
                 addSize -= 4;
             }
 
             while (addSize >= 1) {
                 const USize add = adds[addSize - 1];
-                entry.acc.add1(network_.ftPSQWeights, color, add);
+                entry.acc.add1(network_->ftPSQWeights, color, add);
                 addSize -= 1;
             }
 
@@ -497,13 +490,13 @@ namespace Sift {
                 const USize sub2 = subs[subSize - 2];
                 const USize sub3 = subs[subSize - 3];
                 const USize sub4 = subs[subSize - 4];
-                entry.acc.sub4(network_.ftPSQWeights, color, sub1, sub2, sub3, sub4);
+                entry.acc.sub4(network_->ftPSQWeights, color, sub1, sub2, sub3, sub4);
                 subSize -= 4;
             }
 
             while (subSize >= 1) {
                 const USize sub = subs[subSize - 1];
-                entry.acc.sub1(network_.ftPSQWeights, color, sub);
+                entry.acc.sub1(network_->ftPSQWeights, color, sub);
                 subSize -= 1;
             }
 
@@ -515,10 +508,8 @@ namespace Sift {
         }
 
         inline void refreshThreatAcc(UpdatableAccumulator& curr, Color color, const Position& position) noexcept {
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                resetThreatAcc(curr.threatAcc, color, position);
-                curr.setThreatClean(color);
-            }
+            resetThreatAcc(curr.threatAcc, color, position);
+            curr.setThreatClean(color);
         }
 
         inline void update(const Position& position) noexcept {
@@ -547,46 +538,28 @@ namespace Sift {
                 }
             }
 
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                for (const Color color : {Color::WHITE, Color::BLACK}) {
-                    if (!curr_->isThreatDirty(color)) { continue; }
+            for (const Color color : {Color::WHITE, Color::BLACK}) {
+                if (!curr_->isThreatDirty(color)) { continue; }
 
-                    if (curr_->updates.needsTIRefresh(color)) {
-                        refreshThreatAcc(*curr_, color, position);
-                        continue;
-                    }
-
-                    UpdatableAccumulator* prev = curr_ - 1;
-                    for (; prev->isThreatDirty(color) && !prev->updates.needsTIRefresh(color); prev--) {}
-
-                    assert(prev != &accStack_[0] || !prev->updates.needsTIRefresh(color));
-
-                    if (prev->updates.needsTIRefresh(color)) {
-                        refreshThreatAcc(*curr_, color, position);
-                    } else {
-                        do {
-                            (prev + 1)->threatAcc.copy(color, prev->threatAcc);
-                            updateThreatFeatures(*(prev + 1), (prev + 1)->updates, color, position.kingSquare(color));
-                            prev++;
-                        } while (prev != curr_);
-                    }
+                if (curr_->updates.needsTIRefresh(color)) {
+                    refreshThreatAcc(*curr_, color, position);
+                    continue;
                 }
-            }
-        }
 
-        inline Int32 forwardNetwork(const Accumulator& psqAcc, const Accumulator& threatAcc, const Position& position,
-            Color color) noexcept {
-            assert(network_ != nullptr);
+                UpdatableAccumulator* prev = curr_ - 1;
+                for (; prev->isThreatDirty(color) && !prev->updates.needsTIRefresh(color); prev--) {}
 
-            const auto& friendlyPSQAcc = psqAcc.data(color);
-            const auto& enemyPSQAcc = psqAcc.data(~color);
-            const auto& friendlyThreatAcc = threatAcc.data(color);
-            const auto& enemyThreatAcc = threatAcc.data(~color);
+                assert(prev != &accStack_[0] || !prev->updates.needsTIRefresh(color));
 
-            if constexpr (InputFeatureSet::THREAT_INPUTS) {
-                return network_->forward(position, friendlyPSQAcc, enemyPSQAcc, friendlyThreatAcc, enemyThreatAcc);
-            } else {
-                return network_->forward(position, friendlyPSQAcc, enemyPSQAcc, friendlyPSQAcc, enemyPSQAcc);
+                if (prev->updates.needsTIRefresh(color)) {
+                    refreshThreatAcc(*curr_, color, position);
+                } else {
+                    do {
+                        (prev + 1)->threatAcc.copy(color, prev->threatAcc);
+                        updateThreatFeatures(*(prev + 1), (prev + 1)->updates, color, position.kingSquare(color));
+                        prev++;
+                    } while (prev != curr_);
+                }
             }
         }
     };
