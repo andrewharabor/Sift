@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <ranges>
 #include <span>
 
 #include "arch.hpp"
