@@ -143,7 +143,7 @@ namespace Sift {
     TUNABLE_CALLBACK(SEE_ROOK_VALUE, 690, 400, 1000, []() { SEE::init(); });
     TUNABLE_CALLBACK(SEE_QUEEN_VALUE, 1215, 800, 1600, []() { SEE::init(); });
 
-    static inline void SEE::init() {
+    inline void SEE::init() {
         SEE_PIECE_VALUES = {SEE_PAWN_VALUE, SEE_KNIGHT_VALUE, SEE_BISHOP_VALUE, SEE_ROOK_VALUE, SEE_QUEEN_VALUE, 0, 0};
     }
 
@@ -356,7 +356,7 @@ namespace Sift {
     TUNABLE_CALLBACK(LMR_QUIET_BASE, 77, 50, 125, []() { LMR::init(); })
     TUNABLE_CALLBACK(LMR_QUIET_DIVISOR, 246, 100, 300, []() { LMR::init(); })
 
-    static inline void LMR::init() {
+    inline void LMR::init() {
         LMR_TABLE.fill({});
 
         const Float64 noisyBase = Utils::floatDiv100(LMR_NOISY_BASE);
@@ -384,7 +384,7 @@ namespace Sift {
 
     TUNABLE_CALLBACK(LMP_TABLE_BASE, 4, 0, 20, []() { LMP::init(); })
 
-    static inline void LMP::init() {
+    inline void LMP::init() {
         LMP_TABLE.fill({});
 
         for (Int32 improving = 0; improving < 2; improving++) {

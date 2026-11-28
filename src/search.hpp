@@ -27,6 +27,7 @@
 #include "tt.hpp"
 #include "tunable.hpp"
 #include "types.hpp"
+#include "updates.hpp"
 #include "utils.hpp"
 #include "wdl.hpp"
 
@@ -1404,7 +1405,7 @@ namespace Sift {
             currHist.contHistSubtable = &thread.history.contHistSubtable(thread.position, move);
             currHist.contCorrHistSubtable = &thread.history.contCorrHistSubtable(thread.position, move);
 
-            NNUE::BoardObserver observer = thread.nnue.makeMove();
+            BoardObserver observer = thread.nnue.makeMove();
             thread.position.makeMove(move, observer);
             thread.incNodes();
         }

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstring>
 
-#include "nnue.hpp"
+#include "network.hpp"
 #include "numa.hpp"
 #include "reader.hpp"
 #include "types.hpp"
@@ -20,8 +20,6 @@ INCBIN(std::byte, EMBEDDED_NETWORK, TOSTRING(NETWORK_FILE));
 
 namespace Sift {
     namespace NetLoader {
-        using Network = NNUE::Network;
-
         std::byte* loadedData = nullptr;
 
 #if defined(USE_NUMA)
